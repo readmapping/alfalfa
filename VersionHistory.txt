@@ -1,0 +1,32 @@
+V0.1 - First alfalfa
+--------------------
+UPDATE: 12/03/2012
+-> changed SMAM calculation behavior: maximal matches whitch are not unique are now also calculated and returned, this because exact matches to several positions were not reported. This increases SMAM time and output, but a good choice of the minLength of SMAMs should alleviate this problem.
+UPDATE: 13/03/2012
+-> changed SMAM calculation behavior again: number of matches can be very high, limited to a certain parameter, adjustable by the user that also governs how many alignments per read are expected to be returned.
+UPDATE: 13/03/2012
+-> added a parameter to adjust the number of alignments to be returned (does not much at the moment, only 1 alignment is still returned)
+UPDATE: 13/03/2012
+-> fixed a bug in dp.cpp, where the tracebackposition was not recovered properly for local alignments or alignments with free queryEnd and free refEnd.
+UPDATE: 14/03/2012
+-> fixed a bug in calculation mapq (+ sign was should have been -). Included asserts about mapq
+UPDATE: 14/03/2012
+-> added some more assert in the code
+UPDATE: 14/03/2012
+-> corrected bug in calculation X0-tag: new cigarstring stopped recording after first match/mismatch sequence in a sequence of matches and mismatches
+UPDATE: 14/03/2012
+-> -c noClipping gives better results, perhaps make default!
+UPDATE: 15/03/2012
+-> change: final dp boundaries now uses editDist-currentEditDist for reference sequence boundary.
+
+v0.2 - Allow multiple matches to be calculated 19/03/2012
+----------------------------------------------
+Added a new parameter which allows ALFALFA to calculate more than 1 alignment per read and per strand.
+Added some heuristics to speed up search and added algorithm to select multiple candidate regions.
+-----------------------------------------------
+v0.3
+first release
+-------------
+v0.3.1
+*Optimized DP a bit when no affine gap penalties are used.
+*fixed the usage and error prints to reflect default parameter changes and parameter name changes
