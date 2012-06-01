@@ -10,3 +10,7 @@
 *.lai
 *.la
 *.a
+
+#build and dist directories
+build/
+dist/
