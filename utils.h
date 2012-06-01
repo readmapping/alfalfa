@@ -12,8 +12,8 @@
 
 namespace Utils{
 
-    std::string convertInt(int number);
-    bool contains(std::string & str, long begin, long end, char c);
+    std::string convertInt(const int number);
+    bool contains(const std::string & str,const long begin,const long end,const char c);
 
 }
 

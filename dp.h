@@ -71,7 +71,8 @@ enum outputType{
     ALL
 };
 
-extern int dp( string&, string&, boundaries&, dp_scores&, dp_type&, outputType&, dp_output&, bool print = false);
+extern int dp( const string&, const string&, boundaries&, const dp_scores&, 
+        const dp_type&, const outputType&, dp_output&, bool print = false);
 
 #endif	/* DP_H */
 

@@ -122,7 +122,7 @@ struct alignment_t {
       }
       cigar = ss.str();
   }
-  void setFieldsFromCigar(dp_scores & scores){
+  void setFieldsFromCigar(const dp_scores & scores){
       stringstream sNM;
       stringstream sCig;
       assert(cigarChars.size()==cigarLengths.size());
@@ -162,7 +162,7 @@ struct alignment_t {
 struct read_t {
     read_t(): qname(""),sequence(""),qual("*"), alignments(0) {}
     read_t(string name, string &seq, string &qw): qname(name),sequence(seq),qual(qw), alignments(0) {}
-    void postprocess(dp_scores & scores){
+    void postprocess(const dp_scores & scores){
         int maxScore = scores.mismatch*sequence.length();
         assert(maxScore < 0);//works only for score<0 for now (to do: add sign switch to allow positive min scores)
         int secBestScore = scores.mismatch*sequence.length();
@@ -259,9 +259,9 @@ struct sparseSA {
   void radixStep(int *t_new, int *SA, long &bucketNr, long *BucketBegin, long l, long r, long h);
 
   // Prints match to cout.
-  void print_match(match_t m);
-  void print_match(match_t m, vector<match_t> &buf); // buffered version
-  void print_match(string meta, vector<match_t> &buf, bool rc); // buffered version
+  void print_match(const match_t m);
+  void print_match(const match_t m, vector<match_t> &buf); // buffered version
+  void print_match(const string meta, vector<match_t> &buf, bool rc); // buffered version
 
   // Binary search for left boundry of interval.
   inline long bsearch_left(char c, long i, long s, long e);
@@ -269,7 +269,7 @@ struct sparseSA {
   inline long bsearch_right(char c, long i, long s, long e);
 
   // Simple suffix array search.
-  inline bool search(string &P, long &start, long &end);
+  inline bool search(const string &P, long &start, long &end);
 
   // Simple top down traversal of a suffix array.
   inline bool top_down(char c, long i, long &start, long &end);
@@ -277,7 +277,7 @@ struct sparseSA {
 
   // Traverse pattern P starting from a given prefix and interval
   // until mismatch or min_len characters reached.
-  inline void traverse(string &P, long prefix, interval_t &cur, int min_len);
+  inline void traverse(const string &P, long prefix, interval_t &cur, int min_len);
 
   // Simulate a suffix link.
   inline bool suffixlink(interval_t &m);
@@ -303,47 +303,49 @@ struct sparseSA {
 
   // Given a position i in S, finds a left maximal match of minimum
   // length within K steps.
-  inline void find_Lmaximal(string &P, long prefix, long i, long len, vector<match_t> &matches, int min_len, bool print);
+  inline void find_Lmaximal(const string &P, long prefix, long i, long len, vector<match_t> &matches, int min_len, bool print);
 
   // Given an interval where the given prefix is matched up to a
   // mismatch, find all MEMs up to a minimum match depth.
-  void collectMEMs(string &P, long prefix, interval_t mli, interval_t xmi, vector<match_t> &matches, int min_len, bool print);
+  void collectMEMs(const string &P, long prefix, const interval_t mli, 
+  interval_t xmi, vector<match_t> &matches, int min_len, bool print);
 
-  void collectSMAMs(string &P, long prefix, interval_t mli, interval_t xmi, vector<match_t> &matches, int min_len, int maxCount, bool print);
+  void collectSMAMs(const string &P, long prefix, const interval_t mli, 
+  interval_t xmi, vector<match_t> &matches, int min_len, int maxCount, bool print);
 
   // Find all MEMs given a prefix pattern offset k.
-  void findMEM(long k, string &P, vector<match_t> &matches, int min_len, bool print);
+  void findMEM(long k, const string &P, vector<match_t> &matches, int min_len, bool print);
 
   // Find all MEMs given a prefix pattern offset k.
-  void findSMAM(long k, string &P, vector<match_t> &matches, int min_len, int maxCount, bool print);
+  void findSMAM(long k, const string &P, vector<match_t> &matches, int min_len, int maxCount, bool print);
 
   // NOTE: min_len must be > 1
-  void findMAM(string &P, vector<match_t> &matches, int min_len, bool print);
-  inline bool is_leftmaximal(string &P, long p1, long p2);
+  void findMAM(const string &P, vector<match_t> &matches, int min_len, bool print);
+  inline bool is_leftmaximal(const string &P, long p1, long p2);
 
   // Maximal Almost-Unique Match (MAM). Match is unique in the indexed
   // sequence S. as computed by MUMmer version 2 by Salzberg
   // et. al. Note this is a "one-sided" query. It "streams" the query
   // P throught he index.  Consequently, repeats can occur in the
   // pattern P.
-  void MAM(string &P, vector<match_t> &matches, int min_len, bool print) {
+  void MAM(const string &P, vector<match_t> &matches, int min_len, bool print) {
     if(K != 1) return;  // Only valid for full suffix array.
     findMAM(P, matches, min_len, print);
   }
 
   // Find Maximal Exact Matches (MEMs)
-  void MEM(string &P, vector<match_t> &matches, int min_len, bool print, int num_threads = 1);
+  void MEM(const string &P, vector<match_t> &matches, int min_len, bool print, int num_threads = 1);
 
   // Find Maximal Exact Matches (MEMs)
-  void SMAM(string &P, vector<match_t> &matches, int min_len, int maxCount, bool print, int num_threads = 1);
+  void SMAM(const string &P, vector<match_t> &matches, int min_len, int maxCount, bool print, int num_threads = 1);
 
   // Maximal Unique Match (MUM)
-  void MUM(string &P, vector<match_t> &unique, int min_len, bool print);
+  void MUM(const string &P, vector<match_t> &unique, int min_len, bool print);
 
   //post process MEMs, MAMs, etc...
   void postProcess(vector<match_t> &matches);
 
-  void inexactMatch(read_t& read, align_opt & alnOptions, bool fwStrand, bool print);
+  void inexactMatch(read_t& read,const align_opt & alnOptions, bool fwStrand, bool print);
 };
 
 

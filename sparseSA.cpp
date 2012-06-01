@@ -210,7 +210,7 @@ bool sparseSA::top_down(char c, long i, long &start, long &end) {
 
 // Top down traversal of the suffix array to match a pattern.  NOTE:
 // NO childtab as in the enhanced suffix array (ESA).
-bool sparseSA::search(string &P, long &start, long &end) {
+bool sparseSA::search(const string &P, long &start, long &end) {
   start = 0; end = N - 1;
   long i = 0;
   while(i < (long)P.length()) {
@@ -225,7 +225,7 @@ bool sparseSA::search(string &P, long &start, long &end) {
 
 // Traverse pattern P starting from a given prefix and interval
 // until mismatch or min_len characters reached.
-void sparseSA::traverse(string &P, long prefix, interval_t &cur, int min_len) {
+void sparseSA::traverse(const string &P, long prefix, interval_t &cur, int min_len) {
   if(cur.depth >= min_len) return;
 
   while(prefix+cur.depth < (long)P.length()) {
@@ -311,7 +311,7 @@ bool sparseSA::suffixlink(interval_t &m) {
 }
 
 // For a given offset in the prefix k, find all MEMs.
-void sparseSA::findMEM(long k, string &P, vector<match_t> &matches, int min_len, bool print) {
+void sparseSA::findMEM(long k, const string &P, vector<match_t> &matches, int min_len, bool print) {
   if(k < 0 || k >= K) { cerr << "Invalid k." << endl; return; }
   // Offset all intervals at different start points.
   long prefix = k;
@@ -349,7 +349,8 @@ void sparseSA::findMEM(long k, string &P, vector<match_t> &matches, int min_len,
 
 // Use LCP information to locate right maximal matches. Test each for
 // left maximality.
-void sparseSA::collectMEMs(string &P, long prefix, interval_t mli, interval_t xmi, vector<match_t> &matches, int min_len, bool print) {
+void sparseSA::collectMEMs(const string &P, long prefix, const interval_t mli, 
+        interval_t xmi, vector<match_t> &matches, int min_len, bool print) {
   // All of the suffixes in xmi's interval are right maximal.
   for(long i = xmi.start; i <= xmi.end; i++) find_Lmaximal(P, prefix, SA[i], xmi.depth, matches, min_len, print);
 
@@ -378,7 +379,8 @@ void sparseSA::collectMEMs(string &P, long prefix, interval_t mli, interval_t xm
 
 
 // Finds left maximal matches given a right maximal match at position i.
-void sparseSA::find_Lmaximal(string &P, long prefix, long i, long len, vector<match_t> &matches, int min_len, bool print) {
+void sparseSA::find_Lmaximal(const string &P, long prefix, long i, 
+        long len, vector<match_t> &matches, int min_len, bool print) {
   // Advance to the left up to K steps.
   for(long k = 0; k < K; k++) {
     // If we reach the end and the match is long enough, print.
@@ -408,7 +410,7 @@ void sparseSA::find_Lmaximal(string &P, long prefix, long i, long len, vector<ma
 
 // Print results in format used by MUMmer v3.  Prints results
 // 1-indexed, instead of 0-indexed.
-void sparseSA::print_match(match_t m) {
+void sparseSA::print_match(const match_t m) {
   if(_4column == false) {
     printf("%8ld  %8ld  %8ld\n", m.ref + 1, m.query + 1, m.len);
   }
@@ -425,7 +427,7 @@ void sparseSA::print_match(match_t m) {
 // This version of print match places m_new in a buffer. The buffer is
 // flushed if m_new.len <= 0 or it reaches 1000 entries.  Buffering
 // limits the number of locks on cout.
-void sparseSA::print_match(match_t m_new, vector<match_t> &buf) {
+void sparseSA::print_match(const match_t m_new, vector<match_t> &buf) {
   if(m_new.len > 0)  buf.push_back(m_new);
   if(buf.size() > 1000 || m_new.len <= 0) {
     pthread_mutex_lock(&cout_mutex);
@@ -435,7 +437,7 @@ void sparseSA::print_match(match_t m_new, vector<match_t> &buf) {
   }
 }
 
-void sparseSA::print_match(string meta, vector<match_t> &buf, bool rc) {
+void sparseSA::print_match(const string meta, vector<match_t> &buf, bool rc) {
   pthread_mutex_lock(&cout_mutex);
   if(!rc) printf("> %s\n", meta.c_str());
   else printf("> %s Reverse\n", meta.c_str());
@@ -446,7 +448,7 @@ void sparseSA::print_match(string meta, vector<match_t> &buf, bool rc) {
 
 // Finds maximal almost-unique matches (MAMs) These can repeat in the
 // given query pattern P, but occur uniquely in the indexed reference S.
-void sparseSA::findMAM(string &P, vector<match_t> &matches, int min_len, bool print) {
+void sparseSA::findMAM(const string &P, vector<match_t> &matches, int min_len, bool print) {
   interval_t cur(0, N-1, 0);
   long prefix = 0;
   while(prefix < (long)P.length()) {
@@ -477,7 +479,7 @@ void sparseSA::findMAM(string &P, vector<match_t> &matches, int min_len, bool pr
 
 // Returns true if the position p1 in the query pattern and p2 in the
 // reference is left maximal.
-bool sparseSA::is_leftmaximal(string &P, long p1, long p2) {
+bool sparseSA::is_leftmaximal(const string &P, long p1, long p2) {
   if(p1 == 0 || p2 == 0) return true;
   else return P[p1-1] != S[p2-1];
 }
@@ -486,7 +488,7 @@ bool sparseSA::is_leftmaximal(string &P, long p1, long p2) {
 struct by_ref { bool operator() (const match_t &a, const match_t &b) const { if(a.ref == b.ref) return a.len > b.len; else return a.ref < b.ref; }  };
 
 // Maximal Unique Match (MUM)
-void sparseSA::MUM(string &P, vector<match_t> &unique, int min_len, bool print) {
+void sparseSA::MUM(const string &P, vector<match_t> &unique, int min_len, bool print) {
   // Find unique MEMs.
   vector<match_t> matches;
   MAM(P, matches, min_len, false);
@@ -535,7 +537,7 @@ struct thread_data {
   int min_len; // Minimum length of match.
   bool print;//verbose or not
   int maxCount;//max number of mems per query position
-  string *P; // Query string.
+  const string *P; // Query string.
 };
 
 void *MEMthread(void *arg) {
@@ -553,7 +555,7 @@ void *MEMthread(void *arg) {
   pthread_exit(NULL);
 }
 
-void sparseSA::MEM(string &P, vector<match_t> &matches, int min_len, bool print, int num_threads) {
+void sparseSA::MEM(const string &P, vector<match_t> &matches, int min_len, bool print, int num_threads) {
   if(min_len < K) return;
   if(num_threads == 1) {
     for(int k = 0; k < K; k++) { findMEM(k, P, matches, min_len, print); }
@@ -583,7 +585,8 @@ void sparseSA::MEM(string &P, vector<match_t> &matches, int min_len, bool print,
 }
 // Use LCP information to locate right maximal matches. Test each for
 // left maximality.
-void sparseSA::collectSMAMs(string &P, long prefix, interval_t mli, interval_t xmi, vector<match_t> &matches, int min_len, int maxCount, bool print) {
+void sparseSA::collectSMAMs(const string &P, long prefix, 
+        const interval_t mli, interval_t xmi, vector<match_t> &matches, int min_len, int maxCount, bool print) {
   // All of the suffixes in xmi's interval are right maximal.
   //if(xmi.size() > maxCount ) return;// --> many long matches is ok, do not have to be unique!!!
   int upperLimit = xmi.size() < maxCount ? xmi.end : xmi.start + maxCount-1;
@@ -591,7 +594,7 @@ void sparseSA::collectSMAMs(string &P, long prefix, interval_t mli, interval_t x
 }
 
 // For a given offset in the prefix k, find all MEMs.
-void sparseSA::findSMAM(long k, string &P, vector<match_t> &matches, int min_len, int maxCount, bool print) {
+void sparseSA::findSMAM(long k, const string &P, vector<match_t> &matches, int min_len, int maxCount, bool print) {
   if(k < 0 || k >= K) { cerr << "Invalid k." << endl; return; }
   // Offset all intervals at different start points.
   long prefix = k;
@@ -639,7 +642,7 @@ void *SMAMthread(void *arg) {
   pthread_exit(NULL);
 }
 
-void sparseSA::SMAM(string &P, vector<match_t> &matches, int min_len, int maxCount, bool print, int num_threads) {
+void sparseSA::SMAM(const string &P, vector<match_t> &matches, int min_len, int maxCount, bool print, int num_threads) {
   if(min_len < K) return;
   if(num_threads == 1) {
     for(int k = 0; k < K; k++) { findSMAM(k, P, matches, min_len, maxCount, print); }
@@ -669,17 +672,17 @@ void sparseSA::SMAM(string &P, vector<match_t> &matches, int min_len, int maxCou
 
 }
 
-bool compMatches(match_t i, match_t j){
+bool compMatches(const match_t i, const match_t j){
     return (i.ref < j.ref || (i.ref == j.ref && i.query < j.query));
     //return (i.query < j.query || (i.query == j.query && i.ref < j.ref));
 }
 
-bool compMatchesQuery(match_t i, match_t j){
+bool compMatchesQuery(const match_t i,const match_t j){
     //return (i.ref < j.ref || (i.ref == j.ref && i.query < j.query));
     return (i.query < j.query || (i.query == j.query && i.ref < j.ref));
 }
 
-bool compIntervals(lis_t i, lis_t j){
+bool compIntervals(const lis_t i,const lis_t j){
     return (i.len > j.len || (i.len == j.len && i.begin < j.begin));
 }
 
@@ -687,7 +690,7 @@ void sparseSA::postProcess(vector<match_t> &matches){
     sort(matches.begin(),matches.end(), compMatches);
 }
 
-void sparseSA::inexactMatch(read_t & read, align_opt & alnOptions, bool fwStrand, bool print){
+void sparseSA::inexactMatch(read_t & read,const align_opt & alnOptions, bool fwStrand, bool print){
 #ifndef NDEBUG
     printf("read %s of length %d, strand %s\n",read.qname.c_str(),read.sequence.length(), fwStrand ? "FORWARD" : "REVERSE");
 #endif
@@ -700,7 +703,7 @@ void sparseSA::inexactMatch(read_t & read, align_opt & alnOptions, bool fwStrand
     int min_len = alnOptions.minMemLength;
     if(!alnOptions.fixedMinLength && Plength/editDist > min_len)
         min_len = Plength/editDist;
-    dp_scores & scores = alnOptions.scores;
+    const dp_scores & scores = alnOptions.scores;
     outputType outputT = ERRORSTRING;
     dp_output output;
     vector<match_t> matches;

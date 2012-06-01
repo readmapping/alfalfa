@@ -21,7 +21,7 @@ struct dp_matrices{
     int L2;
 };
 
-int initializeMatrices(dp_matrices& matrices, dp_scores& scores, dp_type& type, outputType& oType){
+int initializeMatrices(dp_matrices& matrices,const dp_scores& scores,const dp_type& type,const outputType& oType){
     assert(matrices.L1 >=0 && matrices.L2 >= 0);
     matrices.M = new int * [matrices.L2+1];
     for(int i = 0; i <= matrices.L2; i++)
@@ -73,7 +73,7 @@ int initializeMatrices(dp_matrices& matrices, dp_scores& scores, dp_type& type, 
     }
 }
 
-int initializeMatrix(dp_matrices& matrices, dp_scores& scores, dp_type& type){
+int initializeMatrix(dp_matrices& matrices,const dp_scores& scores,const dp_type& type){
     assert(matrices.L1 >=0 && matrices.L2 >= 0);
     matrices.M = new int * [matrices.L2+1];
     matrices.traceBack = new char * [matrices.L2+1];
@@ -102,7 +102,7 @@ int initializeMatrix(dp_matrices& matrices, dp_scores& scores, dp_type& type){
             matrices.M[0][i] = i*scores.extendGap;
 }
 
-int deleteMatrices(dp_matrices& matrices, dp_scores& scores, outputType& oType){
+int deleteMatrices(dp_matrices& matrices,const dp_scores& scores,const outputType& oType){
     for(int  i = 0; i <= matrices.L2; i++ ){
         delete[] matrices.M[ i ];
     }
@@ -140,7 +140,7 @@ int deleteMatrix(dp_matrices& matrices){
     return 0;
 }
 
-int findTraceBackPos(dp_matrices& matrices, int* const i, int* const j, dp_type& type){
+int findTraceBackPos(const dp_matrices& matrices, int* const i, int* const j,const dp_type& type){
     //find beginPosition for traceBack and find dpScore
     int max = matrices.M[*i][*j];
     if(type.freeQueryE && type.freeRefE || type.local){//local
@@ -196,7 +196,9 @@ int  maximum( int f1, int f2, int f3, char * ptr )
         return  max ;
 }
 
-int dpFill(dp_matrices& matrices, string& ref, string& query, boundaries& offset, dp_scores& scores, dp_type& type, outputType& oType){
+int dpFill(dp_matrices& matrices,const string& ref,const string& query,
+        const boundaries& offset, const dp_scores& scores, 
+        const dp_type& type,const outputType& oType){
     int        d = 0;
     int        fU, fD, fL ;
     char       ptr;
@@ -230,7 +232,8 @@ int dpFill(dp_matrices& matrices, string& ref, string& query, boundaries& offset
     return 0;
 }
 
-int dpFillOpt(dp_matrices& matrices, string& ref, string& query, boundaries& offset, dp_scores& scores, dp_type& type){
+int dpFillOpt(dp_matrices& matrices,const string& ref,const string& query, 
+        const boundaries& offset, const dp_scores& scores, const dp_type& type){
     int        d = 0;
     char       ptr;
 
@@ -304,7 +307,7 @@ int dpFillOpt(dp_matrices& matrices, string& ref, string& query, boundaries& off
 //    return 0;
 //}
 
-int dpTraceBack(dp_matrices& matrices, int& i, int& j, dp_output& output, std::stringstream & ss){
+int dpTraceBack(const dp_matrices& matrices, int& i, int& j, dp_output& output, std::stringstream & ss){
     while( matrices.traceBack[ i ][ j ] != '0' ){
         switch( matrices.traceBack[ i ][ j ] ){
             case '|' :      ss << 'I';
@@ -329,7 +332,8 @@ int dpTraceBack(dp_matrices& matrices, int& i, int& j, dp_output& output, std::s
     return 0;
 }
 
-void  print_matrices( dp_matrices& matrices, string& ref, string& query, boundaries& offset, bool gapMatrices )
+void  print_matrices(const dp_matrices& matrices,const string& ref, 
+        const string& query, const boundaries& offset, bool gapMatrices )
 {
         cout << "        ";
         for( int j = 0; j < matrices.L1; j++ )
@@ -419,7 +423,7 @@ void  print_matrices( dp_matrices& matrices, string& ref, string& query, boundar
         cout << endl;
 }
 
-void  print_seq( string& ref, string& query, boundaries& offset )
+void  print_seq( const string& ref,const string& query, boundaries& offset )
 {
         cout << "" << endl << ref.substr(offset.refB,offset.refE-offset.refB+1) << endl;
         cout << query.substr(offset.queryB,offset.queryE-offset.queryB+1) << endl << "" << endl;
@@ -427,12 +431,12 @@ void  print_seq( string& ref, string& query, boundaries& offset )
 
 //(extra parameters offset1 and offset2, length1 and length2 in struct boundaries)
 //extra: substitution matrix!
-int dp( string&     ref,
-        string&     query,
+int dp( const string&     ref,
+        const string&     query,
         boundaries& offset,
-        dp_scores&  scores,
-        dp_type&    type,
-        outputType& oType,
+        const dp_scores&  scores,
+        const dp_type&    type,
+        const outputType& oType,
         dp_output&  output,
         bool print)
 {

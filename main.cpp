@@ -301,7 +301,7 @@ static struct option long_options[] = {
     {(char*)0, 0, 0, 0} // terminator
 };
 
-void usage(string prog) {
+void usage(const string prog) {
   cerr << "Usage: " << prog << " COMMAND [options] <reference-file> <query-file> [ouput-file]" << endl;
   cerr << "Command should be one of the following: " << endl;
   cerr << "index                      only build the index for given <reference-file>, used for time calculations" << endl;
