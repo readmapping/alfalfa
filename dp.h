@@ -54,11 +54,11 @@ struct dp_type{
 
 struct dp_output{
     dp_output(): traceRef(""),traceQuery(""),editDist(0),dpScore(0), cigarChars(0), cigarLengths(0) {}
-    string traceRef;
+    string traceRef;//remove???
     string traceQuery;
     int editDist;
     int dpScore;
-    vector<char> cigarChars;
+    vector<char> cigarChars;//static, fixed length field?
     vector<int> cigarLengths;
     void clear(){cigarChars.clear(); cigarLengths.clear(); editDist = dpScore = 0; traceRef = traceQuery = ""; };
 };

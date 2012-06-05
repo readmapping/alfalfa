@@ -65,8 +65,8 @@ struct align_opt {
 
 // Match find by findMEM.
 struct match_t {
-  match_t() { ref = 0; query = 0, len = 0; }
-  match_t(long r, long q, long l) { ref = r; query = q; len = l; }
+  match_t(): ref(0), query(0), len(0) {}
+  match_t(long r, long q, long l): ref(r), query(q), len(l) {}
   long ref; // position in reference sequence
   long query; // position in query
   long len; // length of match
@@ -74,8 +74,8 @@ struct match_t {
 
 // interval in match results + bases covering the result
 struct lis_t {
-  lis_t() { begin = 0; end = 0, len = 0; }
-  lis_t(int b, int e, int l) { begin = b; end = e; len = l; }
+  lis_t(): begin(0), end(0), len(0) {}
+  lis_t(int b, int e, int l): begin(b), end(e), len(l) {}
   int begin; // position in reference sequence
   int end; // position in query
   int len; // length of match
@@ -84,14 +84,15 @@ struct lis_t {
 struct alignment_t {
   alignment_t(): pos(0), cigar("*"), flag(0), rname("*"), mapq(0), tLength(0),
   rnext("*"), pnext(0), editDist(0), alignmentScore(0), cigarChars(0), cigarLengths(0), NMtag("*") {}
-  string cigar;
-  string NMtag;
-  vector<char> cigarChars;
-  vector<int> cigarLengths;
-  string rname;
+  string cigar;//TODO: remove this fields, only used when printed
+  string NMtag;//TODO: remove this fields, only used when printed
+  vector<char> cigarChars;//Change these to fixed-length values
+  vector<int> cigarLengths;//Change these to fixed-length values (make sure to increase them when necessary): make own string and vector classes
+  string rname;//leave out, only for printing
   long pos; // position in reference sequence
   bitset<11> flag;
   int mapq;
+  //TODO: paired-end mapping
   string rnext;
   long pnext;
   int editDist;
@@ -122,7 +123,7 @@ struct alignment_t {
       }
       cigar = ss.str();
   }
-  void setFieldsFromCigar(const dp_scores & scores){
+  void setFieldsFromCigar(const dp_scores & scores){//TODO: change to use special vectors
       stringstream sNM;
       stringstream sCig;
       assert(cigarChars.size()==cigarLengths.size());
@@ -208,16 +209,16 @@ struct read_t {
             }
         }
     }
-    string qname;
+    string qname;//TODO should be reference
     vector<alignment_t> alignments;
-    string sequence;
-    string qual;
+    string sequence;//TODO should be reference
+    string qual;//TODO should be reference
 };
 
 // depth : [start...end]
 struct interval_t {
-  interval_t() { start = 1; end = 0; depth = -1; }
-  interval_t(long s, long e, long d) { start = s; end = e; depth = d; }
+  interval_t(): start(1), end(0), depth(-1) {}
+  interval_t(long s, long e, long d): start(s), end(e), depth(d) {}
   void reset(long e) { start = 0; end = e; depth = 0; }
   long depth, start, end;
   long size() { return end - start + 1; }
@@ -346,6 +347,7 @@ struct sparseSA {
   void postProcess(vector<match_t> &matches);
 
   void inexactMatch(read_t& read,const align_opt & alnOptions, bool fwStrand, bool print);
+  //TODO: calculate global position in above function
 };
 
 

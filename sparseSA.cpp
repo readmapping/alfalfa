@@ -635,7 +635,7 @@ void *SMAMthread(void *arg) {
   // Find MEMs for all assigned offsets to this thread.
 
   vector<match_t> matches; // place-holder
-  matches.reserve(2000);   // TODO: Use this as a buffer again!!!!!!
+  matches.reserve(2000);   // TODO: Use this as a buffer again!!!!!! Use this everywhere, but static initialize is even better
 
   for(long k = 0; k < (long)K.size(); k++) {  sa->findSMAM(K[k], *(data->P), matches, data->min_len, data->maxCount, data->print); }
 
@@ -694,7 +694,7 @@ void sparseSA::inexactMatch(read_t & read,const align_opt & alnOptions, bool fwS
 #ifndef NDEBUG
     printf("read %s of length %d, strand %s\n",read.qname.c_str(),read.sequence.length(), fwStrand ? "FORWARD" : "REVERSE");
 #endif
-    string P = read.sequence;
+    string & P = read.sequence;
     int Plength = P.length();
     int editDist = (int)(alnOptions.errorPercent*Plength)+1;
     if(!fwStrand)
@@ -875,6 +875,7 @@ void sparseSA::inexactMatch(read_t & read,const align_opt & alnOptions, bool fwS
                         alignment.cigarLengths.push_back(minRefDist);
                         alignment.cigarLengths.push_back(match.len - 1 + minQDist);
                         curEditDist += Utils::contains(S, refstrRB + 1, refstrRB + minRefDist - 1, '`') ? editDist + 1 : minRefDist; //boundary of ref sequences is passed
+                        //TODO: only use of contains: add inline here
 #ifndef NDEBUG
                         printf("extra match required deletion of %d chars, and edit increase of %d\n", minRefDist, Utils::contains(S, refstrRB + 1, refstrRB + minRefDist - 1, '`') ? editDist + 1 : minRefDist);
 #endif
@@ -943,6 +944,8 @@ void sparseSA::inexactMatch(read_t & read,const align_opt & alnOptions, bool fwS
     alignment.setFieldsFromCigar(scores);
     printf("alignment cigar is %s\n", alignment.NMtag.c_str());
 #endif
+    //TODO: check for possible optimizations (static initialisations
+    //TODO: reorder matches according to best hits
             if(curEditDist <= editDist){
                 if(!fwStrand){
                     alignment.flag.set(4,true);

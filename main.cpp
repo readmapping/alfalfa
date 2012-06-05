@@ -117,14 +117,14 @@ struct query_arg {
   int skip0;
   int skip;
   mapOptions_t * opt;
-  vector<read_t> alignments;
+  vector<read_t> alignments;//TODO: change this to array of fixed length char arrays + sizes
 };
 
 void *query_thread(void *arg_) {
 
   query_arg *arg = (query_arg *)arg_;
 
-  string meta, line = NAN;
+  string meta, line = NAN;//change meta to char array with fixed length
   ifstream data(arg->opt->query_fast.c_str());
   bool print = arg->opt->verbose;
 
@@ -133,7 +133,7 @@ void *query_thread(void *arg_) {
   if(!data.is_open()) { cerr << "unable to open " << arg->opt->query_fast << endl; exit(1); }
 
   bool fastq = true;
-  string *P = new string;
+  string *P = new string;//change P and qual to char arrays with fixed length
   string *qual = new string;
 
   while(!data.eof() && fastq) {//first read which serves as swich between fasta and fastq
@@ -148,14 +148,14 @@ void *query_thread(void *arg_) {
       trim(line, start,end);
       for(long i = start; i <= end; i++) {
         char c = std::tolower(line[i]);
-        if(arg->opt->nucleotidesOnly) {
+        if(arg->opt->nucleotidesOnly) {//TODO: rewrite this code for proper use
             switch(c) {
                 case 'a': case 't': case 'g': case 'c': break;
                 default:
                     c = '~';
             }
         }
-        *P += c;
+        *P += c;//TODO change when P is char array
       }
       getlijn(data, line); //'+' line
       getlijn(data, line); //qual line
@@ -449,7 +449,7 @@ int main(int argc, char* argv[]){
             cerr << "time for mapping: " << cpu_time << endl;
             delete sa;
             cerr << "generating SAM and writing to " << opt.outputName << endl;
-            FILE * outfile = fopen( opt.outputName.c_str(), "w" );  // open "shoppingList
+            FILE * outfile = fopen( opt.outputName.c_str(), "w" );
             fprintf(outfile,"%s",output.header.c_str());
             //From global to local pos and write to stringstream
             for(int i = 0; i < opt.query_threads; i++) {
@@ -462,7 +462,7 @@ int main(int argc, char* argv[]){
                         long globPos;
                         long it;
                         string revCompl = read.sequence;
-                        reverse_complement(revCompl, false);
+                        reverse_complement(revCompl, false);//TODO: do this during thread-work, perhaps has worse locality for startpos and refdescr tables
                         string qualRC = read.qual;
                         reverse(qualRC.begin(),qualRC.end());
                         for(int k = 0; k < read.alignments.size(); k++){

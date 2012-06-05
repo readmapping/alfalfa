@@ -6,7 +6,7 @@
 
 // Return the reverse complement of sequence. This allows searching
 // the plus strand of instances on the minus strand.
-void reverse_complement(string &seq_rc, bool nucleotides_only) {
+void reverse_complement(string &seq_rc, bool nucleotides_only) {//TODO optimize this for char arrays
   // Reverse in-place.
   reverse(seq_rc.begin(), seq_rc.end());
   for(long i = 0; i < (long)seq_rc.length(); i++) {

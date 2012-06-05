@@ -74,6 +74,7 @@ int initializeMatrices(dp_matrices& matrices,const dp_scores& scores,const dp_ty
 }
 
 int initializeMatrix(dp_matrices& matrices,const dp_scores& scores,const dp_type& type){
+    //TODO: change this to mallocs and initialize once per thread + realloc if nec.
     assert(matrices.L1 >=0 && matrices.L2 >= 0);
     matrices.M = new int * [matrices.L2+1];
     matrices.traceBack = new char * [matrices.L2+1];
@@ -173,7 +174,7 @@ int findTraceBackPos(const dp_matrices& matrices, int* const i, int* const j,con
     return 0;
 }
 
-int  maximum( int f1, int f2, int f3, char * ptr )
+inline int  maximum( int f1, int f2, int f3, char * ptr )
 {
         int  max = 0 ;
 
@@ -234,27 +235,30 @@ int dpFill(dp_matrices& matrices,const string& ref,const string& query,
 
 int dpFillOpt(dp_matrices& matrices,const string& ref,const string& query, 
         const boundaries& offset, const dp_scores& scores, const dp_type& type){
+    //TODO: when changed to mallocs: use row-order traversal
     int        d = 0;
     char       ptr;
 
     for(int i = 1; i <= matrices.L2; i++ ){
         for(int j = 1; j <= matrices.L1; j++ ){
             //here insert substitution matrix!
-            if(ref[offset.refB+j-1]==query[offset.queryB+i-1])
+            if(ref[offset.refB+j-1]==query[offset.queryB+i-1])//TODO: remove if by using table
                 d = scores.match;
             else{
                 d = ref[offset.refB+j-1] == '`' ? scores.mismatch*query.length() : scores.mismatch;// if ref boundary is passed: huge penalty (A bit hacky)
+                //remove this if with a table entry: init table!!!
             }
             matrices.M[ i ][ j ] = maximum( matrices.M[ i-1 ][ j ] + scores.extendGap,
                                 matrices.M[ i-1 ][ j-1 ] + d,
                                 matrices.M[ i ][ j-1 ] + scores.extendGap,
                                 &ptr );
-            if((type.local || (type.freeQueryB && type.freeRefB)) && matrices.M[i][j]<0){
+            if((type.local || (type.freeQueryB && type.freeRefB)) && matrices.M[i][j]<0){//TODO: put this if up front for sw programming
                 matrices.M[i][j] = 0;
                 matrices.traceBack[i][j] = '0';
             }
             else
                 matrices.traceBack[i][j] = (ptr=='\\' && d == scores.mismatch) ? ':' : ptr;
+            //TODO: remove if by using table on previous match/mismatch table and storing the pointer in the max function
         }
     }
     return 0;
@@ -308,6 +312,8 @@ int dpFillOpt(dp_matrices& matrices,const string& ref,const string& query,
 //}
 
 int dpTraceBack(const dp_matrices& matrices, int& i, int& j, dp_output& output, std::stringstream & ss){
+    //TODO: after mallocs: change this traversal to row-order
+    //change stringstream to char array of length dimensions array
     while( matrices.traceBack[ i ][ j ] != '0' ){
         switch( matrices.traceBack[ i ][ j ] ){
             case '|' :      ss << 'I';
@@ -564,7 +570,7 @@ int dp( const string&     ref,
                     errorString.append(i,'I');
                 else if(j > 0 && !type.local && !type.freeRefB)
                     errorString.append(j, 'D');
-                reverse( errorString.begin(), errorString.end() );
+                reverse( errorString.begin(), errorString.end() );//TODO: leave this out, but use different iterator
                 //create output: errorString
                 int iter = 0;
                 int temp;
