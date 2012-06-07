@@ -24,9 +24,19 @@ v0.2 - Allow multiple matches to be calculated 19/03/2012
 Added a new parameter which allows ALFALFA to calculate more than 1 alignment per read and per strand.
 Added some heuristics to speed up search and added algorithm to select multiple candidate regions.
 -----------------------------------------------
+
 v0.3
 first release
 -------------
+
 v0.3.1
 *Optimized DP a bit when no affine gap penalties are used.
 *fixed the usage and error prints to reflect default parameter changes and parameter name changes
+*added long options to the command line and update usage message
+
+v0.3.2
+*multithreading support added and working
+*minor programming improvements in the code
+Planned features: 
+-leave out suffix links and ISA table for large values of "s", because suffix links do not provide significant additional speedup
+-optimize dynamic programming code and add filters to lower the calls to the dynamic programming routine and/or decrease the size of the matrix

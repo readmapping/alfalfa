@@ -20,6 +20,30 @@
                     <name>Release</name>
                     <type>1</type>
                 </confElem>
+                <confElem>
+                    <name>s1</name>
+                    <type>1</type>
+                </confElem>
+                <confElem>
+                    <name>s2</name>
+                    <type>1</type>
+                </confElem>
+                <confElem>
+                    <name>s4</name>
+                    <type>1</type>
+                </confElem>
+                <confElem>
+                    <name>s8</name>
+                    <type>1</type>
+                </confElem>
+                <confElem>
+                    <name>s12</name>
+                    <type>1</type>
+                </confElem>
+                <confElem>
+                    <name>s16</name>
+                    <type>1</type>
+                </confElem>
             </confList>
         </data>
     </configuration>

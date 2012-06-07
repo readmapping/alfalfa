@@ -1,3 +1,27 @@
+/*
+ * Copyright 2012, Michael Vyverman <michael.vyverman@ugent.be>
+ *
+ * This file is part of ALFALFA.
+ * 
+ * ALFALFA is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * ALFALFA is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with ALFALFA.  If not, see <http://www.gnu.org/licenses/>.
+ * 
+ * Part of the code originates from "A Practical Algorithm for Finding 
+ * Maximal Exact Matches in Large Sequence Data Sets Using Sparse Suffix Arrays"
+ * By Khan et al. Copyright (c) 2009 
+ * You should have received a copy of the copyright notice with this code.
+ */
+
 #include <stdio.h>
 #include <math.h>
 #include <pthread.h>
@@ -692,7 +716,10 @@ void sparseSA::postProcess(vector<match_t> &matches){
 
 void sparseSA::inexactMatch(read_t & read,const align_opt & alnOptions, bool fwStrand, bool print){
 #ifndef NDEBUG
-    printf("read %s of length %d, strand %s\n",read.qname.c_str(),read.sequence.length(), fwStrand ? "FORWARD" : "REVERSE");
+    int loops = 0;
+    int dps = 0;
+    int dpsizeSum = 0;
+    if(print) printf("read %s of length %d, strand %s\n",read.qname.c_str(),read.sequence.length(), fwStrand ? "FORWARD" : "REVERSE");
 #endif
     string & P = read.sequence;
     int Plength = P.length();
@@ -709,7 +736,8 @@ void sparseSA::inexactMatch(read_t & read,const align_opt & alnOptions, bool fwS
     vector<match_t> matches;
     //calc seeds
     SMAM(P, matches, min_len, alnOptions.alignmentCount, false);
-    if(alnOptions.tryHarder){
+    if(alnOptions.tryHarder){//TODO: change try-harder to recalculate only after forward + reverse has been tried
+        //easy solution: try reverse and if found: skip
         if(matches.empty())
             SMAM(P, matches, min_len, 1000, false);
         if(matches.empty())
@@ -719,6 +747,16 @@ void sparseSA::inexactMatch(read_t & read,const align_opt & alnOptions, bool fwS
     }
 #ifndef NDEBUG
     if(print) for(long index = 0; index < (long)matches.size(); index++) print_match(matches[index]);
+    int matchesFound = matches.size();
+    int matchesOverCount = 0;
+    int matchCount[P.length()];
+    for( int i = 0; i < P.length(); i++)
+        matchCount[i] = 0;
+    for( int i = 0; i < matches.size(); i++)
+        matchCount[matches[i].query]++;
+    for(int i = 0; i < P.length(); i++)
+        if(matchCount[i] > alnOptions.alignmentCount)
+            matchesOverCount+=matchCount[i]-alnOptions.alignmentCount;
 #endif
     //sort matches
     if(matches.size()>0){
@@ -745,7 +783,7 @@ void sparseSA::inexactMatch(read_t & read,const align_opt & alnOptions, bool fwS
         //for every interval, try to align
         int alnCount = 0;
         int lisIndex = 0;
-        //hardcoded trial parameter for performance reasons
+        //trial parameter for performance reasons
         int trial = 0;
         //////////////////////
         //MAIN ALIGNMENT LOOP
@@ -758,13 +796,15 @@ void sparseSA::inexactMatch(read_t & read,const align_opt & alnOptions, bool fwS
             begin = lisIntervals[lisIndex].begin;
             end = lisIntervals[lisIndex].end;
 #ifndef NDEBUG
+            loops++;
+            int dpSumInLoop = 0;
+if(print){
     printf("region in reference to test: %ld + %d length\n",matches[begin].ref-matches[begin].query,Plength+editDist);
     printf("Number of mems is %d and number of bases covered by MEMs is %d\n",end-begin+1,lisIntervals[lisIndex].len);
     printf("This is interval %d of %d tested and there have been %d alignments found so far\n",lisIndex, lisIntervals.size(),alnCount);
-    if(print){
-        printf("filtered\n");
+    printf("filtered\n");
         for(long index = begin; index < end; index++) print_match(matches[index]);
-    }
+}
 #endif
             //sort this candidate region by query position
             sort(matches.begin()+begin,matches.begin()+end+1, compMatchesQuery);
@@ -775,7 +815,7 @@ void sparseSA::inexactMatch(read_t & read,const align_opt & alnOptions, bool fwS
             //////////////////
             match_t firstSeed = matches[begin];
 #ifndef NDEBUG
-    printf("first seed with ref %ld, query %ld and length %ld\n",firstSeed.ref,firstSeed.query,firstSeed.len);
+    if( print) printf("first seed with ref %ld, query %ld and length %ld\n",firstSeed.ref,firstSeed.query,firstSeed.len);
 #endif
             int refstrLB = firstSeed.ref;
             int refstrRB = refstrLB + firstSeed.len -1;
@@ -802,7 +842,10 @@ void sparseSA::inexactMatch(read_t & read,const align_opt & alnOptions, bool fwS
                 alignment.pos = grenzen.refB+1;
                 curEditDist += output.editDist;
 #ifndef NDEBUG
-    printf("primary dp executed with editDist %d\n",output.editDist);
+                    dps++;
+                    dpsizeSum += ((refstrLB-alignmentBoundLeft)*(queryLB));
+                    dpSumInLoop += ((refstrLB-alignmentBoundLeft)*(queryLB));
+    if(print)printf("primary dp executed with editDist %d\n",output.editDist);
 #endif
                 output.clear();
             }//fill in the starting position in the ref sequence
@@ -864,7 +907,7 @@ void sparseSA::inexactMatch(read_t & read,const align_opt & alnOptions, bool fwS
                 if (foundNext) {
                     match_t match = matches[minDistMem];
 #ifndef NDEBUG
-                    printf("next match with ref %ld, query %ld and length %ld\n", match.ref, match.query, match.len);
+                    if(print) printf("next match with ref %ld, query %ld and length %ld\n", match.ref, match.query, match.len);
 #endif
                     //add indels and mutations to sol
                     if (minQDist <= 0) {
@@ -877,7 +920,7 @@ void sparseSA::inexactMatch(read_t & read,const align_opt & alnOptions, bool fwS
                         curEditDist += Utils::contains(S, refstrRB + 1, refstrRB + minRefDist - 1, '`') ? editDist + 1 : minRefDist; //boundary of ref sequences is passed
                         //TODO: only use of contains: add inline here
 #ifndef NDEBUG
-                        printf("extra match required deletion of %d chars, and edit increase of %d\n", minRefDist, Utils::contains(S, refstrRB + 1, refstrRB + minRefDist - 1, '`') ? editDist + 1 : minRefDist);
+                       if(print) printf("extra match required deletion of %d chars, and edit increase of %d\n", minRefDist, Utils::contains(S, refstrRB + 1, refstrRB + minRefDist - 1, '`') ? editDist + 1 : minRefDist);
 #endif
                     } else if (minRefDist <= 0) {
                         alignment.cigarChars.push_back('I');
@@ -886,7 +929,7 @@ void sparseSA::inexactMatch(read_t & read,const align_opt & alnOptions, bool fwS
                         alignment.cigarLengths.push_back(match.len - 1 + minRefDist);
                         curEditDist += minQDist;
 #ifndef NDEBUG
-                        printf("extra match required insertion of %d chars, and edit increase of %d\n", minQDist, minQDist);
+     if(print)                   printf("extra match required insertion of %d chars, and edit increase of %d\n", minQDist, minQDist);
 #endif
                     } else {//both distances are positive and not equal to (1,1)
                         boundaries grenzen(refstrRB + 1, refstrRB + minRefDist - 1, queryRB + 1, queryRB + minQDist - 1);
@@ -898,7 +941,10 @@ void sparseSA::inexactMatch(read_t & read,const align_opt & alnOptions, bool fwS
                         alignment.cigarLengths.push_back(match.len);
                         curEditDist += output.editDist;
 #ifndef NDEBUG
-                        printf("extra match required dp, resulting in extra edit dist of %d\n", output.editDist);
+                       if(print) printf("extra match required dp, resulting in extra edit dist of %d\n", output.editDist);
+                        dps++;
+                        dpsizeSum += ((minRefDist)*(minQDist));
+                        dpSumInLoop += ((minRefDist)*(minQDist));
 #endif
                         output.clear();
                     }
@@ -928,7 +974,10 @@ void sparseSA::inexactMatch(read_t & read,const align_opt & alnOptions, bool fwS
                 }
                 curEditDist += output.editDist;
 #ifndef NDEBUG
-                printf("final dp required, resulting in extra edit dist of %d\n", output.editDist);
+               if(print) printf("final dp required, resulting in extra edit dist of %d\n", output.editDist);
+                dps++;
+                dpsizeSum += ((refAlignRB-refstrRB)*(P.length()-queryRB-1));
+                dpSumInLoop += ((refAlignRB-refstrRB)*(P.length()-queryRB-1));
 #endif
                 output.clear();
             } else if (queryRB + 1 < P.length() && curEditDist < editDist) {
@@ -936,13 +985,16 @@ void sparseSA::inexactMatch(read_t & read,const align_opt & alnOptions, bool fwS
                 alignment.cigarLengths.push_back(P.length() - queryRB - 1);
                 curEditDist += clipping ? 0 : P.length() - 1 - queryRB;
 #ifndef NDEBUG
-                printf("final insertion required of %d chars\n", P.length() - queryRB - 1);
+              if(print)  printf("final insertion required of %d chars\n", P.length() - queryRB - 1);
 #endif
             }
 #ifndef NDEBUG
+            printf("%d;%d\n",dpSumInLoop,curEditDist <= editDist ? 0 : 1);
+            if(print){
     printf("alignment of %d edit dist found, while max is %d\n", curEditDist, editDist);
     alignment.setFieldsFromCigar(scores);
     printf("alignment cigar is %s\n", alignment.NMtag.c_str());
+            }
 #endif
     //TODO: check for possible optimizations (static initialisations
     //TODO: reorder matches according to best hits
@@ -961,6 +1013,11 @@ void sparseSA::inexactMatch(read_t & read,const align_opt & alnOptions, bool fwS
             trial++;
         }
     }
+#ifndef NDEBUG
+       if(print){       printf("%d;%d;%d;%d\n",loops,dps,dpsizeSum,matchesFound);
+                        printf("%d\n",matchesOverCount);
+       }
+#endif
 }
 
 

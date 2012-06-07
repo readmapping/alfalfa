@@ -22,7 +22,7 @@ AS=as.exe
 
 # Macros
 CND_PLATFORM=Cygwin-Windows
-CND_CONF=Debug
+CND_CONF=s8
 CND_DISTDIR=dist
 CND_BUILDDIR=build
 
@@ -46,8 +46,8 @@ OBJECTFILES= \
 CFLAGS=
 
 # CC Compiler Flags
-CCFLAGS=-O3
-CXXFLAGS=-O3
+CCFLAGS=-O3 -DNDEBUG
+CXXFLAGS=-O3 -DNDEBUG
 
 # Fortran Compiler Flags
 FFLAGS=
@@ -69,32 +69,32 @@ ${CND_DISTDIR}/${CND_CONF}/${CND_PLATFORM}/alfalfa.exe: ${OBJECTFILES}
 ${OBJECTDIR}/main.o: main.cpp 
 	${MKDIR} -p ${OBJECTDIR}
 	${RM} $@.d
-	$(COMPILE.cc) -g -MMD -MP -MF $@.d -o ${OBJECTDIR}/main.o main.cpp
+	$(COMPILE.cc) -O2 -MMD -MP -MF $@.d -o ${OBJECTDIR}/main.o main.cpp
 
 ${OBJECTDIR}/_ext/1942341467/sparseSA.o: /cygdrive/C/Users/mvyvermn/Documents/NetBeansProjects/alfalfa/sparseSA.cpp 
 	${MKDIR} -p ${OBJECTDIR}/_ext/1942341467
 	${RM} $@.d
-	$(COMPILE.cc) -g -MMD -MP -MF $@.d -o ${OBJECTDIR}/_ext/1942341467/sparseSA.o /cygdrive/C/Users/mvyvermn/Documents/NetBeansProjects/alfalfa/sparseSA.cpp
+	$(COMPILE.cc) -O2 -MMD -MP -MF $@.d -o ${OBJECTDIR}/_ext/1942341467/sparseSA.o /cygdrive/C/Users/mvyvermn/Documents/NetBeansProjects/alfalfa/sparseSA.cpp
 
 ${OBJECTDIR}/_ext/1942341467/utils.o: /cygdrive/C/Users/mvyvermn/Documents/NetBeansProjects/alfalfa/utils.cpp 
 	${MKDIR} -p ${OBJECTDIR}/_ext/1942341467
 	${RM} $@.d
-	$(COMPILE.cc) -g -MMD -MP -MF $@.d -o ${OBJECTDIR}/_ext/1942341467/utils.o /cygdrive/C/Users/mvyvermn/Documents/NetBeansProjects/alfalfa/utils.cpp
+	$(COMPILE.cc) -O2 -MMD -MP -MF $@.d -o ${OBJECTDIR}/_ext/1942341467/utils.o /cygdrive/C/Users/mvyvermn/Documents/NetBeansProjects/alfalfa/utils.cpp
 
 ${OBJECTDIR}/_ext/1942341467/fasta.o: /cygdrive/C/Users/mvyvermn/Documents/NetBeansProjects/alfalfa/fasta.cpp 
 	${MKDIR} -p ${OBJECTDIR}/_ext/1942341467
 	${RM} $@.d
-	$(COMPILE.cc) -g -MMD -MP -MF $@.d -o ${OBJECTDIR}/_ext/1942341467/fasta.o /cygdrive/C/Users/mvyvermn/Documents/NetBeansProjects/alfalfa/fasta.cpp
+	$(COMPILE.cc) -O2 -MMD -MP -MF $@.d -o ${OBJECTDIR}/_ext/1942341467/fasta.o /cygdrive/C/Users/mvyvermn/Documents/NetBeansProjects/alfalfa/fasta.cpp
 
 ${OBJECTDIR}/_ext/1942341467/qsufsort.o: /cygdrive/C/Users/mvyvermn/Documents/NetBeansProjects/alfalfa/qsufsort.c 
 	${MKDIR} -p ${OBJECTDIR}/_ext/1942341467
 	${RM} $@.d
-	$(COMPILE.c) -g -MMD -MP -MF $@.d -o ${OBJECTDIR}/_ext/1942341467/qsufsort.o /cygdrive/C/Users/mvyvermn/Documents/NetBeansProjects/alfalfa/qsufsort.c
+	$(COMPILE.c) -O2 -MMD -MP -MF $@.d -o ${OBJECTDIR}/_ext/1942341467/qsufsort.o /cygdrive/C/Users/mvyvermn/Documents/NetBeansProjects/alfalfa/qsufsort.c
 
 ${OBJECTDIR}/_ext/1942341467/dp.o: /cygdrive/C/Users/mvyvermn/Documents/NetBeansProjects/alfalfa/dp.cpp 
 	${MKDIR} -p ${OBJECTDIR}/_ext/1942341467
 	${RM} $@.d
-	$(COMPILE.cc) -g -MMD -MP -MF $@.d -o ${OBJECTDIR}/_ext/1942341467/dp.o /cygdrive/C/Users/mvyvermn/Documents/NetBeansProjects/alfalfa/dp.cpp
+	$(COMPILE.cc) -O2 -MMD -MP -MF $@.d -o ${OBJECTDIR}/_ext/1942341467/dp.o /cygdrive/C/Users/mvyvermn/Documents/NetBeansProjects/alfalfa/dp.cpp
 
 # Subprojects
 .build-subprojects:
