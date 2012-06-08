@@ -720,7 +720,7 @@ void sparseSA::inexactMatch(read_t & read,const align_opt & alnOptions, bool fwS
     int dpsizeSum = 0;
     if(print) printf("read %s of length %d, strand %s\n",read.qname.c_str(),read.sequence.length(), fwStrand ? "FORWARD" : "REVERSE");
 #endif
-    string & P = read.sequence;
+    string P = read.sequence;
     int Plength = P.length();
     int editDist = (int)(alnOptions.errorPercent*Plength)+1;
     if(!fwStrand)

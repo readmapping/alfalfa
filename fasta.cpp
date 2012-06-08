@@ -170,7 +170,7 @@ bool fastqInputReader::nextReadFastQ(string& meta, string& sequence, string& qua
         trim(line, start , end);
         meta = line.substr(start,end-start+1);
         getlijn(data, sequence); //sequence line
-        for(long i = start; i <= end; i++) {
+        for(long i = 0; i <= sequence.length(); i++) {
             char c = std::tolower(sequence[i]);
             if(nucleotidesOnly) {
                 switch(c) {
