@@ -34,7 +34,7 @@
 #include <assert.h>
 
 #include "dp.h"
-#include "fasta.h"
+#include "utils.h"
 #include <bitset>
 
 using namespace std;
@@ -217,7 +217,7 @@ struct read_t {
         else{
             alignment_t & a = alignments[0];
             string revCompl = sequence;
-            reverse_complement(revCompl, false);
+            Utils::reverse_complement(revCompl, false);
             string qualRC = qual;
             reverse(qualRC.begin(),qualRC.end());
             printf("%s\t%d\t%s\t%ld\t%d\t%s\t%s\t%ld\t%d\t%s\t%s\tAS:i:%d\tNH:i:%ld\tNM:i:%d\tX0:Z:%s\n",

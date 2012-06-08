@@ -27,6 +27,9 @@
 
 #include <string>
 #include <vector>
+#include <pthread.h>
+#include <iostream>
+#include <fstream>
 
 using namespace std;
 
@@ -34,6 +37,31 @@ void reverse_complement(string &seq_rc, bool nucleotides_only);
 void trim(string &line, long &start, long &end);
 void load_fasta(string filename, string &S, vector<string> &descr, vector<long> &startpos);
 
+enum filetype_t { UNKNOWN, FASTA, FASTQ };
+
+/**
+ * Global reader class for the sequence reads
+ * @param fileName
+ * @param fileT
+ */
+struct fastqInputReader {
+    fastqInputReader();
+    fastqInputReader(const string& fileName, bool nucOnly, filetype_t fileT = UNKNOWN);
+    ~fastqInputReader();
+    void open(const string& fileName, bool nucOnly, filetype_t fileT = UNKNOWN);
+    
+    void determineType();
+    //returns 0 if succeeded
+    bool nextRead(string& meta, string& sequence, string& qualities);
+    bool nextReadFastQ(string& meta, string& sequence, string& qualities);
+    bool nextReadFastA(string& meta, string& sequence);
+    
+    bool nucleotidesOnly;
+    ifstream data;
+    filetype_t fileType;
+    string filename;
+    pthread_mutex_t readLock_;
+};
 
 #endif	/* FASTA_H */
 

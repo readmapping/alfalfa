@@ -25,37 +25,9 @@
 #include <fstream>
 #include <iostream>
 #include <algorithm>
+#include <assert.h>
 
 #include "fasta.h"
-
-// Return the reverse complement of sequence. This allows searching
-// the plus strand of instances on the minus strand.
-void reverse_complement(string &seq_rc, bool nucleotides_only) {//TODO optimize this for char arrays
-  // Reverse in-place.
-  reverse(seq_rc.begin(), seq_rc.end());
-  for(long i = 0; i < (long)seq_rc.length(); i++) {
-    // Adapted from Kurtz code in MUMmer v3.
-    switch(seq_rc[i]) {
-    case 'a': seq_rc[i] = 't'; break;
-    case 'c': seq_rc[i] = 'g'; break;
-    case 'g': seq_rc[i] = 'c'; break;
-    case 't': seq_rc[i] = 'a'; break;
-    case 'r': seq_rc[i] = 'y'; break; /* a or g */
-    case 'y': seq_rc[i] = 'r'; break; /* c or t */
-    case 's': seq_rc[i] = 's'; break; /* c or g */
-    case 'w': seq_rc[i] = 'w'; break; /* a or t */
-    case 'm': seq_rc[i] = 'k'; break; /* a or c */
-    case 'k': seq_rc[i] = 'm'; break; /* g or t */
-    case 'b': seq_rc[i] = 'v'; break; /* c, g or t */
-    case 'd': seq_rc[i] = 'h'; break; /* a, g or t */
-    case 'h': seq_rc[i] = 'd'; break; /* a, c or t */
-    case 'v': seq_rc[i] = 'b'; break; /* a, c or g */
-    default:
-      if(!nucleotides_only) seq_rc[i] = 'n';
-      break; /* anything */
-    }
-  }
-}
 
 // Trim a string, giving start and end in trimmed version.
 // NOTE: Assumes line.length() > 0!!!!
@@ -126,5 +98,127 @@ void load_fasta(string filename, string &S, vector<string> &descr, vector<long> 
   }
 }
 
+void getlijn(ifstream & input, string & lijn){
+    //write windows version of getline
+    getline(input, lijn, '\n'); // Load one line at a time.
+    if(lijn.length() > 0 && lijn[lijn.length()-1]=='\r')
+        lijn.erase(--lijn.end());
+}
 
+fastqInputReader::fastqInputReader(): filename(""), fileType(UNKNOWN), data(), nucleotidesOnly(false){
+    pthread_mutex_init(&readLock_, NULL);
+}
 
+fastqInputReader::fastqInputReader(const string& fName, bool nucOnly, filetype_t fileT): 
+        filename(fName), fileType(fileT), data(fName.c_str()), nucleotidesOnly(nucOnly) {
+    pthread_mutex_init(&readLock_, NULL);
+    if(!data.is_open()) { cerr << "unable to open " << fName << endl; exit(1); }
+    determineType();
+}
+
+void fastqInputReader::open(const string& fileName, bool nucOnly, filetype_t fileT){
+    nucleotidesOnly = nucOnly;
+    filename = fileName;
+    fileType = fileT;
+    data.open(filename.c_str());
+    determineType();
+}
+
+fastqInputReader::~fastqInputReader(){
+    data.close();
+    pthread_mutex_destroy(&readLock_);
+}
+
+void fastqInputReader::determineType(){
+    if(fileType == UNKNOWN){
+        string line = "";
+        while(!data.eof() && line.length() == 0){
+            getlijn(data, line);
+        }
+        if(line.length() > 0){
+            if(line[0] == '@')
+                fileType = FASTQ;
+            else if(line[0] == '>')
+                fileType = FASTA;
+            else{
+                cerr << "unknown query file format: " << filename << endl; exit(1);
+            }
+        }
+        data.clear();
+        data.seekg(0, ios::beg) ;
+    }
+}
+
+bool fastqInputReader::nextRead(string& meta, string& sequence, string& qualities){
+    if(fileType == FASTQ)
+        return nextReadFastQ(meta, sequence, qualities);
+    else{
+        qualities = "*";
+        return nextReadFastA(meta, sequence);
+    }
+}
+
+bool fastqInputReader::nextReadFastQ(string& meta, string& sequence, string& qualities){
+    string line;
+    sequence.clear();
+    meta.clear();
+    qualities.clear();
+    while(!data.eof()) {// Load one line at a time: cycle through meta, sequence, '+' and quality
+        getlijn(data, line); // new meta
+        if(line.length() == 0) continue;
+        long start = 1, end = line.length()-1;
+        trim(line, start , end);
+        meta = line.substr(start,end-start+1);
+        getlijn(data, sequence); //sequence line
+        for(long i = start; i <= end; i++) {
+            char c = std::tolower(sequence[i]);
+            if(nucleotidesOnly) {
+                switch(c) {
+                    case 'a': case 't': case 'g': case 'c': break;
+                    default:
+                        c = '~';
+                }
+            }
+            sequence[i] = c;
+        }
+        getlijn(data, line); //'+' line --> should become skiplijn(data);
+        getlijn(data, qualities); //qual line
+        return true;
+    }
+    return false;//no more sequences
+}
+
+bool fastqInputReader::nextReadFastA(string& meta, string& sequence){
+    string line;
+    meta.clear();
+    sequence.clear();
+    while(!data.eof()) {
+        getlijn(data, line); // Load one line at a time.
+        if(line.length() == 0) continue;
+        long start = 0, end = line.length() - 1;
+        // Meta tag line and start of a new sequence.
+        // Collect meta data.
+        assert(line[0] == '>');
+        start = 1;
+        trim(line, start, end);
+        meta = line.substr(start,end-start+1);
+        //sequence part
+        while(!data.eof() && data.peek() != '>'){
+            getlijn(data, line); // Load one line at a time.
+            if(line.empty()) continue;
+            for(long i = 0; i < line.length(); i++) {
+                char c = std::tolower(line[i]);
+                if(nucleotidesOnly) {
+                        switch(c) {
+                                case 'a': case 't': case 'g': case 'c': break;
+                                default:
+                                c = '~';
+                        }
+                }
+                sequence += c;
+            }
+        }
+        return true;
+    }
+    return false;
+}

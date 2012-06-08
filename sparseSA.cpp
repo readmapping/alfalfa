@@ -33,7 +33,6 @@
 #include "sparseSA.h"
 #include "dp.h"
 #include "utils.h"
-#include "fasta.h"
 
 // LS suffix sorter (integer alphabet).
 extern "C" { void suffixsort(int *x, int *p, int n, int k, int l); };
@@ -725,7 +724,7 @@ void sparseSA::inexactMatch(read_t & read,const align_opt & alnOptions, bool fwS
     int Plength = P.length();
     int editDist = (int)(alnOptions.errorPercent*Plength)+1;
     if(!fwStrand)
-        reverse_complement(P,false);
+        Utils::reverse_complement(P,false);
     bool clipping = !alnOptions.noClipping;
     int min_len = alnOptions.minMemLength;
     if(!alnOptions.fixedMinLength && Plength/editDist > min_len)

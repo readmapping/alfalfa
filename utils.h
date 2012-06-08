@@ -26,6 +26,7 @@ namespace Utils{
 
     std::string convertInt(const int number);
     bool contains(const std::string & str,const long begin,const long end,const char c);
+    void reverse_complement(std::string &seq_rc, bool nucleotides_only);
 
 }
 

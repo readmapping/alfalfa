@@ -50,12 +50,12 @@ using namespace std;
 
 void usage(string prog);
 
-void getlijn(ifstream & input, string & lijn){
-    //write windows version of getline
-    getline(input, lijn, '\n'); // Load one line at a time.
-    if(lijn.length() > 0 && lijn[lijn.length()-1]=='\r')
-        lijn.erase(--lijn.end());
-}
+//void getlijn(ifstream & input, string & lijn){
+//    //write windows version of getline
+//    getline(input, lijn, '\n'); // Load one line at a time.
+//    if(lijn.length() > 0 && lijn[lijn.length()-1]=='\r')
+//        lijn.erase(--lijn.end());
+//}
 
 enum mum_t { MUM, MAM, MEM, SMAM };
 enum command_t {INDEX, MATCHES, ALN};
@@ -135,6 +135,7 @@ struct samOutput{//construct
 
 //FIELDS
 static sparseSA *sa;
+static fastqInputReader *queryReader;
 
 struct query_arg {
     query_arg(): alignments(0), skip0(0), skip(0), opt(0){}
@@ -142,162 +143,182 @@ struct query_arg {
   int skip;
   mapOptions_t * opt;
   vector<read_t> alignments;//TODO: change this to array of fixed length char arrays + sizes
+  pthread_mutex_t *readLock;
+  pthread_mutex_t *writeLock;
 };
 
 void *query_thread(void *arg_) {
 
   query_arg *arg = (query_arg *)arg_;
-
-  string meta, line = NAN;//change meta to char array with fixed length
-  ifstream data(arg->opt->query_fast.c_str());
   bool print = arg->opt->verbose;
-
   long seq_cnt = 0;
-
-  if(!data.is_open()) { cerr << "unable to open " << arg->opt->query_fast << endl; exit(1); }
-
-  bool fastq = true;
-  string *P = new string;//change P and qual to char arrays with fixed length
-  string *qual = new string;
-
-  while(!data.eof() && fastq) {//first read which serves as swich between fasta and fastq
-    getlijn(data, line); // Load one line at a time.
-    if(line.length() == 0) continue;
-    if(line[0] == '@') {
-      long start = 1, end = line.length() - 1;
-      trim(line, start, end);
-      meta = line.substr(start,end-start+1);
-      getlijn(data, line); //sequence line
-      start = 0; end = line.length() - 1;
-      trim(line, start,end);
-      for(long i = start; i <= end; i++) {
-        char c = std::tolower(line[i]);
-        if(arg->opt->nucleotidesOnly) {//TODO: rewrite this code for proper use
-            switch(c) {
-                case 'a': case 't': case 'g': case 'c': break;
-                default:
-                    c = '~';
-            }
-        }
-        *P += c;//TODO change when P is char array
-      }
-      getlijn(data, line); //'+' line
-      getlijn(data, line); //qual line
-      if(seq_cnt % arg->skip == arg->skip0) {
-          *qual = line;
-          read_t read(meta,*P,*qual);
+  bool hasRead = true;
+  while(hasRead){
+      read_t read;
+      pthread_mutex_lock(arg->readLock);
+      hasRead = queryReader->nextRead(read.qname,read.sequence,read.qual);
+      pthread_mutex_unlock(arg->readLock);
+      if(hasRead){
+          seq_cnt++;
           if(!arg->opt->noFW)
-            sa->inexactMatch(read, arg->opt->alnOptions, true, print);
+                sa->inexactMatch(read, arg->opt->alnOptions, true, print);
           if(!arg->opt->noRC)
-            sa->inexactMatch(read, arg->opt->alnOptions, false, print);
+                sa->inexactMatch(read, arg->opt->alnOptions, false, print);
           read.postprocess(arg->opt->alnOptions.scores);
           arg->alignments.push_back(read);
       }
-      seq_cnt++;
-      delete qual; qual = new string;
-      delete P; P = new string; meta = "";
-      break;
-    }
-    else if(line[0] == '>'){
-        long start = 1, end = line.length() - 1;
-        trim(line, start, end);
-        meta = line.substr(start,end-start+1);
-        fastq = false;
-    }
   }
-  if(fastq){//fastq
-    while(!data.eof()) {// Load one line at a time: cycle through meta, sequence, '+' and quality
-        getlijn(data, line); // new meta
-        if(line.length() == 0) continue;
-        long start = 1, end = line.length()-1;
-        trim(line, start , end);
-        meta = line.substr(start,end-start+1);
-        getlijn(data, line); //sequence line
-        start = 0; end = line.length() - 1;
-        trim(line, start,end);
-        for(long i = start; i <= end; i++) {
-            char c = std::tolower(line[i]);
-            if(arg->opt->nucleotidesOnly) {
-                switch(c) {
-                    case 'a': case 't': case 'g': case 'c': break;
-                    default:
-                        c = '~';
-                }
-            }
-            *P += c;
-        }
-        getlijn(data, line); //'+' line
-        getlijn(data, line); //qual line
-        if(seq_cnt % arg->skip == arg->skip0) {
-            *qual = line;
-            read_t read(meta,*P,*qual);
-            if(!arg->opt->noFW)
-                sa->inexactMatch(read, arg->opt->alnOptions, true, print);
-            if(!arg->opt->noRC)
-                sa->inexactMatch(read, arg->opt->alnOptions, false, print);
-            read.postprocess(arg->opt->alnOptions.scores);
-            arg->alignments.push_back(read);
-        }
-        seq_cnt++;
-        delete qual; qual = new string;
-        delete P; P = new string; meta = "";
-    }
-  }
-  else{//fasta
-        while(!data.eof()) {
-        getlijn(data, line); // Load one line at a time.
-        if(line.length() == 0) continue;
-        long start = 0, end = line.length() - 1;
-        // Meta tag line and start of a new sequence.
-        // Collect meta data.
-        if(line[0] == '>') {
-          if(meta != "") {
-            if(seq_cnt % arg->skip == arg->skip0) {
-              read_t read(meta,*P,NAN);
-              if(!arg->opt->noFW)
-                sa->inexactMatch(read, arg->opt->alnOptions, true, print);
-              if(!arg->opt->noRC)
-                sa->inexactMatch(read, arg->opt->alnOptions, false, print);
-              read.postprocess(arg->opt->alnOptions.scores);
-              arg->alignments.push_back(read);
-            }
-            seq_cnt++;
-            delete P; P = new string; meta = "";
-          }
-          start = 1;
-          trim(line, start, end);
-          meta = line.substr(start,end-start+1);
-        }
-        else { // Collect sequence data.
-          trim(line, start,end);
-          for(long i = start; i <= end; i++) {
-            char c = std::tolower(line[i]);
-            if(arg->opt->nucleotidesOnly) {
-              switch(c) {
-              case 'a': case 't': case 'g': case 'c': break;
-              default:
-                c = '~';
-              }
-            }
-            *P += c;
-          }
-        }
-      }
-      // Handle very last sequence.
-      if(meta != "") {
-        if(seq_cnt % arg->skip == arg->skip0) {
-          read_t read(meta,*P,NAN);
-          if(!arg->opt->noFW)
-            sa->inexactMatch(read, arg->opt->alnOptions, true, print);
-          if(!arg->opt->noRC)
-            sa->inexactMatch(read, arg->opt->alnOptions, false, print);
-          read.postprocess(arg->opt->alnOptions.scores);
-          arg->alignments.push_back(read);
-        }
-      }
-  }
-  delete P;
-  delete qual;
+  printf("sequences mapped: %ld\n", seq_cnt);
+  
+//  ifstream data(arg->opt->query_fast.c_str());
+//  bool print = arg->opt->verbose;
+//
+//  long seq_cnt = 0;
+//
+//  if(!data.is_open()) { cerr << "unable to open " << arg->opt->query_fast << endl; exit(1); }
+//
+//  bool fastq = true;
+//  string *P = new string;//change P and qual to char arrays with fixed length
+//  string *qual = new string;
+//
+//  while(!data.eof() && fastq) {//first read which serves as swich between fasta and fastq
+//    getlijn(data, line); // Load one line at a time.
+//    if(line.length() == 0) continue;
+//    if(line[0] == '@') {
+//      long start = 1, end = line.length() - 1;
+//      trim(line, start, end);
+//      meta = line.substr(start,end-start+1);
+//      getlijn(data, line); //sequence line
+//      start = 0; end = line.length() - 1;
+//      trim(line, start,end);
+//      for(long i = start; i <= end; i++) {
+//        char c = std::tolower(line[i]);
+//        if(arg->opt->nucleotidesOnly) {//TODO: rewrite this code for proper use
+//            switch(c) {
+//                case 'a': case 't': case 'g': case 'c': break;
+//                default:
+//                    c = '~';
+//            }
+//        }
+//        *P += c;//TODO change when P is char array
+//      }
+//      getlijn(data, line); //'+' line
+//      getlijn(data, line); //qual line
+//      if(seq_cnt % arg->skip == arg->skip0) {
+//          *qual = line;
+//          read_t read(meta,*P,*qual);
+//          if(!arg->opt->noFW)
+//            sa->inexactMatch(read, arg->opt->alnOptions, true, print);
+//          if(!arg->opt->noRC)
+//            sa->inexactMatch(read, arg->opt->alnOptions, false, print);
+//          read.postprocess(arg->opt->alnOptions.scores);
+//          arg->alignments.push_back(read);
+//      }
+//      seq_cnt++;
+//      delete qual; qual = new string;
+//      delete P; P = new string; meta = "";
+//      break;
+//    }
+//    else if(line[0] == '>'){
+//        long start = 1, end = line.length() - 1;
+//        trim(line, start, end);
+//        meta = line.substr(start,end-start+1);
+//        fastq = false;
+//    }
+//  }
+//  if(fastq){//fastq
+//    while(!data.eof()) {// Load one line at a time: cycle through meta, sequence, '+' and quality
+//        getlijn(data, line); // new meta
+//        if(line.length() == 0) continue;
+//        long start = 1, end = line.length()-1;
+//        trim(line, start , end);
+//        meta = line.substr(start,end-start+1);
+//        getlijn(data, line); //sequence line
+//        start = 0; end = line.length() - 1;
+//        trim(line, start,end);
+//        for(long i = start; i <= end; i++) {
+//            char c = std::tolower(line[i]);
+//            if(arg->opt->nucleotidesOnly) {
+//                switch(c) {
+//                    case 'a': case 't': case 'g': case 'c': break;
+//                    default:
+//                        c = '~';
+//                }
+//            }
+//            *P += c;
+//        }
+//        getlijn(data, line); //'+' line
+//        getlijn(data, line); //qual line
+//        if(seq_cnt % arg->skip == arg->skip0) {
+//            *qual = line;
+//            read_t read(meta,*P,*qual);
+//            if(!arg->opt->noFW)
+//                sa->inexactMatch(read, arg->opt->alnOptions, true, print);
+//            if(!arg->opt->noRC)
+//                sa->inexactMatch(read, arg->opt->alnOptions, false, print);
+//            read.postprocess(arg->opt->alnOptions.scores);
+//            arg->alignments.push_back(read);
+//        }
+//        seq_cnt++;
+//        delete qual; qual = new string;
+//        delete P; P = new string; meta = "";
+//    }
+//  }
+//  else{//fasta
+//        while(!data.eof()) {
+//        getlijn(data, line); // Load one line at a time.
+//        if(line.length() == 0) continue;
+//        long start = 0, end = line.length() - 1;
+//        // Meta tag line and start of a new sequence.
+//        // Collect meta data.
+//        if(line[0] == '>') {
+//          if(meta != "") {
+//            if(seq_cnt % arg->skip == arg->skip0) {
+//              read_t read(meta,*P,NAN);
+//              if(!arg->opt->noFW)
+//                sa->inexactMatch(read, arg->opt->alnOptions, true, print);
+//              if(!arg->opt->noRC)
+//                sa->inexactMatch(read, arg->opt->alnOptions, false, print);
+//              read.postprocess(arg->opt->alnOptions.scores);
+//              arg->alignments.push_back(read);
+//            }
+//            seq_cnt++;
+//            delete P; P = new string; meta = "";
+//          }
+//          start = 1;
+//          trim(line, start, end);
+//          meta = line.substr(start,end-start+1);
+//        }
+//        else { // Collect sequence data.
+//          trim(line, start,end);
+//          for(long i = start; i <= end; i++) {
+//            char c = std::tolower(line[i]);
+//            if(arg->opt->nucleotidesOnly) {
+//              switch(c) {
+//              case 'a': case 't': case 'g': case 'c': break;
+//              default:
+//                c = '~';
+//              }
+//            }
+//            *P += c;
+//          }
+//        }
+//      }
+//      // Handle very last sequence.
+//      if(meta != "") {
+//        if(seq_cnt % arg->skip == arg->skip0) {
+//          read_t read(meta,*P,NAN);
+//          if(!arg->opt->noFW)
+//            sa->inexactMatch(read, arg->opt->alnOptions, true, print);
+//          if(!arg->opt->noRC)
+//            sa->inexactMatch(read, arg->opt->alnOptions, false, print);
+//          read.postprocess(arg->opt->alnOptions.scores);
+//          arg->alignments.push_back(read);
+//        }
+//      }
+//  }
+//  delete P;
+//  delete qual;
   pthread_exit(NULL);
 }
 
@@ -445,8 +466,11 @@ int main(int argc, char* argv[]){
             if(command == INDEX) delete sa;
         }
         if(command == ALN){
-            //Print SAM Header, require refdescre, startpos and argc/argv
+            //query name + read initialization
             opt.query_fast = optind+2 < argc ? argv[optind+2] : "";
+            queryReader = new fastqInputReader(opt.query_fast, opt.nucleotidesOnly);
+            
+            //Print SAM Header, require refdescre, startpos and argc/argv
             opt.outputName = optind+3 < argc ? argv[optind+3] : opt.query_fast.substr().append(".sam");
             output.createHeader(argc, argv, ref.length());
             pthread_attr_t attr;  pthread_attr_init(&attr);
@@ -460,6 +484,8 @@ int main(int argc, char* argv[]){
                 args[i].skip = opt.query_threads;
                 args[i].skip0 = i;
                 args[i].opt = & opt;
+                args[i].readLock = &queryReader->readLock_;
+                args[i].writeLock = NULL;
             }
             // Create joinable threads to find MEMs.
             for(int i = 0; i < opt.query_threads; i++)
@@ -472,6 +498,7 @@ int main(int argc, char* argv[]){
             cerr << "mapping: done" << endl;
             cerr << "time for mapping: " << cpu_time << endl;
             delete sa;
+            delete queryReader;
             cerr << "generating SAM and writing to " << opt.outputName << endl;
             FILE * outfile = fopen( opt.outputName.c_str(), "w" );
             fprintf(outfile,"%s",output.header.c_str());
@@ -486,7 +513,7 @@ int main(int argc, char* argv[]){
                         long globPos;
                         long it;
                         string revCompl = read.sequence;
-                        reverse_complement(revCompl, false);//TODO: do this during thread-work, perhaps has worse locality for startpos and refdescr tables
+                        Utils::reverse_complement(revCompl, false);//TODO: do this during thread-work, perhaps has worse locality for startpos and refdescr tables
                         string qualRC = read.qual;
                         reverse(qualRC.begin(),qualRC.end());
                         for(int k = 0; k < read.alignments.size(); k++){

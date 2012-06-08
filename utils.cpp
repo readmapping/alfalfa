@@ -20,6 +20,7 @@
 #include "utils.h"
 #include <sstream>
 #include <assert.h>
+#include <algorithm>
 
 namespace Utils{
 
@@ -38,6 +39,35 @@ namespace Utils{
             i++;
         }
         return contains;
+    }
+    
+    // Return the reverse complement of sequence. This allows searching
+    // the plus strand of instances on the minus strand.
+    void reverse_complement(std::string &seq_rc, bool nucleotides_only) {//TODO optimize this for char arrays
+        // Reverse in-place.
+        std::reverse(seq_rc.begin(), seq_rc.end());
+        for(long i = 0; i < (long)seq_rc.length(); i++) {
+            // Adapted from Kurtz code in MUMmer v3.
+            switch(seq_rc[i]) {
+                case 'a': seq_rc[i] = 't'; break;
+                case 'c': seq_rc[i] = 'g'; break;
+                case 'g': seq_rc[i] = 'c'; break;
+                case 't': seq_rc[i] = 'a'; break;
+                case 'r': seq_rc[i] = 'y'; break; /* a or g */
+                case 'y': seq_rc[i] = 'r'; break; /* c or t */
+                case 's': seq_rc[i] = 's'; break; /* c or g */
+                case 'w': seq_rc[i] = 'w'; break; /* a or t */
+                case 'm': seq_rc[i] = 'k'; break; /* a or c */
+                case 'k': seq_rc[i] = 'm'; break; /* g or t */
+                case 'b': seq_rc[i] = 'v'; break; /* c, g or t */
+                case 'd': seq_rc[i] = 'h'; break; /* a, g or t */
+                case 'h': seq_rc[i] = 'd'; break; /* a, c or t */
+                case 'v': seq_rc[i] = 'b'; break; /* a, c or g */
+                default:
+                if(!nucleotides_only) seq_rc[i] = 'n';
+                break; /* anything */
+            }
+        }
     }
 
 }
