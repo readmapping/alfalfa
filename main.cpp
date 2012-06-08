@@ -50,13 +50,6 @@ using namespace std;
 
 void usage(string prog);
 
-//void getlijn(ifstream & input, string & lijn){
-//    //write windows version of getline
-//    getline(input, lijn, '\n'); // Load one line at a time.
-//    if(lijn.length() > 0 && lijn[lijn.length()-1]=='\r')
-//        lijn.erase(--lijn.end());
-//}
-
 enum mum_t { MUM, MAM, MEM, SMAM };
 enum command_t {INDEX, MATCHES, ALN};
 //mapper options
@@ -136,6 +129,8 @@ struct samOutput{//construct
 //FIELDS
 static sparseSA *sa;
 static fastqInputReader *queryReader;
+static FILE * outfile;
+static pthread_mutex_t writeLock_;
 
 struct query_arg {
     query_arg(): alignments(0), skip0(0), skip(0), opt(0){}
@@ -165,160 +160,46 @@ void *query_thread(void *arg_) {
           if(!arg->opt->noRC)
                 sa->inexactMatch(read, arg->opt->alnOptions, false, print);
           read.postprocess(arg->opt->alnOptions.scores);
-          arg->alignments.push_back(read);
+          //From global to local pos and write to stringstream
+          stringstream * ss = new stringstream;
+          if(read.alignments.empty())
+              *ss << read.qname << "\t4\t*\t0\t0\t*\t*\t0\t0\t" 
+                      << read.sequence << "\t" << read.qual << endl;
+          else{
+                long globPos;
+                long it;
+                string revCompl = read.sequence;
+                //TODO: do this during thread-work, perhaps has worse locality for startpos and refdescr tables
+                Utils::reverse_complement(revCompl, false);
+                string qualRC = read.qual;
+                reverse(qualRC.begin(),qualRC.end());
+                for(int k = 0; k < read.alignments.size(); k++){
+                        alignment_t & a = read.alignments[k];
+                        globPos = a.pos;
+                        it = 1;
+                        while(it < sa->startpos.size() && globPos > sa->startpos[it]){
+                                it++;
+                        }
+                        a.pos = globPos - sa->startpos[it-1];
+                        a.rname = sa->descr[it-1];
+                        *ss << read.qname << "\t" << a.flag.to_ulong() << "\t"
+                                << a.rname << "\t" << a.pos << "\t" << 
+                                a.mapq << "\t" << a.cigar << "\t" << 
+                                a.rnext << "\t" << a.pnext << "\t" << 
+                                a.tLength << "\t" << (a.flag.test(4) ? revCompl : read.sequence) <<
+                                "\t" << (a.flag.test(4) ? qualRC : read.qual) << "\tAS:i:" << 
+                                a.alignmentScore << "\tNM:i:" << a.editDist << "\tX0:Z:" << 
+                                a.NMtag << endl;
+                }
+          }
+          pthread_mutex_lock(arg->writeLock);
+          fprintf(outfile,"%s",ss->str().c_str());
+          pthread_mutex_unlock(arg->writeLock);
+          delete ss;
       }
   }
   printf("sequences mapped: %ld\n", seq_cnt);
   
-//  ifstream data(arg->opt->query_fast.c_str());
-//  bool print = arg->opt->verbose;
-//
-//  long seq_cnt = 0;
-//
-//  if(!data.is_open()) { cerr << "unable to open " << arg->opt->query_fast << endl; exit(1); }
-//
-//  bool fastq = true;
-//  string *P = new string;//change P and qual to char arrays with fixed length
-//  string *qual = new string;
-//
-//  while(!data.eof() && fastq) {//first read which serves as swich between fasta and fastq
-//    getlijn(data, line); // Load one line at a time.
-//    if(line.length() == 0) continue;
-//    if(line[0] == '@') {
-//      long start = 1, end = line.length() - 1;
-//      trim(line, start, end);
-//      meta = line.substr(start,end-start+1);
-//      getlijn(data, line); //sequence line
-//      start = 0; end = line.length() - 1;
-//      trim(line, start,end);
-//      for(long i = start; i <= end; i++) {
-//        char c = std::tolower(line[i]);
-//        if(arg->opt->nucleotidesOnly) {//TODO: rewrite this code for proper use
-//            switch(c) {
-//                case 'a': case 't': case 'g': case 'c': break;
-//                default:
-//                    c = '~';
-//            }
-//        }
-//        *P += c;//TODO change when P is char array
-//      }
-//      getlijn(data, line); //'+' line
-//      getlijn(data, line); //qual line
-//      if(seq_cnt % arg->skip == arg->skip0) {
-//          *qual = line;
-//          read_t read(meta,*P,*qual);
-//          if(!arg->opt->noFW)
-//            sa->inexactMatch(read, arg->opt->alnOptions, true, print);
-//          if(!arg->opt->noRC)
-//            sa->inexactMatch(read, arg->opt->alnOptions, false, print);
-//          read.postprocess(arg->opt->alnOptions.scores);
-//          arg->alignments.push_back(read);
-//      }
-//      seq_cnt++;
-//      delete qual; qual = new string;
-//      delete P; P = new string; meta = "";
-//      break;
-//    }
-//    else if(line[0] == '>'){
-//        long start = 1, end = line.length() - 1;
-//        trim(line, start, end);
-//        meta = line.substr(start,end-start+1);
-//        fastq = false;
-//    }
-//  }
-//  if(fastq){//fastq
-//    while(!data.eof()) {// Load one line at a time: cycle through meta, sequence, '+' and quality
-//        getlijn(data, line); // new meta
-//        if(line.length() == 0) continue;
-//        long start = 1, end = line.length()-1;
-//        trim(line, start , end);
-//        meta = line.substr(start,end-start+1);
-//        getlijn(data, line); //sequence line
-//        start = 0; end = line.length() - 1;
-//        trim(line, start,end);
-//        for(long i = start; i <= end; i++) {
-//            char c = std::tolower(line[i]);
-//            if(arg->opt->nucleotidesOnly) {
-//                switch(c) {
-//                    case 'a': case 't': case 'g': case 'c': break;
-//                    default:
-//                        c = '~';
-//                }
-//            }
-//            *P += c;
-//        }
-//        getlijn(data, line); //'+' line
-//        getlijn(data, line); //qual line
-//        if(seq_cnt % arg->skip == arg->skip0) {
-//            *qual = line;
-//            read_t read(meta,*P,*qual);
-//            if(!arg->opt->noFW)
-//                sa->inexactMatch(read, arg->opt->alnOptions, true, print);
-//            if(!arg->opt->noRC)
-//                sa->inexactMatch(read, arg->opt->alnOptions, false, print);
-//            read.postprocess(arg->opt->alnOptions.scores);
-//            arg->alignments.push_back(read);
-//        }
-//        seq_cnt++;
-//        delete qual; qual = new string;
-//        delete P; P = new string; meta = "";
-//    }
-//  }
-//  else{//fasta
-//        while(!data.eof()) {
-//        getlijn(data, line); // Load one line at a time.
-//        if(line.length() == 0) continue;
-//        long start = 0, end = line.length() - 1;
-//        // Meta tag line and start of a new sequence.
-//        // Collect meta data.
-//        if(line[0] == '>') {
-//          if(meta != "") {
-//            if(seq_cnt % arg->skip == arg->skip0) {
-//              read_t read(meta,*P,NAN);
-//              if(!arg->opt->noFW)
-//                sa->inexactMatch(read, arg->opt->alnOptions, true, print);
-//              if(!arg->opt->noRC)
-//                sa->inexactMatch(read, arg->opt->alnOptions, false, print);
-//              read.postprocess(arg->opt->alnOptions.scores);
-//              arg->alignments.push_back(read);
-//            }
-//            seq_cnt++;
-//            delete P; P = new string; meta = "";
-//          }
-//          start = 1;
-//          trim(line, start, end);
-//          meta = line.substr(start,end-start+1);
-//        }
-//        else { // Collect sequence data.
-//          trim(line, start,end);
-//          for(long i = start; i <= end; i++) {
-//            char c = std::tolower(line[i]);
-//            if(arg->opt->nucleotidesOnly) {
-//              switch(c) {
-//              case 'a': case 't': case 'g': case 'c': break;
-//              default:
-//                c = '~';
-//              }
-//            }
-//            *P += c;
-//          }
-//        }
-//      }
-//      // Handle very last sequence.
-//      if(meta != "") {
-//        if(seq_cnt % arg->skip == arg->skip0) {
-//          read_t read(meta,*P,NAN);
-//          if(!arg->opt->noFW)
-//            sa->inexactMatch(read, arg->opt->alnOptions, true, print);
-//          if(!arg->opt->noRC)
-//            sa->inexactMatch(read, arg->opt->alnOptions, false, print);
-//          read.postprocess(arg->opt->alnOptions.scores);
-//          arg->alignments.push_back(read);
-//        }
-//      }
-//  }
-//  delete P;
-//  delete qual;
   pthread_exit(NULL);
 }
 
@@ -473,6 +354,10 @@ int main(int argc, char* argv[]){
             //Print SAM Header, require refdescre, startpos and argc/argv
             opt.outputName = optind+3 < argc ? argv[optind+3] : opt.query_fast.substr().append(".sam");
             output.createHeader(argc, argv, ref.length());
+            outfile = fopen( opt.outputName.c_str(), "w" );
+            fprintf(outfile,"%s",output.header.c_str());
+            pthread_mutex_init(&writeLock_, NULL);
+            
             pthread_attr_t attr;  pthread_attr_init(&attr);
             pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
             vector<query_arg> args(opt.query_threads);
@@ -485,7 +370,7 @@ int main(int argc, char* argv[]){
                 args[i].skip0 = i;
                 args[i].opt = & opt;
                 args[i].readLock = &queryReader->readLock_;
-                args[i].writeLock = NULL;
+                args[i].writeLock = &writeLock_;
             }
             // Create joinable threads to find MEMs.
             for(int i = 0; i < opt.query_threads; i++)
@@ -497,43 +382,9 @@ int main(int argc, char* argv[]){
             double cpu_time = (double)( end - start ) /CLOCKS_PER_SEC;
             cerr << "mapping: done" << endl;
             cerr << "time for mapping: " << cpu_time << endl;
+            fclose( outfile );
             delete sa;
             delete queryReader;
-            cerr << "generating SAM and writing to " << opt.outputName << endl;
-            FILE * outfile = fopen( opt.outputName.c_str(), "w" );
-            fprintf(outfile,"%s",output.header.c_str());
-            //From global to local pos and write to stringstream
-            for(int i = 0; i < opt.query_threads; i++) {
-                for(int j = 0; j < args[i].alignments.size(); j++){
-                    read_t & read = args[i].alignments[j];
-                    if(read.alignments.empty())
-                        fprintf(outfile,"%s\t%d\t%s\t%ld\t%d\t%s\t%s\t%ld\t%d\t%s\t%s\n",
-                                read.qname.c_str(),4,"*",0,0,"*","*",0,0,read.sequence.c_str(),read.qual.c_str());
-                    else{
-                        long globPos;
-                        long it;
-                        string revCompl = read.sequence;
-                        Utils::reverse_complement(revCompl, false);//TODO: do this during thread-work, perhaps has worse locality for startpos and refdescr tables
-                        string qualRC = read.qual;
-                        reverse(qualRC.begin(),qualRC.end());
-                        for(int k = 0; k < read.alignments.size(); k++){
-                            alignment_t & a = read.alignments[k];
-                            globPos = a.pos;
-                            it = 1;
-                            while(it < output.startpos.size() && globPos > output.startpos[it]){
-                                it++;
-                            }
-                            a.pos = globPos - output.startpos[it-1];
-                            a.rname = output.refdescr[it-1];
-                            fprintf(outfile,"%s\t%d\t%s\t%ld\t%d\t%s\t%s\t%ld\t%d\t%s\t%s\tAS:i:%d\tNM:i:%d\tX0:Z:%s\n",
-                        read.qname.c_str(),(int)a.flag.to_ulong(),a.rname.c_str(),a.pos,a.mapq,a.cigar.c_str(),
-                        a.rnext.c_str(),a.pnext,a.tLength, a.flag.test(4) ? revCompl.c_str() : read.sequence.c_str(), a.flag.test(4) ? qualRC.c_str() : read.qual.c_str(),
-                        a.alignmentScore,a.editDist,a.NMtag.c_str());
-                        }
-                    }
-                }
-            }
-            fclose( outfile );
             cerr << "FINISHED" << endl;
         }
     }
