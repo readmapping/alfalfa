@@ -956,7 +956,7 @@ if(print){
             }
             //possible at the end characters
             //mapInterval += Integer.toString(queryRB+1)+"]";
-            if (queryRB + 1 < P.length() && refstrRB < S.length() - 1 && curEditDist < editDist) {
+            if (queryRB + 1 < P.length() && refstrRB < S.length() - 1 && curEditDist <= editDist) {
                 int refAlignRB = refstrRB + (P.length() - queryRB) + 1 + editDist - curEditDist;
                 if (refAlignRB >= S.length())
                     refAlignRB = S.length() - 1;
