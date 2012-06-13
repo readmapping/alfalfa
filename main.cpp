@@ -176,12 +176,9 @@ void *query_thread(void *arg_) {
                 for(int k = 0; k < read.alignments.size(); k++){
                         alignment_t & a = read.alignments[k];
                         globPos = a.pos;
-                        it = 1;
-                        while(it < sa->startpos.size() && globPos > sa->startpos[it]){
-                                it++;
-                        }
-                        a.pos = globPos - sa->startpos[it-1];
-                        a.rname = sa->descr[it-1];
+                        long descIndex;
+                        sa->from_set(globPos, descIndex, a.pos);
+                        a.rname = sa->descr[descIndex];
                         *ss << read.qname << "\t" << a.flag.to_ulong() << "\t"
                                 << a.rname << "\t" << a.pos << "\t" << 
                                 a.mapq << "\t" << a.cigar << "\t" << 
