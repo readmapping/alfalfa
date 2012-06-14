@@ -29,6 +29,7 @@
 
 #include <bitset>
 #include <limits.h>
+#include <stack>
 
 #include "sparseSA.h"
 #include "dp.h"
@@ -124,6 +125,10 @@ sparseSA::sparseSA(string &S_, vector<string> &descr_, vector<long> &startpos_, 
   // Use algorithm by Kasai et al to construct LCP array.
   computeLCP();  // SA + ISA -> LCP
   LCP.init();
+  
+  CHILD.resize(N/K);
+  //Use algorithm by Abouelhoda et al to construct CHILD array
+  computeChild();
 
   NKm1 = N/K-1;
 }
@@ -143,6 +148,42 @@ void sparseSA::computeLCP() {
     }
     h = max(0L, h - K);
   }
+}
+
+// Child array construction algorithm
+void sparseSA::computeChild() {
+        //Compute up and down values
+        int lastIndex  = -1;
+        stack<int,vector<int> > stapelUD;
+        stapelUD.push(0);
+        for(int i = 1; i < N/K; i++){
+            while(LCP[i] < LCP[stapelUD.top()]){
+                lastIndex = stapelUD.top();
+                stapelUD.pop();
+                if(LCP[i] <= LCP[stapelUD.top()] && LCP[stapelUD.top()] != LCP[lastIndex]){
+                    CHILD[stapelUD.top()] = lastIndex;
+                }
+            }
+            //now LCP[i] >= LCP[top] holds
+            if(lastIndex != -1){
+                CHILD[i-1] = lastIndex;
+                lastIndex = -1;
+            }
+            stapelUD.push(i);
+        }
+        //Compute Next L-index values
+        stack<int,vector<int> > stapelNL;
+        stapelNL.push(0);
+        for(int i = 1; i < N/K; i++){
+            while(LCP[i] < LCP[stapelNL.top()])
+                stapelNL.pop();
+            lastIndex = stapelNL.top();
+            if(LCP[i] == LCP[lastIndex]){
+                stapelNL.pop();
+                CHILD[lastIndex] = i;
+            }
+            stapelNL.push(i);
+        }
 }
 
 
@@ -264,6 +305,77 @@ void sparseSA::traverse(const string &P, long prefix, interval_t &cur, int min_l
   }
 }
 
+// Traverse pattern P starting from a given prefix and interval
+// until mismatch or min_len characters reached.
+// Uses the child table for faster traversal
+void sparseSA::traverse_faster(const string &P,const long prefix, interval_t &cur, int min_len){
+        if(cur.depth >= min_len) return;
+        int c = prefix + cur.depth;
+        bool intervalFound = c < P.length() && top_down_child(P[c], cur);
+        bool mismatchFound = false;
+        while(intervalFound && !mismatchFound && 
+                c < P.length() && cur.depth < min_len){
+            c++;
+            cur.depth++;
+            if(cur.start != cur.end){
+                int childLCP;
+                //calculate LCP of child node, which is now cur. the LCP value 
+                //of the parent is currently c - prefix
+                if(cur.start < CHILD[cur.end] && CHILD[cur.end] <= cur.end)
+                    childLCP = CHILD[cur.end];
+                else
+                    childLCP = CHILD[cur.start];
+                int minimum = min(childLCP,min_len);
+                //match along branch
+                while(!mismatchFound && c < P.length() && cur.depth < minimum){
+                    mismatchFound = S[SA[cur.start]+cur.depth] != P[c];
+                    c++;
+                    cur.depth += !mismatchFound;
+                }
+                intervalFound = c < P.length() && !mismatchFound && 
+                        cur.depth < min_len && top_down_child(P[c], cur);
+            }
+            else{
+                while(!mismatchFound && c < P.length() && cur.depth < min_len){
+                    mismatchFound = SA[cur.start]+cur.depth >= S.length() || 
+                            S[SA[cur.start]+cur.depth] != P[c];
+                    c++;
+                    cur.depth += !mismatchFound;
+                }
+            }
+        }
+}
+
+//finds the child interval of cur that starts with character c
+//updates left and right bounds of cur to child interval if found, or returns
+//cur if not found (also returns true/false if found or not)
+bool sparseSA::top_down_child(char c, interval_t &cur){
+    long left = cur.start;
+    long right = CHILD[cur.end];
+    if(cur.start >= right || right > cur.end)
+        right = CHILD[cur.start];
+    //now left and right point to first child
+    if(S[SA[cur.start]+cur.depth] == c){
+        cur.end = right-1;
+        return true;
+    }
+    left = right;
+    //while has next L-index
+    while(CHILD[right] > right && LCP[right] == LCP[CHILD[right]]){
+        right = CHILD[right];
+        if(S[SA[left]+cur.depth] == c){
+            cur.start = left; cur.end = right - 1;
+            return true;
+        }
+        left = right;
+    }
+    //last interval
+    if(S[SA[left]+cur.depth] == c){
+            cur.start = left;
+            return true;
+    }
+    return false;
+}
 
 // Given SA interval apply binary search to match character c at
 // position i in the search string. Adapted from the C++ source code
@@ -631,7 +743,7 @@ void sparseSA::findSMAM(long k, const string &P, vector<match_t> &matches, int m
     //traverse(P, prefix, mli, min_lenK);    // Traverse until minimum length matched.
     //if(mli.depth > xmi.depth) xmi = mli;
     //if(mli.depth <= 1) { mli.reset(N/K-1); xmi.reset(N/K-1); prefix+=K; continue; }
-    traverse(P, prefix, xmi, P.length()); // Traverse until mismatch.
+    traverse_faster(P, prefix, xmi, P.length()); // Traverse until mismatch.
     if(xmi.depth <= 1) { xmi.reset(N/K-1); prefix+=K; continue; }
     if(xmi.depth >= min_lenK) {
         collectSMAMs(P, prefix, mli, xmi, matches, min_len, maxCount, print); // Using LCP info to find MEM length.

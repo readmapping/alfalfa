@@ -261,6 +261,7 @@ struct sparseSA {
   vector<unsigned int> SA;  // Suffix array.
   vector<int> ISA;  // Inverse suffix array.
   vec_uchar LCP; // Simulates a vector<int> LCP.
+  vector<int> CHILD; //child table
 
   long K; // suffix sampling, K = 1 every suffix, K = 2 every other suffix, K = 3, every 3rd sffix
 
@@ -279,6 +280,8 @@ struct sparseSA {
 
   // Modified Kasai et all for LCP computation.
   void computeLCP();
+  //Modified Abouelhoda et all for CHILD Computation.
+  void computeChild();
 
   // Radix sort required to construct transformed text for sparse SA construction.
   void radixStep(int *t_new, int *SA, long &bucketNr, long *BucketBegin, long l, long r, long h);
@@ -299,10 +302,12 @@ struct sparseSA {
   // Simple top down traversal of a suffix array.
   inline bool top_down(char c, long i, long &start, long &end);
   inline bool top_down_faster(char c, long i, long &start, long &end);
+  inline bool top_down_child(char c, interval_t &cur);
 
   // Traverse pattern P starting from a given prefix and interval
   // until mismatch or min_len characters reached.
   inline void traverse(const string &P, long prefix, interval_t &cur, int min_len);
+  inline void traverse_faster(const string &P,const long prefix, interval_t &cur, int min_len);
 
   // Simulate a suffix link.
   inline bool suffixlink(interval_t &m);
