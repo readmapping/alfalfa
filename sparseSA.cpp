@@ -152,6 +152,9 @@ void sparseSA::computeLCP() {
 
 // Child array construction algorithm
 void sparseSA::computeChild() {
+    for(int i = 0; i < N/K; i++){
+        CHILD[i] = -1;
+    }
         //Compute up and down values
         int lastIndex  = -1;
         stack<int,vector<int> > stapelUD;
@@ -170,6 +173,13 @@ void sparseSA::computeChild() {
                 lastIndex = -1;
             }
             stapelUD.push(i);
+        }
+        while(0 < LCP[stapelUD.top()]){//last row (fix for last character of sequence not being unique
+            lastIndex = stapelUD.top();
+            stapelUD.pop();
+            if(0 <= LCP[stapelUD.top()] && LCP[stapelUD.top()] != LCP[lastIndex]){
+                CHILD[stapelUD.top()] = lastIndex;
+            }
         }
         //Compute Next L-index values
         stack<int,vector<int> > stapelNL;
@@ -309,22 +319,33 @@ void sparseSA::traverse(const string &P, long prefix, interval_t &cur, int min_l
 // until mismatch or min_len characters reached.
 // Uses the child table for faster traversal
 void sparseSA::traverse_faster(const string &P,const long prefix, interval_t &cur, int min_len){
+//    printf("prefix = %ld\t min_len = %d\n",prefix,min_len);
+//    printf("interval left = %ld\t interval right = %ld\t interval depth = %ld\n",cur.start,cur.end,cur.depth);
         if(cur.depth >= min_len) return;
         int c = prefix + cur.depth;
-        bool intervalFound = c < P.length() && top_down_child(P[c], cur);
+//        printf("initialization: c is %d\n",c);
+        bool intervalFound = c < P.length();
+        if(intervalFound && cur.size() > 1) 
+            intervalFound = top_down_child(P[c], cur);
+        else if(intervalFound)
+            intervalFound = P[c] == S[SA[cur.start]+cur.depth];
         bool mismatchFound = false;
         while(intervalFound && !mismatchFound && 
                 c < P.length() && cur.depth < min_len){
             c++;
             cur.depth++;
+//            printf("current child interval size is %ld\n",cur.end-cur.start+1);
             if(cur.start != cur.end){
                 int childLCP;
                 //calculate LCP of child node, which is now cur. the LCP value 
                 //of the parent is currently c - prefix
                 if(cur.start < CHILD[cur.end] && CHILD[cur.end] <= cur.end)
-                    childLCP = CHILD[cur.end];
+                    childLCP = LCP[CHILD[cur.end]];
                 else
-                    childLCP = CHILD[cur.start];
+                    childLCP = LCP[CHILD[cur.start]];
+//                printf("current parent interval has depth %ld\n",cur.depth-1);
+//                printf("current child interval with depth %ld - [%ld,%ld]\n",childLCP,cur.start,cur.end);
+//                printf("characters to match on branch: %ld\n",childLCP-cur.depth);
                 int minimum = min(childLCP,min_len);
                 //match along branch
                 while(!mismatchFound && c < P.length() && cur.depth < minimum){
@@ -350,28 +371,43 @@ void sparseSA::traverse_faster(const string &P,const long prefix, interval_t &cu
 //updates left and right bounds of cur to child interval if found, or returns
 //cur if not found (also returns true/false if found or not)
 bool sparseSA::top_down_child(char c, interval_t &cur){
+//printf("topDownCHILD with char %c and starting interval %ld - [%ld,%ld]\n",c,cur.depth,cur.start,cur.end);
     long left = cur.start;
     long right = CHILD[cur.end];
-    if(cur.start >= right || right > cur.end)
+//printf("first L-index first try: %ld\n",right);
+    if(cur.start >= right || right > cur.end){
+//        printf("first try incorrect, changed to: %ld\n",CHILD[cur.start]);
         right = CHILD[cur.start];
+    }
+//printf("Value L-index: %ld\n",right);
+//printf("character for first child interval: %c\n",S[SA[cur.start]+cur.depth]);
     //now left and right point to first child
     if(S[SA[cur.start]+cur.depth] == c){
         cur.end = right-1;
+//printf("topDownCHILD returned [%ld,%ld]\n",cur.start,cur.end);
         return true;
     }
     left = right;
     //while has next L-index
     while(CHILD[right] > right && LCP[right] == LCP[CHILD[right]]){
         right = CHILD[right];
+//printf("Next L-index: %ld\n",right);
+//printf("character for next child interval: %c\n",S[SA[left]+cur.depth]);
         if(S[SA[left]+cur.depth] == c){
             cur.start = left; cur.end = right - 1;
+//printf("topDownCHILD returned [%ld,%ld]\n",cur.start,cur.end);
             return true;
         }
         left = right;
     }
+//printf("character for last child interval: %c\n",S[SA[left]+cur.depth]);
     //last interval
     if(S[SA[left]+cur.depth] == c){
             cur.start = left;
+//printf("topDownCHILD returned [%ld,%ld]\n",cur.start,cur.end);
+//printf("before: i %ld\tSA %ld\tLCP %ld\tCHILD %ld\tS %c\n",cur.start-1,SA[cur.start-1],LCP[cur.start-1],CHILD[cur.start-1],S[SA[cur.start-1]]);
+//printf("at: i %ld\tSA %ld\tLCP %ld\tCHILD %ld\tS %c\n",cur.start,SA[cur.start],LCP[cur.start],CHILD[cur.start],S[SA[cur.start]]);
+//printf("next: i %ld\tSA %ld\tLCP %ld\tCHILD %ld\tS %c\n",cur.start+1,SA[cur.start+1],LCP[cur.start+1],CHILD[cur.start+1],S[SA[cur.start+1]]);
             return true;
     }
     return false;
@@ -731,6 +767,7 @@ void sparseSA::collectSMAMs(const string &P, long prefix,
 // For a given offset in the prefix k, find all MEMs.
 void sparseSA::findSMAM(long k, const string &P, vector<match_t> &matches, int min_len, int maxCount, bool print) {
   if(k < 0 || k >= K) { cerr << "Invalid k." << endl; return; }
+//  printf("> new read of length %ld\n",P.length());
   // Offset all intervals at different start points.
   long prefix = k;
   interval_t mli(0,N/K-1,0); // min length interval
@@ -743,18 +780,28 @@ void sparseSA::findSMAM(long k, const string &P, vector<match_t> &matches, int m
     //traverse(P, prefix, mli, min_lenK);    // Traverse until minimum length matched.
     //if(mli.depth > xmi.depth) xmi = mli;
     //if(mli.depth <= 1) { mli.reset(N/K-1); xmi.reset(N/K-1); prefix+=K; continue; }
+//      printf("before top down: %ld - [%ld,%ld] and prefix %ld\n",xmi.depth,xmi.start,xmi.end,prefix);
+//      interval_t copy(xmi.start,xmi.end,xmi.depth);
+//    traverse(P, prefix, copy, P.length()); // Traverse until mismatch.
     traverse_faster(P, prefix, xmi, P.length()); // Traverse until mismatch.
+//    printf("previous result: %ld - [%ld,%ld]\n",copy.depth,copy.start,copy.end);
+//    printf("new result: %ld - [%ld,%ld]\n",xmi.depth,xmi.start,xmi.end);
+    assert(copy.depth-xmi.depth == 0);
+    assert(copy.start-xmi.start == 0);
+    assert(copy.end-xmi.end == 0);
     if(xmi.depth <= 1) { xmi.reset(N/K-1); prefix+=K; continue; }
     if(xmi.depth >= min_lenK) {
         collectSMAMs(P, prefix, mli, xmi, matches, min_len, maxCount, print); // Using LCP info to find MEM length.
         // When using ISA/LCP trick, depth = depth - K. prefix += K.
         prefix+=K;
         if( suffixlink(xmi) == false ) { xmi.reset(N/K-1); continue; }
+//        xmi.reset(N/K-1); continue;
     }
     else {
       // When using ISA/LCP trick, depth = depth - K. prefix += K.
       prefix+=K;
       if( suffixlink(xmi) == false ) { xmi.reset(N/K-1); continue; }
+//      xmi.reset(N/K-1); continue;
     }
   }
 #ifndef NDEBUG
@@ -847,6 +894,7 @@ void sparseSA::inexactMatch(read_t & read,const align_opt & alnOptions, bool fwS
     vector<match_t> matches;
     //calc seeds
     SMAM(P, matches, min_len, alnOptions.alignmentCount, false);
+//    exit(1);
     if(alnOptions.tryHarder){//TODO: change try-harder to recalculate only after forward + reverse has been tried
         //easy solution: try reverse and if found: skip
         if(matches.empty())
@@ -1100,7 +1148,7 @@ if(print){
 #endif
             }
 #ifndef NDEBUG
-            printf("%d;%d\n",dpSumInLoop,curEditDist <= editDist ? 0 : 1);
+//            printf("%d;%d\n",dpSumInLoop,curEditDist <= editDist ? 0 : 1);
             if(print){
     printf("alignment of %d edit dist found, while max is %d\n", curEditDist, editDist);
     alignment.setFieldsFromCigar(scores);
