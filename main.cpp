@@ -57,7 +57,7 @@ enum command_t {INDEX, MATCHES, ALN};
 int MINOPTIONCOUNT = 2;
 static const string PROG = "ALFALFA";
 static const string SAM_VERSION = "1.4";
-static const string PROG_VERSION = "0.3.2";
+static const string PROG_VERSION = "0.3.3";
 static string NAN = "*";
 
 struct mapOptions_t{//commentary + sort + constructor

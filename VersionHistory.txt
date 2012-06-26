@@ -40,3 +40,9 @@ v0.3.2
 Planned features: 
 -leave out suffix links and ISA table for large values of "s", because suffix links do not provide significant additional speedup
 -optimize dynamic programming code and add filters to lower the calls to the dynamic programming routine and/or decrease the size of the matrix
+
+v0.3.3
+*added child table construction
+*added child table traversal
+*configured sparse 'enhanced' suffix array to use child table for s >= 4 and leave out ISA. For s<4, the child table will not be constructed
+

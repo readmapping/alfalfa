@@ -264,6 +264,8 @@ struct sparseSA {
   vector<int> CHILD; //child table
 
   long K; // suffix sampling, K = 1 every suffix, K = 2 every other suffix, K = 3, every 3rd sffix
+  bool hasChild;
+  bool hasSufLink;
 
   // Maps a hit in the concatenated sequence set to a position in that sequence.
   void from_set(long hit, long &seq, long &seqpos) {
