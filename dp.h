@@ -46,6 +46,7 @@ struct dp_scores{
     int mismatch;
     int openGap;
     int extendGap;
+    //static int scoreMatrix[256][256];
 };
 
 struct dp_type{
@@ -79,6 +80,9 @@ enum outputType{
 
 extern int dp( const string&, const string&, boundaries&, const dp_scores&, 
         const dp_type&, const outputType&, dp_output&, bool print = false);
+
+extern int dpBand( const string&, const string&, boundaries&, const dp_scores&, 
+        const dp_type&, const outputType&, dp_output&, int bandSize, bool print = false);
 
 #endif	/* DP_H */
 
