@@ -235,9 +235,10 @@ int dpFill(dp_matrices& matrices,const string& ref,const string& query, bool for
             matrices.gapLeft[i][idx2] = matrices.M[ i ][ idx2 ] + scores.extendGap + 2*scores.openGap;
             if((type.local || (type.freeQueryB && type.freeRefB)) && matrices.M[i][idx2]<0){//TODO: put this if up front for sw programming
                 matrices.M[i][idx2] = 0;
-                matrices.traceBack[i][idx2] = '0';
+                ptr = '0';
             }
             idx2++;
+            matrices.traceBack[i][idx2] = ptr;
         }
         for(int j = max( 1, idx2); j <= min(matrices.L1, colRB-1); j++ ){
             //here insert substitution matrix!
@@ -280,8 +281,9 @@ int dpFill(dp_matrices& matrices,const string& ref,const string& query, bool for
             matrices.gapUp[i][idx2] = matrices.M[ i ][ idx2 ] + scores.extendGap + 2*scores.openGap;
             if((type.local || (type.freeQueryB && type.freeRefB)) && matrices.M[i][idx2]<0){//TODO: put this if up front for sw programming
                 matrices.M[i][idx2] = 0;
-                matrices.traceBack[i][idx2] = '0';
+                ptr = '0';
             }
+            matrices.traceBack[i][idx2] = ptr;
         }
     }
     return 0;
@@ -313,8 +315,9 @@ int dpFillOpt(dp_matrices& matrices,const string& ref,const string& query, bool 
             }
             if((type.local || (type.freeQueryB && type.freeRefB)) && matrices.M[i][idx2]<0){//TODO: put this if up front for sw programming
                 matrices.M[i][idx2] = 0;
-                matrices.traceBack[i][idx2] = '0';
+                ptr = '0';
             }
+            matrices.traceBack[i][idx2] = ptr;
             idx2++;
         }
         for(int j = max( 1, idx2); j <= min(matrices.L1, colRB-1); j++ ){
@@ -355,8 +358,9 @@ int dpFillOpt(dp_matrices& matrices,const string& ref,const string& query, bool 
             }
             if((type.local || (type.freeQueryB && type.freeRefB)) && matrices.M[i][idx2]<0){//TODO: put this if up front for sw programming
                 matrices.M[i][idx2] = 0;
-                matrices.traceBack[i][idx2] = '0';
+                ptr = '0';
             }
+            matrices.traceBack[i][idx2] = ptr;
         }
     }
     return 0;
@@ -384,6 +388,9 @@ int dpTraceBack(const dp_matrices& matrices, int& i, int& j, dp_output& output, 
             case '-' :      ss << 'D';
                             output.editDist++;
                             j-- ;
+                            break;
+            default :       cerr << "Error in dynamic programming" << endl;
+                            break;
         }
     }
     return 0;
@@ -644,10 +651,10 @@ int dpBand( const string&     ref,
     //with the band, otherwise: give bad alignment and return
     //ELSE IF free start at begin in cols or rows: (resulting in no free ending):
     //check range of starting point (0,0) lies in range of band if rows or columns were not free
-    if((type.freeQueryB && !type.freeRefB && (matrices.L2 + bandSize < matrices.L1 || matrices.L2 - bandSize > matrices.L1)) ||
-            (type.freeRefB && !type.freeQueryB && (matrices.L1 + bandSize < matrices.L2 || matrices.L1 - bandSize > matrices.L2)) ||
-            (!(type.freeQueryB || type.freeRefB) && !type.freeRefE && (matrices.L2 + bandSize < matrices.L1 || matrices.L2 - bandSize > matrices.L1)) ||
-            (!(type.freeQueryB || type.freeRefB) && !type.freeQueryE && (matrices.L1 + bandSize < matrices.L2 || matrices.L1 - bandSize > matrices.L2))){
+    if((type.freeQueryB && !type.freeRefB && matrices.L2 + bandSize < matrices.L1) ||
+            (type.freeRefB && !type.freeQueryB && matrices.L2 - bandSize > matrices.L1) ||
+            (!(type.freeQueryB || type.freeRefB) && !type.freeRefE && matrices.L2 + bandSize < matrices.L1) ||
+            (!(type.freeQueryB || type.freeRefB) && !type.freeQueryE && matrices.L2 - bandSize > matrices.L1)){
         output.dpScore = scores.mismatch*query.length();
         output.editDist = query.length();
         return 1;
@@ -661,7 +668,7 @@ int dpBand( const string&     ref,
         dpFill(matrices, ref, query, !type.freeQueryB && !type.freeRefB, offset, scores, type);
         if(print) print_matrices(matrices, ref, query, offset, scores.openGap!=0);
         //traceback and output
-        int        i = matrices.L2, j = matrices.L1;
+        int        i = min(matrices.L2,matrices.L1+matrices.bandSize), j = min(matrices.L1,matrices.L2+matrices.bandSize);
         //find beginPosition for traceBack and find dpScore
         findTraceBackPos(matrices,&i,&j,type);
         output.dpScore = matrices.M[i][j];
@@ -714,7 +721,7 @@ int dpBand( const string&     ref,
         //dp
         dpFillOpt(matrices, ref, query, !type.freeQueryB && !type.freeRefB, offset, scores, type);
         //traceback and output
-        int        i = matrices.L2, j = matrices.L1;
+        int        i = min(matrices.L2,matrices.L1+matrices.bandSize), j = min(matrices.L1,matrices.L2+matrices.bandSize);
         //find beginPosition for traceBack and find dpScore
         findTraceBackPos(matrices,&i,&j,type);
         output.dpScore = matrices.M[i][j];

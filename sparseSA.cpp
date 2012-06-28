@@ -965,7 +965,7 @@ if(print){
                 dp_type types;
                 types.freeRefB = true;
                 types.freeQueryB = clipping;
-                dp( S, P, grenzen, scores, types, outputT, output, false);
+                dpBand( S, P, grenzen, scores, types, outputT, output, editDist-curEditDist, false);
                 if(clipping && grenzen.queryB> 0){
                     alignment.cigarChars.push_back('S');
                     alignment.cigarLengths.push_back(grenzen.queryB);
@@ -1067,7 +1067,7 @@ if(print){
                     } else {//both distances are positive and not equal to (1,1)
                         boundaries grenzen(refstrRB + 1, refstrRB + minRefDist - 1, queryRB + 1, queryRB + minQDist - 1);
                         dp_type types;
-                        dp(S, P, grenzen, scores, types, outputT, output, false);
+                        dpBand( S, P, grenzen, scores, types, outputT, output, editDist-curEditDist, false);
                         alignment.cigarChars.insert(alignment.cigarChars.end(), output.cigarChars.begin(), output.cigarChars.end());
                         alignment.cigarLengths.insert(alignment.cigarLengths.end(), output.cigarLengths.begin(), output.cigarLengths.end());
                         alignment.cigarChars.push_back('=');
@@ -1098,7 +1098,7 @@ if(print){
                 dp_type types;
                 types.freeRefE = true;
                 types.freeQueryE = clipping;
-                dp(S, P, grenzen, scores, types, outputT, output, false);
+                dpBand( S, P, grenzen, scores, types, outputT, output, editDist-curEditDist+1, false);
                 alignment.cigarChars.insert(alignment.cigarChars.end(), output.cigarChars.begin(), output.cigarChars.end());
                 alignment.cigarLengths.insert(alignment.cigarLengths.end(), output.cigarLengths.begin(), output.cigarLengths.end());
                 if (clipping && grenzen.queryE < P.length() - 1) {
