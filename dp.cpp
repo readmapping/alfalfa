@@ -43,10 +43,6 @@ struct dp_matrices{
     bool banded;
 };
 
-bool insideBand(int i, int j, int band){
-    return i-j <= band || i-j >= -1*band;
-}
-
 int initializeMatrix(dp_matrices& matrices,const dp_scores& scores,const dp_type& type){
     //TODO: change this to mallocs and initialize once per thread + realloc if nec.
     assert(matrices.L1 >=0 && matrices.L2 >= 0);
@@ -59,28 +55,22 @@ int initializeMatrix(dp_matrices& matrices,const dp_scores& scores,const dp_type
     //init matrices
     matrices.M[0][0] = 0;
     matrices.traceBack[0][0] = '0';//n is where traceBack stops
-    int L2Bound = min(matrices.bandSize, matrices.L2);
-    int L1Bound = min(matrices.bandSize, matrices.L1);
-    if(matrices.bandSize < matrices.L2 || matrices.bandSize < matrices.L1)
-        matrices.banded = true;
-    else
-        matrices.banded = false;
-    for(int i = 1; i <= L2Bound; i++)
+    for(int i = 1; i <= matrices.L2; i++)
         matrices.traceBack[i][0] = '0';
-    for(int i = 1; i <= L1Bound; i++)
+    for(int i = 1; i <= matrices.L1; i++)
         matrices.traceBack[0][i] = '0';
     assert(!banded || (!type.freeQueryB && !type.freeRefB));
     if(type.freeQueryB)
-        for(int i = 1; i <= L2Bound; i++)
+        for(int i = 1; i <= matrices.L2; i++)
             matrices.M[i][0] = 0;
     else
-        for(int i = 1; i <= L2Bound; i++)
+        for(int i = 1; i <= matrices.L2; i++)
             matrices.M[i][0] = scores.openGap + i*scores.extendGap;
     if(type.freeRefB)
-        for(int i = 1; i <= L1Bound; i++)
+        for(int i = 1; i <= matrices.L1; i++)
             matrices.M[0][i] = 0;
     else
-        for(int i = 1; i <= L1Bound; i++)
+        for(int i = 1; i <= matrices.L1; i++)
             matrices.M[0][i] = scores.openGap + i*scores.extendGap;
 }
 
@@ -89,18 +79,16 @@ int initializeMatrices(dp_matrices& matrices,const dp_scores& scores,const dp_ty
     initializeMatrix(matrices, scores, type);
     matrices.gapUp = new int * [matrices.L2+1];
     matrices.gapLeft = new int * [matrices.L2+1];
-    int L2Bound = min(matrices.bandSize, matrices.L2);
-    int L1Bound = min(matrices.bandSize, matrices.L1);
     for(int i = 0; i <= matrices.L2; i++){
         matrices.gapUp[i] = new int[matrices.L1+1];
         matrices.gapLeft[i] = new int[matrices.L1+1];
     }
     matrices.gapLeft[0][0] = matrices.gapUp[0][0] = 0;
-    for(int i = 1; i <= L1Bound; i++){
+    for(int i = 1; i <= matrices.L1; i++){
         matrices.gapUp[0][i] = matrices.M[0][i] + scores.openGap;
         matrices.gapLeft[0][i] = matrices.M[0][i] + scores.openGap;
     }
-    for(int i = 1; i <= L2Bound; i++){
+    for(int i = 1; i <= matrices.L2; i++){
         matrices.gapUp[i][0] = matrices.M[i][0] + scores.openGap;
         matrices.gapLeft[i][0] = matrices.M[i][0] + scores.openGap;
     }
@@ -147,7 +135,7 @@ int deleteMatrix(dp_matrices& matrices){
 int findTraceBackPos(const dp_matrices& matrices, int* const i, int* const j,const dp_type& type){
     //find beginPosition for traceBack and find dpScore
     int maximum = matrices.M[*i][*j];
-    if(type.freeQueryE && type.freeRefE || type.local){//local
+    if((type.freeQueryE && type.freeRefE) || type.local){//local
         if(!matrices.banded){
             for(int idx = matrices.L2; idx >= 0; idx--){
                 for(int idx2 = matrices.L1; idx2 >= 0; idx2--){
@@ -161,8 +149,8 @@ int findTraceBackPos(const dp_matrices& matrices, int* const i, int* const j,con
         }
         else{
             for(int idx = matrices.L2; idx >= 0; idx--){
-                for(int idx2 = matrices.L1; idx2 >= 0; idx2--){
-                    if(insideBand(idx, idx2, matrices.bandSize) && matrices.M[idx][idx2] > maximum){
+                for(int idx2 = min(idx+matrices.bandSize,matrices.L1); idx2 >= max(0,idx-matrices.bandSize); idx2--){
+                    if(matrices.M[idx][idx2] > maximum){
                         maximum = matrices.M[idx][idx2];
                         *i = idx;
                         *j = idx2;
@@ -225,7 +213,8 @@ int dpFill(dp_matrices& matrices,const string& ref,const string& query, bool for
     char       ptr;
 
     for(int i = 1; i <= matrices.L2; i++ ){
-        int idx2 = i-matrices.bandSize;
+        int idx2 = forward ? i-matrices.bandSize : matrices.L1-matrices.L2 + i - matrices.bandSize;
+        int colRB = forward ? i+matrices.bandSize : matrices.L1-matrices.L2 + i + matrices.bandSize;
         if(idx2>0){//left value undefined
             matrices.M[ i ][ idx2 ] = matrices.M[ i-1 ][ idx2-1 ];
             if(ref[offset.refB+idx2-1]==query[offset.queryB+i-1]){//TODO: remove if by using table
@@ -250,7 +239,7 @@ int dpFill(dp_matrices& matrices,const string& ref,const string& query, bool for
             }
             idx2++;
         }
-        for(int j = max( 1, idx2); j <= min(matrices.L1, i+matrices.bandSize-1); j++ ){
+        for(int j = max( 1, idx2); j <= min(matrices.L1, colRB-1); j++ ){
             //here insert substitution matrix!
             if(ref[offset.refB+j-1]==query[offset.queryB+i-1])
                 d = scores.match;
@@ -270,8 +259,8 @@ int dpFill(dp_matrices& matrices,const string& ref,const string& query, bool for
             else
                 matrices.traceBack[i][j] = (ptr=='\\' && d == scores.mismatch) ? ':' : ptr;
         }
-        if(i+matrices.bandSize <= matrices.L1){
-            idx2 = i + matrices.bandSize;
+        if(colRB <= matrices.L1){
+            idx2 = colRB;
             matrices.M[ i ][ idx2 ] = matrices.M[ i-1 ][ idx2-1 ];
             if(ref[offset.refB+idx2-1]==query[offset.queryB+i-1]){//TODO: remove if by using table
                 matrices.M[ i ][ idx2 ] += scores.match;
@@ -304,9 +293,9 @@ int dpFillOpt(dp_matrices& matrices,const string& ref,const string& query, bool 
     int        d = 0;
     char       ptr;
     
-    if(forward)
     for(int i = 1; i <= matrices.L2; i++ ){
-        int idx2 = i-matrices.bandSize;
+        int idx2 = forward ? i-matrices.bandSize : matrices.L1-matrices.L2 + i - matrices.bandSize;
+        int colRB = forward ? i+matrices.bandSize : matrices.L1-matrices.L2 + i + matrices.bandSize;
         if(idx2>0){
             matrices.M[ i ][ idx2 ] = matrices.M[ i-1 ][ idx2-1 ];
             if(ref[offset.refB+idx2-1]==query[offset.queryB+i-1]){//TODO: remove if by using table
@@ -328,7 +317,7 @@ int dpFillOpt(dp_matrices& matrices,const string& ref,const string& query, bool 
             }
             idx2++;
         }
-        for(int j = max( 1, idx2); j <= min(matrices.L1, i+matrices.bandSize-1); j++ ){
+        for(int j = max( 1, idx2); j <= min(matrices.L1, colRB-1); j++ ){
             //here insert substitution matrix!
             if(ref[offset.refB+j-1]==query[offset.queryB+i-1])//TODO: remove if by using table
                 d = scores.match;
@@ -348,8 +337,8 @@ int dpFillOpt(dp_matrices& matrices,const string& ref,const string& query, bool 
                 matrices.traceBack[i][j] = (ptr=='\\' && d == scores.mismatch) ? ':' : ptr;
             //TODO: remove if by using table on previous match/mismatch table and storing the pointer in the max function
         }
-        if(i+matrices.bandSize <= matrices.L1){
-            idx2 = i + matrices.bandSize;
+        if(colRB <= matrices.L1){
+            idx2 = colRB;
             matrices.M[ i ][ idx2 ] = matrices.M[ i-1 ][ idx2-1 ];
             if(ref[offset.refB+idx2-1]==query[offset.queryB+i-1]){//TODO: remove if by using table
                 matrices.M[ i ][ idx2 ] += scores.match;
@@ -513,6 +502,7 @@ int dp( const string&     ref,
     matrices.L1 = offset.refE-offset.refB+1;
     matrices.L2 = offset.queryE-offset.queryB+1;
     matrices.bandSize = max(matrices.L1, matrices.L2) + 1;
+    matrices.banded = false;
     assert(matrices.L1 >=0 && matrices.L2 >= 0);
     if(scores.openGap != 0){
         //build matrices
@@ -644,14 +634,20 @@ int dpBand( const string&     ref,
     matrices.L1 = offset.refE-offset.refB+1;
     matrices.L2 = offset.queryE-offset.queryB+1;
     matrices.bandSize = bandSize;
+    matrices.banded = true;
     assert(matrices.L1 >=0 && matrices.L2 >= 0 && bandSize >0);
     assert(!dp_type.local);
     assert((!dp_type.freeQueryB && !dp_type.freeRefB) || (!dp_type.freeQueryE && !dp_type.freeRefE));
+    //IF no free start at begin:
     //possible end of alignment should be accessible for traceback: 
     //range of allowed traceback startpositions should have a non-empty intersection
     //with the band, otherwise: give bad alignment and return
-    if((!type.freeRefE && matrices.L2 + bandSize < matrices.L1) ||
-            (!type.freeQueryE && matrices.L1 + bandSize < matrices.L2)){
+    //ELSE IF free start at begin in cols or rows: (resulting in no free ending):
+    //check range of starting point (0,0) lies in range of band if rows or columns were not free
+    if((type.freeQueryB && !type.freeRefB && (matrices.L2 + bandSize < matrices.L1 || matrices.L2 - bandSize > matrices.L1)) ||
+            (type.freeRefB && !type.freeQueryB && (matrices.L1 + bandSize < matrices.L2 || matrices.L1 - bandSize > matrices.L2)) ||
+            (!(type.freeQueryB || type.freeRefB) && !type.freeRefE && (matrices.L2 + bandSize < matrices.L1 || matrices.L2 - bandSize > matrices.L1)) ||
+            (!(type.freeQueryB || type.freeRefB) && !type.freeQueryE && (matrices.L1 + bandSize < matrices.L2 || matrices.L1 - bandSize > matrices.L2))){
         output.dpScore = scores.mismatch*query.length();
         output.editDist = query.length();
         return 1;
@@ -662,7 +658,7 @@ int dpBand( const string&     ref,
         initializeMatrices(matrices, scores, type);
         //Check for affine gap: if else
         //dp
-        dpFill(matrices, ref, query, true, offset, scores, type);
+        dpFill(matrices, ref, query, !type.freeQueryB && !type.freeRefB, offset, scores, type);
         if(print) print_matrices(matrices, ref, query, offset, scores.openGap!=0);
         //traceback and output
         int        i = matrices.L2, j = matrices.L1;
@@ -716,7 +712,7 @@ int dpBand( const string&     ref,
         //build matrices
         initializeMatrix(matrices, scores, type);
         //dp
-        dpFillOpt(matrices, ref, query, true, offset, scores, type);
+        dpFillOpt(matrices, ref, query, !type.freeQueryB && !type.freeRefB, offset, scores, type);
         //traceback and output
         int        i = matrices.L2, j = matrices.L1;
         //find beginPosition for traceBack and find dpScore
