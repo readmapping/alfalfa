@@ -43,6 +43,19 @@ struct dp_matrices{
     bool banded;
 };
 
+void dp_scores::updateScoreMatrixDna(){//presumes match/mismatch has been added correctly
+    for(int i = 0; i < 127; i++)
+        for(int j = 0; j < 127; j++)
+            //set to value that is small enough to be used with large reads and not cause overflow with current score
+            scoreMatrix[i][j] = -200000;
+    for(int i = 'A'; i <= 'Z'; i++)
+        for(int j = 'A'; j <= 'Z'; j++)
+            scoreMatrix[i][j] = i==j ? match : mismatch;
+    for(int i = 'a'; i <= 'z'; i++)
+        for(int j = 'a'; j <= 'z'; j++)
+            scoreMatrix[i][j] = i==j ? match : mismatch;
+}
+
 int initializeMatrix(dp_matrices& matrices,const dp_scores& scores,const dp_type& type){
     //TODO: change this to mallocs and initialize once per thread + realloc if nec.
     assert(matrices.L1 >=0 && matrices.L2 >= 0);
@@ -216,16 +229,9 @@ int dpFill(dp_matrices& matrices,const string& ref,const string& query, bool for
         int idx2 = forward ? i-matrices.bandSize : matrices.L1-matrices.L2 + i - matrices.bandSize;
         int colRB = forward ? i+matrices.bandSize : matrices.L1-matrices.L2 + i + matrices.bandSize;
         if(idx2>0){//left value undefined
-            matrices.M[ i ][ idx2 ] = matrices.M[ i-1 ][ idx2-1 ];
-            if(ref[offset.refB+idx2-1]==query[offset.queryB+i-1]){//TODO: remove if by using table
-                matrices.M[ i ][ idx2 ] = scores.match;
-                ptr = '\\';
-            }
-            else{
-                matrices.M[ i ][ idx2 ] = ref[offset.refB+idx2-1] == '`' ? scores.mismatch*query.length() : scores.mismatch;// if ref boundary is passed: huge penalty (A bit hacky)
-                ptr = ':';
-                //remove this if with a table entry: init table!!!
-            }
+            ptr = '\\';
+            d = scores.scoreMatrix[ref[offset.refB+idx2-1]][query[offset.queryB+i-1]];
+            matrices.M[ i ][ idx2 ] = matrices.M[ i-1 ][ idx2-1 ] + d;
             matrices.gapUp[i][idx2] = max(matrices.M[ i-1 ][ idx2 ] + scores.extendGap + scores.openGap, matrices.gapUp[i-1][idx2]+scores.extendGap);
             if(matrices.M[ i ][ idx2 ] < matrices.gapUp[i][idx2]){
                 matrices.M[ i ][ idx2 ] = matrices.gapUp[i][idx2];
@@ -238,15 +244,11 @@ int dpFill(dp_matrices& matrices,const string& ref,const string& query, bool for
                 ptr = '0';
             }
             idx2++;
-            matrices.traceBack[i][idx2] = ptr;
+            matrices.traceBack[i][idx2] = (ptr=='\\' && d == scores.mismatch) ? ':' : ptr;
         }
         for(int j = max( 1, idx2); j <= min(matrices.L1, colRB-1); j++ ){
             //here insert substitution matrix!
-            if(ref[offset.refB+j-1]==query[offset.queryB+i-1])
-                d = scores.match;
-            else{
-                d = ref[offset.refB+j-1] == '`' ? scores.mismatch*query.length() : scores.mismatch;// if ref boundary is passed: huge penalty (A bit hacky)
-            }
+            d = scores.scoreMatrix[ref[offset.refB+j-1]][query[offset.queryB+i-1]];
             fU = max(matrices.M[ i-1 ][ j ] + scores.extendGap + scores.openGap, matrices.gapUp[i-1][j]+scores.extendGap);
             fD = matrices.M[ i-1 ][ j-1 ] + d;
             fL = max(matrices.M[ i ][ j-1 ] + scores.extendGap + scores.openGap, matrices.gapLeft[i][j-1]+scores.extendGap);
@@ -262,16 +264,9 @@ int dpFill(dp_matrices& matrices,const string& ref,const string& query, bool for
         }
         if(colRB <= matrices.L1){
             idx2 = colRB;
-            matrices.M[ i ][ idx2 ] = matrices.M[ i-1 ][ idx2-1 ];
-            if(ref[offset.refB+idx2-1]==query[offset.queryB+i-1]){//TODO: remove if by using table
-                matrices.M[ i ][ idx2 ] += scores.match;
-                ptr = '\\';
-            }
-            else{
-                matrices.M[ i ][ idx2 ] += ref[offset.refB+idx2-1] == '`' ? scores.mismatch*query.length() : scores.mismatch;// if ref boundary is passed: huge penalty (A bit hacky)
-                ptr = ':';
-                //remove this if with a table entry: init table!!!
-            }
+            ptr = '\\';
+            d = scores.scoreMatrix[ref[offset.refB+idx2-1]][query[offset.queryB+i-1]];
+            matrices.M[ i ][ idx2 ] = matrices.M[ i-1 ][ idx2-1 ] + d;
             matrices.gapLeft[i][idx2] = max(matrices.M[ i ][ idx2-1 ] + scores.extendGap + scores.openGap, matrices.gapLeft[i][idx2-1]+scores.extendGap);
             if(matrices.M[ i ][ idx2 ] < matrices.gapLeft[i][idx2]){
                 matrices.M[ i ][ idx2 ] = matrices.gapLeft[i][idx2];
@@ -283,7 +278,7 @@ int dpFill(dp_matrices& matrices,const string& ref,const string& query, bool for
                 matrices.M[i][idx2] = 0;
                 ptr = '0';
             }
-            matrices.traceBack[i][idx2] = ptr;
+            matrices.traceBack[i][idx2] = (ptr=='\\' && d == scores.mismatch) ? ':' : ptr;
         }
     }
     return 0;
@@ -299,16 +294,9 @@ int dpFillOpt(dp_matrices& matrices,const string& ref,const string& query, bool 
         int idx2 = forward ? i-matrices.bandSize : matrices.L1-matrices.L2 + i - matrices.bandSize;
         int colRB = forward ? i+matrices.bandSize : matrices.L1-matrices.L2 + i + matrices.bandSize;
         if(idx2>0){
-            matrices.M[ i ][ idx2 ] = matrices.M[ i-1 ][ idx2-1 ];
-            if(ref[offset.refB+idx2-1]==query[offset.queryB+i-1]){//TODO: remove if by using table
-                matrices.M[ i ][ idx2 ] += scores.match;
-                ptr = '\\';
-            }
-            else{
-                matrices.M[ i ][ idx2 ] += ref[offset.refB+idx2-1] == '`' ? scores.mismatch*query.length() : scores.mismatch;// if ref boundary is passed: huge penalty (A bit hacky)
-                ptr = ':';
-                //remove this if with a table entry: init table!!!
-            }
+            ptr = '\\';
+            d = scores.scoreMatrix[ref[offset.refB+idx2-1]][query[offset.queryB+i-1]];
+            matrices.M[ i ][ idx2 ] = matrices.M[ i-1 ][ idx2-1 ] + d;
             if(matrices.M[ i ][ idx2 ] < matrices.M[ i-1 ][ idx2 ] + scores.extendGap){
                 matrices.M[ i ][ idx2 ] = matrices.M[ i-1 ][ idx2 ] + scores.extendGap;
                 ptr = '|';
@@ -317,17 +305,11 @@ int dpFillOpt(dp_matrices& matrices,const string& ref,const string& query, bool 
                 matrices.M[i][idx2] = 0;
                 ptr = '0';
             }
-            matrices.traceBack[i][idx2] = ptr;
+            matrices.traceBack[i][idx2] = (ptr=='\\' && d == scores.mismatch) ? ':' : ptr;
             idx2++;
         }
         for(int j = max( 1, idx2); j <= min(matrices.L1, colRB-1); j++ ){
-            //here insert substitution matrix!
-            if(ref[offset.refB+j-1]==query[offset.queryB+i-1])//TODO: remove if by using table
-                d = scores.match;
-            else{
-                d = ref[offset.refB+j-1] == '`' ? scores.mismatch*query.length() : scores.mismatch;// if ref boundary is passed: huge penalty (A bit hacky)
-                //remove this if with a table entry: init table!!!
-            }
+            d = scores.scoreMatrix[ref[offset.refB+j-1]][query[offset.queryB+i-1]];
             matrices.M[ i ][ j ] = maximum( matrices.M[ i-1 ][ j ] + scores.extendGap,
                                 matrices.M[ i-1 ][ j-1 ] + d,
                                 matrices.M[ i ][ j-1 ] + scores.extendGap,
@@ -342,16 +324,9 @@ int dpFillOpt(dp_matrices& matrices,const string& ref,const string& query, bool 
         }
         if(colRB <= matrices.L1){
             idx2 = colRB;
-            matrices.M[ i ][ idx2 ] = matrices.M[ i-1 ][ idx2-1 ];
-            if(ref[offset.refB+idx2-1]==query[offset.queryB+i-1]){//TODO: remove if by using table
-                matrices.M[ i ][ idx2 ] += scores.match;
-                ptr = '\\';
-            }
-            else{
-                matrices.M[ i ][ idx2 ] += ref[offset.refB+idx2-1] == '`' ? scores.mismatch*query.length() : scores.mismatch;// if ref boundary is passed: huge penalty (A bit hacky)
-                ptr = ':';
-                //remove this if with a table entry: init table!!!
-            }
+            ptr = '\\';
+            d = scores.scoreMatrix[ref[offset.refB+idx2-1]][query[offset.queryB+i-1]];
+            matrices.M[ i ][ idx2 ] = matrices.M[ i-1 ][ idx2-1 ] + d;
             if(matrices.M[ i ][ idx2 ] < matrices.M[ i ][ idx2-1 ] + scores.extendGap){
                 matrices.M[ i ][ idx2 ] = matrices.M[ i ][ idx2-1 ] + scores.extendGap;
                 ptr = '-';
@@ -360,7 +335,7 @@ int dpFillOpt(dp_matrices& matrices,const string& ref,const string& query, bool 
                 matrices.M[i][idx2] = 0;
                 ptr = '0';
             }
-            matrices.traceBack[i][idx2] = ptr;
+            matrices.traceBack[i][idx2] = (ptr=='\\' && d == scores.mismatch) ? ':' : ptr;
         }
     }
     return 0;

@@ -46,7 +46,8 @@ struct dp_scores{
     int mismatch;
     int openGap;
     int extendGap;
-    //static int scoreMatrix[256][256];
+    int scoreMatrix[127][127];
+    void updateScoreMatrixDna();
 };
 
 struct dp_type{

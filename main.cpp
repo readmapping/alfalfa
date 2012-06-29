@@ -57,7 +57,7 @@ enum command_t {INDEX, MATCHES, ALN};
 int MINOPTIONCOUNT = 2;
 static const string PROG = "ALFALFA";
 static const string SAM_VERSION = "1.4";
-static const string PROG_VERSION = "0.3.3";
+static const string PROG_VERSION = "0.3.4";
 static string NAN = "*";
 
 struct mapOptions_t{//commentary + sort + constructor
@@ -315,6 +315,7 @@ int main(int argc, char* argv[]){
 				throw 1;
             }
 	}
+        opt.alnOptions.scores.updateScoreMatrixDna();
         if(opt.alnOptions.alignmentCount < 1){
             opt.alnOptions.alignmentCount = 1;
             opt.alnOptions.unique = true;

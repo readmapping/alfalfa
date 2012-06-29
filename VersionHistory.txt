@@ -46,3 +46,7 @@ v0.3.3
 *added child table traversal
 *configured sparse 'enhanced' suffix array to use child table for s >= 4 and leave out ISA. For s<4, the child table will not be constructed
 
+v0.3.4
+*added banded alignment; which supports everything, except local alignment
+*added band-value in inexact matching algorithm
+*added score-matrix for DP, eliminating some branches
