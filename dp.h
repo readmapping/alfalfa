@@ -79,10 +79,22 @@ enum outputType{
     ALL
 };
 
+//These fields should maybe be positioned somewhere else for multi-threading!!!
+static int ** M;
+static int ** UP;
+static int ** LEFT;
+static int DP_DIM;
+extern void initDPMatrix(int dimension, bool affine);
+extern void resizeDPMatrix(int dimension, bool affine);
+extern void deleteDPMatrix(bool affine);
+
 extern int dp( const string&, const string&, boundaries&, const dp_scores&, 
         const dp_type&, const outputType&, dp_output&, bool print = false);
 
 extern int dpBand( const string&, const string&, boundaries&, const dp_scores&, 
+        const dp_type&, const outputType&, dp_output&, int bandSize, bool print = false);
+
+extern int dpBandStatic( const string&, const string&, boundaries&, const dp_scores&, 
         const dp_type&, const outputType&, dp_output&, int bandSize, bool print = false);
 
 #endif	/* DP_H */

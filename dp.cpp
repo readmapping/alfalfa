@@ -43,6 +43,41 @@ struct dp_matrices{
     bool banded;
 };
 
+void initDPMatrix(int dimension, bool affine){
+    DP_DIM = dimension;
+    M = new int * [DP_DIM];
+    for(int i = 0; i < DP_DIM; i++){
+        M[i] = new int[DP_DIM];
+    }
+    if(affine){
+        UP = new int * [DP_DIM];
+        LEFT = new int * [DP_DIM];
+        for(int i = 0; i < DP_DIM; i++){
+            UP[i] = new int[DP_DIM];
+            LEFT[i] = new int[DP_DIM];
+        }
+    }
+}
+
+void resizeDPMatrix(int dimension, bool affine){
+    deleteDPMatrix(affine);
+    initDPMatrix(dimension, affine);
+}
+
+void deleteDPMatrix(bool affine){
+    for(int i = 0; i < DP_DIM; i++)
+        delete[] M[ i ];
+    delete[] M;
+    if(affine){
+        for(int i = 0; i < DP_DIM; i++){
+            delete[] UP[ i ];
+            delete[] LEFT[ i ];
+        }
+        delete[] UP;
+        delete[] LEFT;
+    }
+}
+
 void dp_scores::updateScoreMatrixDna(){//presumes match/mismatch has been added correctly
     for(int i = 0; i < 127; i++)
         for(int j = 0; j < 127; j++)
@@ -85,6 +120,43 @@ int initializeMatrix(dp_matrices& matrices,const dp_scores& scores,const dp_type
     else
         for(int i = 1; i <= matrices.L1; i++)
             matrices.M[0][i] = scores.openGap + i*scores.extendGap;
+}
+
+int updateMatrix(dp_matrices& matrices,const dp_scores& scores,const dp_type& type){
+    //TODO: change this to mallocs and initialize once per thread + realloc if nec.
+    assert(matrices.L1 >=0 && matrices.L2 >= 0);
+    int maxDim = max(matrices.L1,matrices.L2);
+    int newDim = DP_DIM;
+    while(maxDim+1 > newDim){
+        newDim = 2*newDim;
+    }
+    if(newDim > DP_DIM)
+        resizeDPMatrix(newDim, scores.openGap != 0);
+    assert(!banded || (!type.freeQueryB && !type.freeRefB));
+    M[0][0] = 0;
+    if(type.freeQueryB)//no need for reinitialization if same values
+        for(int i = 1; i <= matrices.L2; i++)
+            M[i][0] = 0;
+    else
+        for(int i = 1; i <= matrices.L2; i++)
+            M[i][0] = scores.openGap + i*scores.extendGap;
+    if(type.freeRefB)
+        for(int i = 1; i <= matrices.L1; i++)
+            M[0][i] = 0;
+    else
+        for(int i = 1; i <= matrices.L1; i++)
+            M[0][i] = scores.openGap + i*scores.extendGap;
+    if(scores.openGap != 0){//affine gap penalties
+        UP[0][0] = LEFT[0][0] = 0;
+        for(int i = 1; i <= matrices.L1; i++){
+            UP[0][i] = M[0][i] + scores.openGap;
+            LEFT[0][i] = M[0][i] + scores.openGap;
+        }
+        for(int i = 1; i <= matrices.L2; i++){
+            UP[i][0] = M[i][0] + scores.openGap;
+            LEFT[i][0] = M[i][0] + scores.openGap;
+        }
+    }
 }
 
 //only called for affine gap penalties
@@ -195,6 +267,56 @@ int findTraceBackPos(const dp_matrices& matrices, int* const i, int* const j,con
     return 0;
 }
 
+int findTraceBackPosStatic(const dp_matrices& matrices, int* const i, int* const j,const dp_type& type){
+    //find beginPosition for traceBack and find dpScore
+    int maximum = M[*i][*j];
+    if((type.freeQueryE && type.freeRefE) || type.local){//local
+        if(!matrices.banded){
+            for(int idx = matrices.L2; idx >= 0; idx--){
+                for(int idx2 = matrices.L1; idx2 >= 0; idx2--){
+                    if(M[idx][idx2] > maximum){
+                        maximum = M[idx][idx2];
+                        *i = idx;
+                        *j = idx2;
+                    }
+                }
+            }
+        }
+        else{
+            for(int idx = matrices.L2; idx >= 0; idx--){
+                for(int idx2 = min(idx+matrices.bandSize,matrices.L1); idx2 >= max(0,idx-matrices.bandSize); idx2--){
+                    if(M[idx][idx2] > maximum){
+                        maximum = M[idx][idx2];
+                        *i = idx;
+                        *j = idx2;
+                    }
+                }
+            }
+        }
+    }
+    else if(type.freeQueryE){//banded update
+        for(int idx = min(matrices.L2, matrices.L1 + matrices.bandSize); 
+                idx >= min(matrices.L2, max(0,matrices.L1 - matrices.bandSize)); 
+                idx--){
+            if(M[idx][*j] > maximum){
+                maximum = M[idx][*j];
+                *i = idx;
+            }
+        }
+    }
+    else if(type.freeRefE){
+        for(int idx = min(matrices.L1, matrices.L2 + matrices.bandSize); 
+                idx >= min(matrices.L1, max(0,matrices.L2 - matrices.bandSize)); 
+                idx--){
+            if(M[*i][idx] > maximum){
+                maximum = M[*i][idx];
+                *j = idx;
+            }
+        }
+    }
+    return 0;
+}
+
 inline int  maximum( int f1, int f2, int f3, char * ptr )
 {
         int  max = 0 ;
@@ -284,6 +406,49 @@ int dpFill(dp_matrices& matrices,const string& ref,const string& query, bool for
     return 0;
 }
 
+int dpFillStatic(dp_matrices& matrices,const string& ref,const string& query, bool forward,
+        const boundaries& offset, const dp_scores& scores, 
+        const dp_type& type){
+    int        d = 0;
+    int        local = type.local || (type.freeQueryB && type.freeRefB) ? 0 : 1;
+
+    for(int i = 1; i <= matrices.L2; i++ ){
+        int idx2 = forward ? i-matrices.bandSize : matrices.L1-matrices.L2 + i - matrices.bandSize;
+        int colRB = forward ? i+matrices.bandSize : matrices.L1-matrices.L2 + i + matrices.bandSize;
+        if(idx2>0){//left value undefined
+            d = scores.scoreMatrix[ref[offset.refB+idx2-1]][query[offset.queryB+i-1]];
+            M[ i ][ idx2 ] = M[ i-1 ][ idx2-1 ] + d;
+            UP[i][idx2] = max(M[ i-1 ][ idx2 ] + scores.extendGap + scores.openGap, UP[i-1][idx2]+scores.extendGap);
+            M[ i ][ idx2 ] = max(M[ i ][ idx2 ] , UP[i][idx2]);
+            //fill in generic value for gapLeft, such that it is defined, but not chosen in next step
+            LEFT[i][idx2] = M[ i ][ idx2 ] + scores.extendGap + 2*scores.openGap;
+            M[ i ][ idx2 ] = max(M[ i ][ idx2 ], 0 + local*M[ i ][ idx2 ]);
+            idx2++;
+        }
+        for(int j = max( 1, idx2); j <= min(matrices.L1, colRB-1); j++ ){
+            //here insert substitution matrix!
+            d = scores.scoreMatrix[ref[offset.refB+j-1]][query[offset.queryB+i-1]];
+            UP[i][j] = max(M[ i-1 ][ j ] + scores.extendGap + scores.openGap, UP[i-1][j]+scores.extendGap);
+            M[i][j] = M[ i-1 ][ j-1 ] + d;
+            LEFT[i][j] = max(M[ i ][ j-1 ] + scores.extendGap + scores.openGap, LEFT[i][j-1]+scores.extendGap);
+            M[i][j] = max(M[i][j], LEFT[i][j]);
+            M[i][j] = max(M[i][j], UP[i][j]);
+            M[ i ][ j ] = max(M[ i ][ j ], 0 + local*M[ i ][ j ]);
+        }
+        if(colRB <= matrices.L1){
+            idx2 = colRB;
+            d = scores.scoreMatrix[ref[offset.refB+idx2-1]][query[offset.queryB+i-1]];
+            M[ i ][ idx2 ] = M[ i-1 ][ idx2-1 ] + d;
+            LEFT[i][idx2] = max(M[ i ][ idx2-1 ] + scores.extendGap + scores.openGap, LEFT[i][idx2-1]+scores.extendGap);
+            M[ i ][ idx2 ] = max(M[ i ][ idx2 ], LEFT[i][idx2]);
+            //fill in generic value for gapUp, such that it is defined, but not chosen in next step
+            UP[i][idx2] = M[ i ][ idx2 ] + scores.extendGap + 2*scores.openGap;
+            M[ i ][ idx2 ] = max(M[ i ][ idx2 ], 0 + local*M[ i ][ idx2 ]);
+        }
+    }
+    return 0;
+}
+
 int dpFillOpt(dp_matrices& matrices,const string& ref,const string& query, bool forward, 
         const boundaries& offset, const dp_scores& scores, const dp_type& type){
     //TODO: when changed to mallocs: use row-order traversal
@@ -341,6 +506,37 @@ int dpFillOpt(dp_matrices& matrices,const string& ref,const string& query, bool 
     return 0;
 }
 
+int dpFillOptStatic(dp_matrices& matrices,const string& ref,const string& query, bool forward, 
+        const boundaries& offset, const dp_scores& scores, const dp_type& type){
+    //TODO: when changed to mallocs: use row-order traversal
+    int        d = 0;
+    int        local = type.local || (type.freeQueryB && type.freeRefB) ? 0 : 1;
+    
+    for(int i = 1; i <= matrices.L2; i++ ){
+        int idx2 = forward ? i-matrices.bandSize : matrices.L1-matrices.L2 + i - matrices.bandSize;
+        int colRB = forward ? i+matrices.bandSize : matrices.L1-matrices.L2 + i + matrices.bandSize;
+        if(idx2>0){
+            d = scores.scoreMatrix[ref[offset.refB+idx2-1]][query[offset.queryB+i-1]];
+            M[ i ][ idx2 ] = max(M[ i-1 ][ idx2-1 ] + d, M[ i-1 ][ idx2 ] + scores.extendGap);
+            M[ i ][ idx2 ] = max(M[ i ][ idx2 ], 0 + local*M[ i ][ idx2 ]);
+            idx2++;
+        }
+        for(int j = max( 1, idx2); j <= min(matrices.L1, colRB-1); j++ ){
+            d = scores.scoreMatrix[ref[offset.refB+j-1]][query[offset.queryB+i-1]];
+            M[ i ][ j ] = max(M[ i-1 ][ j-1 ] + d, M[ i ][ j-1 ] + scores.extendGap);
+            M[ i ][ j ] = max(M[ i ][ j ], M[ i-1 ][ j ] + scores.extendGap);
+            M[ i ][ j ] = max(M[ i ][ j ], 0 + local*M[ i ][ j ]);
+        }
+        if(colRB <= matrices.L1){
+            idx2 = colRB;
+            d = scores.scoreMatrix[ref[offset.refB+idx2-1]][query[offset.queryB+i-1]];
+            M[ i ][ idx2 ] = max(M[ i-1 ][ idx2-1 ] + d, M[ i ][ idx2-1 ] + scores.extendGap);
+            M[ i ][ idx2 ] = max(M[ i ][ idx2 ], 0 + local*M[ i ][ idx2 ]);
+        }
+    }
+    return 0;
+}
+
 int dpTraceBack(const dp_matrices& matrices, int& i, int& j, dp_output& output, std::stringstream & ss){
     //TODO: after mallocs: change this traversal to row-order
     //change stringstream to char array of length dimensions array
@@ -366,6 +562,112 @@ int dpTraceBack(const dp_matrices& matrices, int& i, int& j, dp_output& output, 
                             break;
             default :       cerr << "Error in dynamic programming" << endl;
                             break;
+        }
+    }
+    return 0;
+}
+
+int dpTraceBackStatic(const dp_matrices& matrices, 
+        int& i, int& j,const dp_scores& scores,
+        const dp_type& type, dp_output& output, 
+        std::stringstream & ss, const boundaries& offset, bool forward, const string& ref, const string& query){
+    //TODO: after mallocs: change this traversal to row-order
+    //change stringstream to char array of length dimensions array
+    int qBound = 0; int rBound = 0;
+    if(type.freeQueryB)
+        qBound = matrices.L2;
+    if(type.freeRefB)
+        rBound = matrices.L1;
+    bool local = type.local || (type.freeQueryB && type.freeRefB);
+    int bandCorrection = forward ? 0 : matrices.L1-matrices.L2;
+    while( (i > qBound || j > rBound) && (!local || M[ i ][ j ] > 0)){
+        if( j > 0 && i > 0 && M[ i ][ j ] == M[ i-1 ][ j-1 ] + scores.match && ref[offset.refB+j-1] == query[offset.queryB+i-1]){
+            ss << '=';
+            i-- ;  j-- ;
+        }
+        else if(j > 0 && i > 0 && M[ i ][ j ] == M[ i-1 ][ j-1 ] + scores.mismatch){
+            ss << 'X';
+            output.editDist++;
+            i-- ;  j-- ;
+        }
+        else if(j > 0 && j > i+bandCorrection - matrices.bandSize && M[ i ][ j ] == LEFT[ i ][ j ]){
+            ss << 'D';
+            output.editDist++;
+            j-- ;
+        }
+        else if(i > 0 && j < i+bandCorrection + matrices.bandSize && M[ i ][ j ] == UP[ i ][ j ]){
+            ss << 'I';
+            output.editDist++;
+            i-- ;
+        }
+        else{
+            cerr << "Error in dynamic programming" << endl;
+            cerr << "No valid trace position found" << endl;
+            cerr << "Position " << i << ", " << j << endl;
+            cerr << "Scores: Current " << M[ i ][ j ] << endl;
+            if(j > 0 && i > 0){
+                cerr << "Scores: Diag "    << M[ i-1 ][ j-1 ] << endl;
+                cerr << "Characters "    << ref[offset.refB+j-1] << "  " << query[offset.queryB+i-1] << endl; 
+            }
+            cerr << "BandSize " << matrices.bandSize << endl;
+            if(j > 0)
+                cerr << "Scores: Left "    << M[ i ][ j-1 ] << endl;
+            if(i > 0)
+                cerr << "Scores: Up "    << M[ i-1 ][ j ] << endl;
+            exit(1);
+        }
+    }
+    return 0;
+}
+
+int dpTraceBackOptStatic(const dp_matrices& matrices, 
+        int& i, int& j,const dp_scores& scores,
+        const dp_type& type, dp_output& output, 
+        std::stringstream & ss, const boundaries& offset, bool forward, const string& ref, const string& query){
+    //TODO: after mallocs: change this traversal to row-order
+    //change stringstream to char array of length dimensions array
+    int qBound = 0; int rBound = 0;
+    if(type.freeQueryB)
+        qBound = matrices.L2;
+    if(type.freeRefB)
+        rBound = matrices.L1;
+    bool local = type.local || (type.freeQueryB && type.freeRefB);
+    int bandCorrection = forward ? 0 : matrices.L1-matrices.L2;
+    while( (i > qBound || j > rBound) && (!local || M[ i ][ j ] > 0)){
+        if( j > 0 && i > 0 && M[ i ][ j ] == M[ i-1 ][ j-1 ] + scores.match && ref[offset.refB+j-1] == query[offset.queryB+i-1]){
+            ss << '=';
+            i-- ;  j-- ;
+        }
+        else if(j > 0 && i > 0 && M[ i ][ j ] == M[ i-1 ][ j-1 ] + scores.mismatch){
+            ss << 'X';
+            output.editDist++;
+            i-- ;  j-- ;
+        }
+        else if(j > 0 && j > i+bandCorrection - matrices.bandSize && M[ i ][ j ] == M[ i ][ j-1 ] + scores.extendGap){
+            ss << 'D';
+            output.editDist++;
+            j-- ;
+        }
+        else if(i > 0 && j < i+bandCorrection + matrices.bandSize && M[ i ][ j ] == M[ i-1 ][ j ] + scores.extendGap){
+            ss << 'I';
+            output.editDist++;
+            i-- ;
+        }
+        else{
+            cerr << "Error in dynamic programming" << endl;
+            cerr << "No valid trace position found" << endl;
+            cerr << "Position " << i << ", " << j << endl;
+            cerr << "Scores: Current " << M[ i ][ j ] << endl;
+            if(j > 0 && i > 0){
+                cerr << "Scores: Diag "    << M[ i-1 ][ j-1 ] << endl;
+                cerr << "Characters "    << ref[offset.refB+j-1] << "  " << query[offset.queryB+i-1] << endl; 
+            }
+            cerr << "BandSize " << matrices.bandSize << endl;
+            if(j > 0)
+                cerr << "Scores: Left "    << M[ i ][ j-1 ] << endl;
+            if(i > 0)
+                cerr << "Scores: Up "    << M[ i-1 ][ j ] << endl;
+            exit(1);
         }
     }
     return 0;
@@ -743,6 +1045,101 @@ int dpBand( const string&     ref,
             offset.refB = offset.refB+j;
         deleteMatrix(matrices);
     }
+
+    return 0;
+}
+//(extra parameters offset1 and offset2, length1 and length2 in struct boundaries)
+//extra: substitution matrix!
+//Banded alignment only for band sizes > 0 and non-local alignment!!!
+int dpBandStatic( const string&     ref,
+        const string&     query,
+        boundaries& offset,
+        const dp_scores&  scores,
+        const dp_type&    type,
+        const outputType& oType,
+        dp_output&  output,
+        int bandSize,
+        bool print)
+{
+    dp_matrices matrices;
+    matrices.L1 = offset.refE-offset.refB+1;
+    matrices.L2 = offset.queryE-offset.queryB+1;
+    matrices.bandSize = bandSize;
+    matrices.banded = true;
+    assert(matrices.L1 >=0 && matrices.L2 >= 0 && bandSize >0);
+    assert(!dp_type.local);
+    assert((!dp_type.freeQueryB && !dp_type.freeRefB) || (!dp_type.freeQueryE && !dp_type.freeRefE));
+    //IF no free start at begin:
+    //possible end of alignment should be accessible for traceback: 
+    //range of allowed traceback startpositions should have a non-empty intersection
+    //with the band, otherwise: give bad alignment and return
+    //ELSE IF free start at begin in cols or rows: (resulting in no free ending):
+    //check range of starting point (0,0) lies in range of band if rows or columns were not free
+    if((type.freeQueryB && !type.freeRefB && matrices.L2 + bandSize < matrices.L1) ||
+            (type.freeRefB && !type.freeQueryB && matrices.L2 - bandSize > matrices.L1) ||
+            (!(type.freeQueryB || type.freeRefB) && !type.freeRefE && matrices.L2 + bandSize < matrices.L1) ||
+            (!(type.freeQueryB || type.freeRefB) && !type.freeQueryE && matrices.L2 - bandSize > matrices.L1)){
+        output.dpScore = scores.mismatch*query.length();
+        output.editDist = query.length();
+        return 1;
+    }
+    //build matrices
+    updateMatrix(matrices, scores, type);
+    bool affine = scores.openGap != 0;
+    //dp
+    if(affine)
+        dpFillStatic(matrices, ref, query, !type.freeQueryB && !type.freeRefB, offset, scores, type);
+    else
+        dpFillOptStatic(matrices, ref, query, !type.freeQueryB && !type.freeRefB, offset, scores, type);
+    //traceback and output
+    int        i = min(matrices.L2,matrices.L1+matrices.bandSize), j = min(matrices.L1,matrices.L2+matrices.bandSize);
+    //find beginPosition for traceBack and find dpScore
+    findTraceBackPosStatic(matrices,&i,&j,type);
+    output.dpScore = M[i][j];
+    //Next is for output only
+    if(oType>DPSCORE){
+        //Alter boundaries to return the new positions when free gaps were introduced.
+        if(type.freeQueryE && i < matrices.L2)
+            offset.queryE = offset.queryB+i-1;
+        if(type.freeRefE && j < matrices.L1)
+            offset.refE = offset.refB+j-1;
+        //traceBack
+        std::stringstream ss;
+        if(affine)
+            dpTraceBackStatic(matrices, i, j, scores, type, output, ss, offset, !type.freeQueryB && !type.freeRefB, ref, query);
+        else
+            dpTraceBackOptStatic(matrices, i, j, scores, type, output, ss, offset, !type.freeQueryB && !type.freeRefB, ref, query);
+        //Edit Dist ouput
+        if( i > 0 && !type.freeQueryB)
+            output.editDist += i;
+        if(j > 0 && !type.freeRefB)
+            output.editDist += j;
+        //Errorstring output
+        if(oType == ERRORSTRING || oType == ALL){
+            string errorString = ss.str();
+            if(i > 0 && !type.freeQueryB)
+                errorString.append(i,'I');
+            else if(j > 0 && !type.freeRefB)
+                errorString.append(j, 'D');
+            reverse( errorString.begin(), errorString.end() );
+            //create output: errorString
+            int iter = 0;
+            int temp;
+            while(iter < errorString.length()){
+                temp = iter;
+                while(iter+1 < errorString.length() && errorString[iter+1]==errorString[temp])
+                    iter++;
+                iter++;
+                output.cigarChars.push_back(errorString[temp]);
+                output.cigarLengths.push_back(iter-temp);
+            }
+        }
+    }
+    //change boundaries for local and freeGap types to return changed free boundaries.
+    if(type.freeQueryB && i > 0)
+        offset.queryB = offset.queryB+i;
+    if(type.freeRefB && j > 0)
+        offset.refB = offset.refB+j;
 
     return 0;
 }

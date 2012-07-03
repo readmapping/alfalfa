@@ -50,3 +50,7 @@ v0.3.4
 *added banded alignment; which supports everything, except local alignment
 *added band-value in inexact matching algorithm
 *added score-matrix for DP, eliminating some branches
+
+v0.3.5
+*changed dynamic programming: only initialise when necessairy, instead of for every run of the routine.
+*changed dynamic programming: calculate trace after filling the DP matrix, instead of working with a trace matrix

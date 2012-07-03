@@ -57,7 +57,7 @@ enum command_t {INDEX, MATCHES, ALN};
 int MINOPTIONCOUNT = 2;
 static const string PROG = "ALFALFA";
 static const string SAM_VERSION = "1.4";
-static const string PROG_VERSION = "0.3.4";
+static const string PROG_VERSION = "0.3.5";
 static string NAN = "*";
 
 struct mapOptions_t{//commentary + sort + constructor
@@ -316,6 +316,7 @@ int main(int argc, char* argv[]){
             }
 	}
         opt.alnOptions.scores.updateScoreMatrixDna();
+        initDPMatrix(2048, opt.alnOptions.scores.openGap != 0);
         if(opt.alnOptions.alignmentCount < 1){
             opt.alnOptions.alignmentCount = 1;
             opt.alnOptions.unique = true;
@@ -383,6 +384,7 @@ int main(int argc, char* argv[]){
             fclose( outfile );
             delete sa;
             delete queryReader;
+            deleteDPMatrix(opt.alnOptions.scores.openGap != 0);
             cerr << "FINISHED" << endl;
         }
     }
