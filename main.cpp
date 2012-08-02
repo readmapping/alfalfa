@@ -83,7 +83,6 @@ struct mapOptions_t{//commentary + sort + constructor
         alnOptions.tryHarder = false;
         alnOptions.fixedMinLength = false;
         alnOptions.unique = false;
-        unpairedQ = pair1 = pair2 = ref_fasta = outputName = "";
         pairedOpt.contain = true;
         pairedOpt.discordant = true;
         pairedOpt.dovetail = false;
@@ -99,11 +98,6 @@ struct mapOptions_t{//commentary + sort + constructor
     //I/O options
     bool _4column;//for MEM output
     bool verbose;
-    string unpairedQ;
-    string pair1;
-    string pair2;
-    string ref_fasta;
-    string outputName;
     //Sequence options
     bool nucleotidesOnly;
     //MAM options
@@ -145,12 +139,21 @@ static fastqInputReader *queryReader;
 static FILE * outfile;
 static pthread_mutex_t writeLock_;
 
+static fastqInputReader *mate1Reader;
+static fastqInputReader *mate2Reader;
+
+//I/O NAMES
+static string unpairedQ = "";
+static string pair1 = "";
+static string pair2 = "";
+static string ref_fasta = "";
+static string outputName = "";
+
 struct query_arg {
-    query_arg(): alignments(0), skip0(0), skip(0), opt(0){}
+    query_arg(): skip0(0), skip(0), opt(0){}
   int skip0;
   int skip;
   mapOptions_t * opt;
-  vector<read_t> alignments;//TODO: change this to array of fixed length char arrays + sizes
   pthread_mutex_t *readLock;
   pthread_mutex_t *writeLock;
 };
@@ -180,7 +183,6 @@ void *query_thread(void *arg_) {
                       << read.sequence << "\t" << read.qual << endl;
           else{
                 long globPos;
-                long it;
                 string revCompl = read.sequence;
                 //TODO: do this during thread-work, perhaps has worse locality for startpos and refdescr tables
                 Utils::reverse_complement(revCompl, false);
@@ -208,6 +210,63 @@ void *query_thread(void *arg_) {
           delete ss;
       }
   }
+  printf("sequences mapped: %ld\n", seq_cnt);
+  
+  pthread_exit(NULL);
+}
+
+void *paired_thread(void *arg_) {
+
+  query_arg *arg = (query_arg *)arg_;
+  bool print = arg->opt->verbose;
+  long seq_cnt = 0;
+  bool hasRead = true;
+//  while(hasRead){
+//      read_t read;
+//      pthread_mutex_lock(arg->readLock);
+//      hasRead = queryReader->nextRead(read.qname,read.sequence,read.qual);
+//      pthread_mutex_unlock(arg->readLock);
+//      if(hasRead){
+//          seq_cnt++;
+//          if(!arg->opt->noFW)
+//                sa->inexactMatch(read, arg->opt->alnOptions, true, print);
+//          if(!arg->opt->noRC)
+//                sa->inexactMatch(read, arg->opt->alnOptions, false, print);
+//          read.postprocess(arg->opt->alnOptions.scores);
+//          //From global to local pos and write to stringstream
+//          stringstream * ss = new stringstream;
+//          if(read.alignments.empty())
+//              *ss << read.qname << "\t4\t*\t0\t0\t*\t*\t0\t0\t" 
+//                      << read.sequence << "\t" << read.qual << endl;
+//          else{
+//                long globPos;
+//                string revCompl = read.sequence;
+//                //TODO: do this during thread-work, perhaps has worse locality for startpos and refdescr tables
+//                Utils::reverse_complement(revCompl, false);
+//                string qualRC = read.qual;
+//                reverse(qualRC.begin(),qualRC.end());
+//                for(int k = 0; k < read.alignments.size(); k++){
+//                        alignment_t & a = read.alignments[k];
+//                        globPos = a.pos;
+//                        long descIndex;
+//                        sa->from_set(globPos, descIndex, a.pos);
+//                        a.rname = sa->descr[descIndex];
+//                        *ss << read.qname << "\t" << a.flag.to_ulong() << "\t"
+//                                << a.rname << "\t" << a.pos << "\t" << 
+//                                a.mapq << "\t" << a.cigar << "\t" << 
+//                                a.rnext << "\t" << a.pnext << "\t" << 
+//                                a.tLength << "\t" << (a.flag.test(4) ? revCompl : read.sequence) <<
+//                                "\t" << (a.flag.test(4) ? qualRC : read.qual) << "\tAS:i:" << 
+//                                a.alignmentScore << "\tNM:i:" << a.editDist << "\tX0:Z:" << 
+//                                a.NMtag << endl;
+//                }
+//          }
+//          pthread_mutex_lock(arg->writeLock);
+//          fprintf(outfile,"%s",ss->str().c_str());
+//          pthread_mutex_unlock(arg->writeLock);
+//          delete ss;
+//      }
+//  }
   printf("sequences mapped: %ld\n", seq_cnt);
   
   pthread_exit(NULL);
@@ -350,11 +409,11 @@ int main(int argc, char* argv[]){
 			argc-1, argv+1,
 			short_options, long_options, &option_index)) != -1) {//memType cannot be chosen
             switch (c) {
-                case 'x': opt.ref_fasta = optarg; break;
-                case 'U': opt.unpairedQ = optarg; break;
-                case '1': opt.pair1 = optarg; break;
-                case '2': opt.pair2 = optarg; break;
-                case 'S': opt.outputName = optarg; break;
+                case 'x': ref_fasta = optarg; break;
+                case 'U': unpairedQ = optarg; break;
+                case '1': pair1 = optarg; break;
+                case '2': pair2 = optarg; break;
+                case 'S': outputName = optarg; break;
                 case 's': opt.K = atoi(optarg); break;
                 case 'k': opt.alnOptions.alignmentCount = atoi(optarg); break;
                 case 'l': opt.alnOptions.minMemLength = atoi(optarg); opt.alnOptions.fixedMinLength = true; break;
@@ -398,21 +457,21 @@ int main(int argc, char* argv[]){
             opt.alnOptions.unique = true;
         }
         //add the reference query and output files
-        if(opt.ref_fasta.empty()){
+        if(ref_fasta.empty()){
             fprintf(stderr, "ALFALFA requires input reference file \n");
             exit(1);
         }
         //query name + read initialization
-        if(command == ALN && (opt.unpairedQ.empty() && (opt.pair1.empty() || opt.pair2.empty()))){
+        if(command == ALN && (unpairedQ.empty() && (pair1.empty() || pair2.empty()))){
             fprintf(stderr, "ALFALFA requires query files (1 unpaired and/or 2 mate files \n");
             exit(1);
         }
         cerr << "parsing options: done" << endl;
         cerr << "loading ref sequences: ..." << endl;
         string ref;
-        load_fasta(opt.ref_fasta, ref, output.refdescr, output.startpos);
+        load_fasta(ref_fasta, ref, output.refdescr, output.startpos);
         cerr << "loading ref sequences: done" << endl;
-        cerr << "# ref sequence: " << opt.ref_fasta.data() << endl;
+        cerr << "# ref sequence: " << ref_fasta.data() << endl;
         if(command >= INDEX){
             //build index
             cerr << "building index with s = " << opt.K  << " ... "<< endl;
@@ -426,15 +485,15 @@ int main(int argc, char* argv[]){
             if(command == INDEX) delete sa;
         }
         if(command == ALN){
-            if(opt.outputName.empty()) 
-                opt.outputName = opt.ref_fasta.substr().append(".sam");
+            if(outputName.empty()) 
+                outputName = ref_fasta.substr().append(".sam");
             //Print SAM Header, require refdescre, startpos and argc/argv
             output.createHeader(argc, argv, ref.length());
-            outfile = fopen( opt.outputName.c_str(), "w" );
+            outfile = fopen( outputName.c_str(), "w" );
             fprintf(outfile,"%s",output.header.c_str());
             //FIRST: Unpaired reads
-            if(!opt.unpairedQ.empty()){
-                queryReader = new fastqInputReader(opt.unpairedQ, opt.nucleotidesOnly);
+            if(!unpairedQ.empty()){
+                queryReader = new fastqInputReader(unpairedQ, opt.nucleotidesOnly);
                 pthread_mutex_init(&writeLock_, NULL);
                 pthread_attr_t attr;  pthread_attr_init(&attr);
                 pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
@@ -463,34 +522,39 @@ int main(int argc, char* argv[]){
                 delete queryReader;
             }
             //SECOND: Paired reads
-            if(!opt.pair1.empty() && !opt.pair2.empty()){
-//                queryReader = new fastqInputReader(opt.unpairedQ, opt.nucleotidesOnly);
-//                pthread_mutex_init(&writeLock_, NULL);
-//                pthread_attr_t attr;  pthread_attr_init(&attr);
-//                pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
-//                vector<query_arg> args(opt.query_threads);
-//                vector<pthread_t> thread_ids(opt.query_threads);
-//                cerr << "Mapping unpaired reads to the index using " << opt.query_threads << " threads ..." << endl;
-//                clock_t start = clock();
-//                // Initialize additional thread data.
-//                for(int i = 0; i < opt.query_threads; i++) {
-//                    args[i].skip = opt.query_threads;
-//                    args[i].skip0 = i;
-//                    args[i].opt = & opt;
-//                    args[i].readLock = &queryReader->readLock_;
-//                    args[i].writeLock = &writeLock_;
-//                }
-//                // Create joinable threads to find MEMs.
-//                for(int i = 0; i < opt.query_threads; i++)
-//                    pthread_create(&thread_ids[i], &attr, query_thread, (void *)&args[i]);
-//                // Wait for all threads to terminate.
-//                for(int i = 0; i < opt.query_threads; i++)
-//                    pthread_join(thread_ids[i], NULL);
-//                clock_t end = clock();
-//                double cpu_time = (double)( end - start ) /CLOCKS_PER_SEC;
-//                cerr << "mapping unpaired: done" << endl;
-//                cerr << "time for mapping: " << cpu_time << endl;
-//                delete queryReader;
+            if(!pair1.empty() && !pair2.empty()){
+                mate1Reader = new fastqInputReader(pair1, opt.nucleotidesOnly);
+                mate2Reader = new fastqInputReader(pair2, opt.nucleotidesOnly);
+                pthread_attr_t attr;  pthread_attr_init(&attr);
+                pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+                vector<query_arg> args(opt.query_threads);
+                vector<pthread_t> thread_ids(opt.query_threads);
+                cerr << "Mapping paired reads to the index using " << opt.query_threads << " threads ..." << endl;
+                clock_t start = clock();
+                // Initialize additional thread data.
+                for(int i = 0; i < opt.query_threads; i++) {
+                    args[i].skip = opt.query_threads;
+                    args[i].skip0 = i;
+                    args[i].opt = & opt;
+                    args[i].readLock = &mate1Reader->readLock_;
+                    args[i].writeLock = &writeLock_;
+                }
+                // Create joinable threads to find MEMs.
+                for(int i = 0; i < opt.query_threads; i++)
+                    pthread_create(&thread_ids[i], &attr, paired_thread, (void *)&args[i]);
+                // Wait for all threads to terminate.
+                for(int i = 0; i < opt.query_threads; i++)
+                    pthread_join(thread_ids[i], NULL);
+                clock_t end = clock();
+                double cpu_time = (double)( end - start ) /CLOCKS_PER_SEC;
+                cerr << "mapping paired: done" << endl;
+                cerr << "time for mapping: " << cpu_time << endl;
+                delete mate1Reader;
+                delete mate2Reader;
+            }
+            else if(!pair1.empty() || !pair2.empty()){
+                fprintf(stderr, "ALFALFA requires 2 separate mate pairs files \n");
+                exit(1);
             }
             fclose( outfile );
             delete sa;
