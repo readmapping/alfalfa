@@ -104,8 +104,10 @@
           <runcommandpicklistitem>"${OUTPUT_PATH}" aln -s 8 C:/data/reference/drosophila/genome.fasta C:/data/reference/drosophila/reads_454/SRR034673.10k.fastq</runcommandpicklistitem>
           <runcommandpicklistitem>"${OUTPUT_PATH}" aln -s 1 C:/data/reference/drosophila/genome.fasta C:/data/reference/drosophila/reads_454/4999.fastq</runcommandpicklistitem>
           <runcommandpicklistitem>"${OUTPUT_PATH}" aln -s 1 C:/data/reference/drosophila/genome.fasta C:/data/reference/drosophila/reads_454/SRR034673.10k.fastq</runcommandpicklistitem>
+          <runcommandpicklistitem>"${OUTPUT_PATH}" aln -s 1 -x C:/data/reference/drosophila/genome.fasta -U C:/data/reference/drosophila/reads_454/SRR034673.10k.fastq</runcommandpicklistitem>
+          <runcommandpicklistitem>"${OUTPUT_PATH}" aln -s 1 -x C:/data/reference/drosophila/genome.fasta -U C:/data/reference/drosophila/reads_454/SRR034673.10k.fastq -S C:/data/reference/drosophila/reads_454/SRR034673.10k.sam</runcommandpicklistitem>
         </runcommandpicklist>
-        <runcommand>"${OUTPUT_PATH}" aln -s 1 C:/data/reference/drosophila/genome.fasta C:/data/reference/drosophila/reads_454/SRR034673.10k.fastq</runcommand>
+        <runcommand>"${OUTPUT_PATH}" aln -s 1 -x C:/data/reference/drosophila/genome.fasta -U C:/data/reference/drosophila/reads_454/SRR034673.10k.fastq -S C:/data/reference/drosophila/reads_454/SRR034673.10k.sam</runcommand>
         <rundir></rundir>
         <buildfirst>true</buildfirst>
         <terminal-type>0</terminal-type>
@@ -283,6 +285,7 @@
           <runcommandpicklistitem>"${OUTPUT_PATH}" aln C:/data/reference/drosophila/genome.fasta C:/data/reference/drosophila/reads_454/SRR034673.10k.fastq</runcommandpicklistitem>
           <runcommandpicklistitem>"${OUTPUT_PATH}" aln -s 8 C:/data/reference/drosophila/genome.fasta C:/data/reference/drosophila/reads_454/SRR034673.10k.fastq</runcommandpicklistitem>
           <runcommandpicklistitem>"${OUTPUT_PATH}" aln -s 12 C:/data/reference/drosophila/genome.fasta C:/data/reference/drosophila/reads_454/SRR034673.10k.fastq</runcommandpicklistitem>
+          <runcommandpicklistitem>"${OUTPUT_PATH}" aln -s 16 C:/data/reference/drosophila/genome.fasta C:\Users\mvyvermn\Downloads\sratoolkit.2.1.10-win64\bin\SRR107602.fastq</runcommandpicklistitem>
           <runcommandpicklistitem>"${OUTPUT_PATH}" aln -s 16 C:/data/reference/drosophila/genome.fasta C:/data/reference/drosophila/reads_454/SRR034673.10k.fastq</runcommandpicklistitem>
         </runcommandpicklist>
         <runcommand>"${OUTPUT_PATH}" aln -s 16 C:/data/reference/drosophila/genome.fasta C:/data/reference/drosophila/reads_454/SRR034673.10k.fastq</runcommand>

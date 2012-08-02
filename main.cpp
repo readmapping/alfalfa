@@ -83,6 +83,7 @@ struct mapOptions_t{//commentary + sort + constructor
         alnOptions.tryHarder = false;
         alnOptions.fixedMinLength = false;
         alnOptions.unique = false;
+        unpairedQ = pair1 = pair2 = ref_fasta = outputName = "";
     }
     //performance options
     int K;//sparsity factor
@@ -90,7 +91,9 @@ struct mapOptions_t{//commentary + sort + constructor
     //I/O options
     bool _4column;//for MEM output
     bool verbose;
-    string query_fast;
+    string unpairedQ;
+    string pair1;
+    string pair2;
     string ref_fasta;
     string outputName;
     //Sequence options
@@ -200,7 +203,7 @@ void *query_thread(void *arg_) {
   pthread_exit(NULL);
 }
 
-static const char * short_options = "s:k:l:frnt:q:d:vm:u:o:e:cC:T:Hh";
+static const char * short_options = "s:k:l:frnt:q:d:vm:u:o:e:cC:T:Hhx:U:1:2:S:";
 static struct option long_options[] = {
     {(char*)"sparsityfactor",   required_argument, 0,            's'},
     {(char*)"threads",          required_argument, 0,            'q'},
@@ -225,11 +228,18 @@ static struct option long_options[] = {
 };
 
 void usage(const string prog) {
-  cerr << "Usage: " << prog << " COMMAND [options] <reference-file> <query-file> [ouput-file]" << endl;
+  cerr << "Usage: " << prog << " COMMAND [options] -x <reference-file> -1 <m1> -2 <m2> -U <unpaired> [-S ouput-file]" << endl;
   cerr << "Command should be one of the following: " << endl;
   cerr << "index                      only build the index for given <reference-file>, used for time calculations" << endl;
-  cerr << "aln                        map the reads from <query-file> to the index build for <reference-file>" << endl;
+  cerr << "aln                        map the reads to the index build for <reference-file>" << endl;
   cerr << "the options are ordered by functionality: " << endl;
+  cerr << endl;
+  cerr << "I/O OPTIONS " << endl;
+  cerr << "-x (string)                reference sequence in mult-fasta" << endl;
+  cerr << "-1                         query file with first mates (fasta or fastq)" << endl;
+  cerr << "-2                         query file with second mates (fasta or fastq)" << endl;
+  cerr << "-U                         query file with unpaired reads (fasta or fastq)" << endl;
+  cerr << "-S                         output file name (will be sam)" << endl;
   cerr << endl;
   cerr << "PERFORMANCE OPTIONS " << endl;
   cerr << "-s/--sparsityfactor (int)  the sparsity factor of the sparse suffix array index, values between 1 and 4 are preferred [1]" << endl;
@@ -289,11 +299,16 @@ int main(int argc, char* argv[]){
 			argc-1, argv+1,
 			short_options, long_options, &option_index)) != -1) {//memType cannot be chosen
             switch (c) {
-		case 's': opt.K = atoi(optarg); break;
+                case 'x': opt.ref_fasta = optarg; break;
+                case 'U': opt.unpairedQ = optarg; break;
+                case '1': opt.pair1 = optarg; break;
+                case '2': opt.pair2 = optarg; break;
+                case 'S': opt.outputName = optarg; break;
+                case 's': opt.K = atoi(optarg); break;
                 case 'k': opt.alnOptions.alignmentCount = atoi(optarg); break;
                 case 'l': opt.alnOptions.minMemLength = atoi(optarg); opt.alnOptions.fixedMinLength = true; break;
                 case 'f': opt.noFW = 1; break;
-		case 'r': opt.noRC = 1; break;
+                case 'r': opt.noRC = 1; break;
                 case 'n': opt.nucleotidesOnly = 1; break;
                 case 'v': opt.verbose = 1; break;
                 case 'c': opt.alnOptions.noClipping = false; break;
@@ -303,7 +318,7 @@ int main(int argc, char* argv[]){
                 case 'u': opt.alnOptions.scores.mismatch = atoi(optarg); break;
                 case 'o': opt.alnOptions.scores.openGap = atoi(optarg); break;
                 case 'e': opt.alnOptions.scores.extendGap = atoi(optarg); break;
-		case 'd': opt.alnOptions.errorPercent = atof(optarg); break;
+                case 'd': opt.alnOptions.errorPercent = atof(optarg); break;
                 case 'T': opt.alnOptions.maxTrial = atoi(optarg); break;
                 case 'C': opt.alnOptions.minCoverage = atoi(optarg); break;
                 case 'H': opt.alnOptions.tryHarder = true; break;
@@ -314,7 +329,7 @@ int main(int argc, char* argv[]){
                 default: usage(PROG);
 				throw 1;
             }
-	}
+        }
         opt.alnOptions.scores.updateScoreMatrixDna();
         initDPMatrix(2048, opt.alnOptions.scores.openGap != 0);
         if(opt.alnOptions.alignmentCount < 1){
@@ -322,9 +337,13 @@ int main(int argc, char* argv[]){
             opt.alnOptions.unique = true;
         }
         //add the reference query and output files
-        if(optind + 1 < argc) opt.ref_fasta = argv[optind+1];
-        else{
+        if(opt.ref_fasta.empty()){
             fprintf(stderr, "ALFALFA requires input reference file \n");
+            exit(1);
+        }
+        //query name + read initialization
+        if(command == ALN && (opt.unpairedQ.empty() && (opt.pair1.empty() || opt.pair2.empty()))){
+            fprintf(stderr, "ALFALFA requires query files (1 unpaired and/or 2 mate files \n");
             exit(1);
         }
         cerr << "parsing options: done" << endl;
@@ -346,47 +365,47 @@ int main(int argc, char* argv[]){
             if(command == INDEX) delete sa;
         }
         if(command == ALN){
-            //query name + read initialization
-            opt.query_fast = optind+2 < argc ? argv[optind+2] : "";
-            queryReader = new fastqInputReader(opt.query_fast, opt.nucleotidesOnly);
-            
+            if(opt.outputName.empty()) 
+                opt.outputName = opt.ref_fasta.substr().append(".sam");
             //Print SAM Header, require refdescre, startpos and argc/argv
-            opt.outputName = optind+3 < argc ? argv[optind+3] : opt.query_fast.substr().append(".sam");
             output.createHeader(argc, argv, ref.length());
             outfile = fopen( opt.outputName.c_str(), "w" );
             fprintf(outfile,"%s",output.header.c_str());
-            pthread_mutex_init(&writeLock_, NULL);
-            
-            pthread_attr_t attr;  pthread_attr_init(&attr);
-            pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
-            vector<query_arg> args(opt.query_threads);
-            vector<pthread_t> thread_ids(opt.query_threads);
-            cerr << "Mapping reads to the index using " << opt.query_threads << " threads ..." << endl;
-            clock_t start = clock();
-            // Initialize additional thread data.
-            for(int i = 0; i < opt.query_threads; i++) {
-                args[i].skip = opt.query_threads;
-                args[i].skip0 = i;
-                args[i].opt = & opt;
-                args[i].readLock = &queryReader->readLock_;
-                args[i].writeLock = &writeLock_;
+            //FIRST: Unpaired reads
+            if(!opt.unpairedQ.empty()){
+                queryReader = new fastqInputReader(opt.unpairedQ, opt.nucleotidesOnly);
+                pthread_mutex_init(&writeLock_, NULL);
+                pthread_attr_t attr;  pthread_attr_init(&attr);
+                pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+                vector<query_arg> args(opt.query_threads);
+                vector<pthread_t> thread_ids(opt.query_threads);
+                cerr << "Mapping unpaired reads to the index using " << opt.query_threads << " threads ..." << endl;
+                clock_t start = clock();
+                // Initialize additional thread data.
+                for(int i = 0; i < opt.query_threads; i++) {
+                    args[i].skip = opt.query_threads;
+                    args[i].skip0 = i;
+                    args[i].opt = & opt;
+                    args[i].readLock = &queryReader->readLock_;
+                    args[i].writeLock = &writeLock_;
+                }
+                // Create joinable threads to find MEMs.
+                for(int i = 0; i < opt.query_threads; i++)
+                    pthread_create(&thread_ids[i], &attr, query_thread, (void *)&args[i]);
+                // Wait for all threads to terminate.
+                for(int i = 0; i < opt.query_threads; i++)
+                    pthread_join(thread_ids[i], NULL);
+                clock_t end = clock();
+                double cpu_time = (double)( end - start ) /CLOCKS_PER_SEC;
+                cerr << "mapping unpaired: done" << endl;
+                cerr << "time for mapping: " << cpu_time << endl;
+                delete queryReader;
             }
-            // Create joinable threads to find MEMs.
-            for(int i = 0; i < opt.query_threads; i++)
-                pthread_create(&thread_ids[i], &attr, query_thread, (void *)&args[i]);
-            // Wait for all threads to terminate.
-            for(int i = 0; i < opt.query_threads; i++)
-                pthread_join(thread_ids[i], NULL);
-            clock_t end = clock();
-            double cpu_time = (double)( end - start ) /CLOCKS_PER_SEC;
-            cerr << "mapping: done" << endl;
-            cerr << "time for mapping: " << cpu_time << endl;
             fclose( outfile );
             delete sa;
-            delete queryReader;
             deleteDPMatrix(opt.alnOptions.scores.openGap != 0);
             cerr << "FINISHED" << endl;
         }
     }
-  return 0;
+    return 0;
 }
