@@ -27,16 +27,9 @@
 
 #include <vector>
 #include <string>
-#include <iostream>
 #include <algorithm>
 #include <limits>
-#include <sstream>
-#include <assert.h>
-
-#include "dp.h"
-#include "utils.h"
-#include "options.h"
-#include <bitset>
+#include <iostream>
 
 using namespace std;
 
@@ -53,7 +46,7 @@ struct vec_uchar {
   vector<item_t> M;
   void resize(size_t N) { vec.resize(N); }
   // Vector X[i] notation to get LCP values.
-  int operator[] (size_t idx) {
+  int operator[] (size_t idx) const{
     if(vec[idx] == numeric_limits<unsigned char>::max())
       return lower_bound(M.begin(), M.end(), item_t(idx,0))->val;
     else
@@ -80,149 +73,6 @@ struct match_t {
   long ref; // position in reference sequence
   long query; // position in query
   long len; // length of match
-};
-
-// interval in match results + bases covering the result
-struct lis_t {
-  lis_t(): begin(0), end(0), len(0) {}
-  lis_t(int b, int e, int l): begin(b), end(e), len(l) {}
-  int begin; // position in reference sequence
-  int end; // position in query
-  int len; // length of match
-};
-
-struct alignment_t {
-  alignment_t(): pos(0), cigar("*"), flag(0), rname("*"), mapq(0), tLength(0),
-  rnext("*"), pnext(0), editDist(0), alignmentScore(0), cigarChars(0), cigarLengths(0), NMtag("*") {}
-  string cigar;//TODO: remove this fields, only used when printed
-  string NMtag;//TODO: remove this fields, only used when printed
-  vector<char> cigarChars;//Change these to fixed-length values
-  vector<int> cigarLengths;//Change these to fixed-length values (make sure to increase them when necessary): make own string and vector classes
-  string rname;//leave out, only for printing
-  long pos; // position in reference sequence
-  bitset<11> flag;
-  int mapq;
-  //TODO: paired-end mapping
-  string rnext;
-  long pnext;
-  int editDist;
-  int alignmentScore;
-  int tLength;
-  void createCigar(bool newVersion){
-      stringstream ss;
-      assert(cigarChars.size()==cigarLengths.size());
-      if(newVersion)
-          for(int i = 0; i < cigarChars.size(); i++)
-              ss << cigarLengths[i] << cigarChars[i];
-      else{
-          int i = 0;
-          while(i < cigarChars.size()){
-              if(cigarChars[i]=='=' || cigarChars[i]=='X'){
-                    int tempLength = cigarLengths[i];
-                    while(i < cigarChars.size()-1 && (cigarChars[i+1]=='=' || cigarChars[i+1]=='X')){
-                        tempLength += cigarLengths[i+1];
-                        i++;
-                    }
-                    ss << tempLength << 'M';
-              }
-              else{
-                ss << cigarLengths[i] << cigarChars[i];
-              }
-              i++;
-          }
-      }
-      cigar = ss.str();
-  }
-  void setFieldsFromCigar(const dp_scores & scores){//TODO: change to use special vectors
-      stringstream sNM;
-      stringstream sCig;
-      assert(cigarChars.size()==cigarLengths.size());
-      assert(cigarChars.size()>0);
-      int i = 0;
-      editDist = 0;
-      while(i < cigarChars.size()){
-          if(cigarChars[i]=='=' || cigarChars[i]=='X'){
-                int tempLength = cigarLengths[i];
-                sNM << cigarLengths[i] << cigarChars[i];
-                editDist += (cigarChars[i]=='X' ? cigarLengths[i] : 0);
-                alignmentScore += (cigarChars[i]=='X' ? scores.mismatch*cigarLengths[i] : scores.match*cigarLengths[i]);
-                while(i < cigarChars.size()-1 && (cigarChars[i+1]=='=' || cigarChars[i+1]=='X')){
-                    i++;
-                    tempLength += cigarLengths[i];
-                    sNM << cigarLengths[i] << cigarChars[i];
-                    editDist += (cigarChars[i]=='X' ? cigarLengths[i] : 0);
-                    alignmentScore += (cigarChars[i]=='X' ? scores.mismatch*cigarLengths[i] : scores.match*cigarLengths[i]);
-                }
-                sCig << tempLength << 'M';
-          }
-          else{
-            sCig << cigarLengths[i] << cigarChars[i];
-            sNM << cigarLengths[i] << cigarChars[i];
-            if(cigarChars[i]=='D' || cigarChars[i]=='I'){
-                editDist += cigarLengths[i];
-                alignmentScore += scores.openGap + scores.extendGap*cigarLengths[i];
-            }
-          }
-          i++;
-      }
-      cigar = sCig.str();
-      NMtag = sNM.str();
-  }
-};
-
-struct read_t {
-    read_t(): qname(""),sequence(""),qual("*"), alignments(0) {}
-    read_t(string name, string &seq, string &qw): qname(name),sequence(seq),qual(qw), alignments(0) {}
-    void postprocess(const dp_scores & scores){
-        int maxScore = scores.mismatch*sequence.length();
-        assert(maxScore < 0);//works only for score<0 for now (to do: add sign switch to allow positive min scores)
-        int secBestScore = scores.mismatch*sequence.length();
-        for(int j = 0; j < alignments.size(); j++){
-             alignments[j].setFieldsFromCigar(scores);
-             if(alignments[j].alignmentScore > maxScore){
-                 secBestScore = maxScore;
-                 maxScore = alignments[j].alignmentScore;
-             }
-             else if(alignments[j].alignmentScore < maxScore && alignments[j].alignmentScore > secBestScore)
-                 secBestScore = alignments[j].alignmentScore;
-        }
-        int mapq = (secBestScore == scores.mismatch*sequence.length()) ? 255 :
-            250*(maxScore-secBestScore)/(maxScore-scores.mismatch*sequence.length()) ;
-        assert(mapq <= 255 && mapq >= 0);
-        for(int j = 0; j < alignments.size(); j++){
-             if(alignments[j].alignmentScore == maxScore)
-                 alignments[j].mapq = mapq;
-             else
-                 alignments[j].flag.set(8,true);
-        }
-    }
-    void printAlignments(){
-        if(alignments.empty()){
-            printf("%s\t%d\t%s\t%ld\t%d\t%s\t%s\t%ld\t%d\t%s\t%s\n",qname.c_str(),4,"*",0,0,"*","*",0,0,sequence.c_str(),qual.c_str());
-        }
-        else{
-            alignment_t & a = alignments[0];
-            string revCompl = sequence;
-            Utils::reverse_complement(revCompl, false);
-            string qualRC = qual;
-            reverse(qualRC.begin(),qualRC.end());
-            printf("%s\t%d\t%s\t%ld\t%d\t%s\t%s\t%ld\t%d\t%s\t%s\tAS:i:%d\tNH:i:%ld\tNM:i:%d\tX0:Z:%s\n",
-                        qname.c_str(),(int)a.flag.to_ulong(),a.rname.c_str(),a.pos,a.mapq,a.cigar.c_str(),
-                        a.rnext.c_str(),a.pnext,a.tLength, a.flag.test(4) ? revCompl.c_str() : sequence.c_str(), a.flag.test(4) ? qualRC.c_str() : qual.c_str(),
-                        a.alignmentScore,alignments.size(),a.editDist,a.NMtag.c_str());
-            for(int i=1; i < alignments.size(); i++){
-                a = alignments[i];
-                printf("%s\t%d\t%s\t%ld\t%d\t%s\t%s\t%ld\t%d\t%s\t%s\tAS:i:%d\tNM:i:%d\tX0:Z:%s\n",
-                        qname.c_str(),(int)a.flag.to_ulong(),a.rname.c_str(),a.pos,a.mapq,a.cigar.c_str(),
-                        a.rnext.c_str(),a.pnext,a.tLength,a.flag.test(4) ? revCompl.c_str() : sequence.c_str(),
-                        a.flag.test(4) ? qualRC.c_str() : qual.c_str(),a.alignmentScore,a.editDist,a.NMtag.c_str());
-            }
-        }
-    }
-    string qname;//TODO should be reference
-    vector<alignment_t> alignments;
-    string sequence;//TODO should be reference
-    string qual;//TODO should be reference
 };
 
 // depth : [start...end]
@@ -254,7 +104,7 @@ struct sparseSA {
   bool hasSufLink;
 
   // Maps a hit in the concatenated sequence set to a position in that sequence.
-  void from_set(long hit, long &seq, long &seqpos) {
+  void from_set(long hit, long &seq, long &seqpos) const {
     // Use binary search to locate index of sequence and position
     // within sequence.
     vector<long>::iterator it = upper_bound(startpos.begin(), startpos.end(), hit);
@@ -275,33 +125,33 @@ struct sparseSA {
   void radixStep(int *t_new, int *SA, long &bucketNr, long *BucketBegin, long l, long r, long h);
 
   // Prints match to cout.
-  void print_match(const match_t m);
-  void print_match(const match_t m, vector<match_t> &buf); // buffered version
-  void print_match(const string meta, vector<match_t> &buf, bool rc); // buffered version
+  void print_match(const match_t m) const;
+  void print_match(const match_t m, vector<match_t> &buf) const; // buffered version
+  void print_match(const string meta, vector<match_t> &buf, bool rc) const; // buffered version
 
   // Binary search for left boundry of interval.
-  inline long bsearch_left(char c, long i, long s, long e);
+  inline long bsearch_left(char c, long i, long s, long e) const;
   // Binary search for right boundry of interval.
-  inline long bsearch_right(char c, long i, long s, long e);
+  inline long bsearch_right(char c, long i, long s, long e) const;
 
   // Simple suffix array search.
-  inline bool search(const string &P, long &start, long &end);
+  inline bool search(const string &P, long &start, long &end) const;
 
   // Simple top down traversal of a suffix array.
-  inline bool top_down(char c, long i, long &start, long &end);
-  inline bool top_down_faster(char c, long i, long &start, long &end);
-  inline bool top_down_child(char c, interval_t &cur);
+  inline bool top_down(char c, long i, long &start, long &end) const;
+  inline bool top_down_faster(char c, long i, long &start, long &end) const;
+  inline bool top_down_child(char c, interval_t &cur) const;
 
   // Traverse pattern P starting from a given prefix and interval
   // until mismatch or min_len characters reached.
-  inline void traverse(const string &P, long prefix, interval_t &cur, int min_len);
-  inline void traverse_faster(const string &P,const long prefix, interval_t &cur, int min_len);
+  inline void traverse(const string &P, long prefix, interval_t &cur, int min_len) const;
+  inline void traverse_faster(const string &P,const long prefix, interval_t &cur, int min_len) const;
 
   // Simulate a suffix link.
-  inline bool suffixlink(interval_t &m);
+  inline bool suffixlink(interval_t &m) const;
 
   // Expand ISA/LCP interval. Used to simulate suffix links.
-  inline bool expand_link(interval_t &link) {
+  inline bool expand_link(interval_t &link) const {
     long thresh = 2 * link.depth * logN, exp = 0; // Threshold link expansion.
     long start = link.start;
     long end = link.end;
@@ -321,50 +171,45 @@ struct sparseSA {
 
   // Given a position i in S, finds a left maximal match of minimum
   // length within K steps.
-  inline void find_Lmaximal(const string &P, long prefix, long i, long len, vector<match_t> &matches, int min_len, bool print);
+  inline void find_Lmaximal(const string &P, long prefix, long i, long len, vector<match_t> &matches, int min_len, bool print) const;
 
   // Given an interval where the given prefix is matched up to a
   // mismatch, find all MEMs up to a minimum match depth.
   void collectMEMs(const string &P, long prefix, const interval_t mli, 
-  interval_t xmi, vector<match_t> &matches, int min_len, bool print);
+  interval_t xmi, vector<match_t> &matches, int min_len, bool print) const;
 
   void collectSMAMs(const string &P, long prefix, const interval_t mli, 
-  interval_t xmi, vector<match_t> &matches, int min_len, int maxCount, bool print);
+  interval_t xmi, vector<match_t> &matches, int min_len, int maxCount, bool print) const;
 
   // Find all MEMs given a prefix pattern offset k.
-  void findMEM(long k, const string &P, vector<match_t> &matches, int min_len, bool print);
+  void findMEM(long k, const string &P, vector<match_t> &matches, int min_len, bool print) const;
 
   // Find all MEMs given a prefix pattern offset k.
-  void findSMAM(long k, const string &P, vector<match_t> &matches, int min_len, int maxCount, bool print);
+  void findSMAM(long k, const string &P, vector<match_t> &matches, int min_len, int maxCount, bool print) const;
 
   // NOTE: min_len must be > 1
-  void findMAM(const string &P, vector<match_t> &matches, int min_len, bool print);
-  inline bool is_leftmaximal(const string &P, long p1, long p2);
+  void findMAM(const string &P, vector<match_t> &matches, int min_len, bool print) const;
+  inline bool is_leftmaximal(const string &P, long p1, long p2) const;
 
   // Maximal Almost-Unique Match (MAM). Match is unique in the indexed
   // sequence S. as computed by MUMmer version 2 by Salzberg
   // et. al. Note this is a "one-sided" query. It "streams" the query
   // P throught he index.  Consequently, repeats can occur in the
   // pattern P.
-  void MAM(const string &P, vector<match_t> &matches, int min_len, bool print) {
+  void MAM(const string &P, vector<match_t> &matches, int min_len, bool print) const{
     if(K != 1) return;  // Only valid for full suffix array.
     findMAM(P, matches, min_len, print);
   }
 
   // Find Maximal Exact Matches (MEMs)
-  void MEM(const string &P, vector<match_t> &matches, int min_len, bool print, int num_threads = 1);
+  void MEM(const string &P, vector<match_t> &matches, int min_len, bool print, int num_threads = 1) const;
 
   // Find Maximal Exact Matches (MEMs)
-  void SMAM(const string &P, vector<match_t> &matches, int min_len, int maxCount, bool print, int num_threads = 1);
+  void SMAM(const string &P, vector<match_t> &matches, int min_len, int maxCount, bool print, int num_threads = 1) const;
 
   // Maximal Unique Match (MUM)
-  void MUM(const string &P, vector<match_t> &unique, int min_len, bool print);
+  void MUM(const string &P, vector<match_t> &unique, int min_len, bool print) const;
 
-  //post process MEMs, MAMs, etc...
-  void postProcess(vector<match_t> &matches);
-
-  void inexactMatch(read_t& read,const align_opt & alnOptions, bool fwStrand, bool print);
-  //TODO: calculate global position in above function
 };
 
 

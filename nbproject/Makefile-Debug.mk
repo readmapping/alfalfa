@@ -39,6 +39,7 @@ OBJECTFILES= \
 	${OBJECTDIR}/_ext/1942341467/utils.o \
 	${OBJECTDIR}/_ext/1942341467/fasta.o \
 	${OBJECTDIR}/_ext/1942341467/qsufsort.o \
+	${OBJECTDIR}/_ext/1942341467/mapper.o \
 	${OBJECTDIR}/_ext/1942341467/dp.o
 
 
@@ -90,6 +91,11 @@ ${OBJECTDIR}/_ext/1942341467/qsufsort.o: /cygdrive/C/Users/mvyvermn/Documents/Ne
 	${MKDIR} -p ${OBJECTDIR}/_ext/1942341467
 	${RM} $@.d
 	$(COMPILE.c) -g -MMD -MP -MF $@.d -o ${OBJECTDIR}/_ext/1942341467/qsufsort.o /cygdrive/C/Users/mvyvermn/Documents/NetBeansProjects/alfalfa/qsufsort.c
+
+${OBJECTDIR}/_ext/1942341467/mapper.o: /cygdrive/C/Users/mvyvermn/Documents/NetBeansProjects/alfalfa/mapper.cpp 
+	${MKDIR} -p ${OBJECTDIR}/_ext/1942341467
+	${RM} $@.d
+	$(COMPILE.cc) -g -MMD -MP -MF $@.d -o ${OBJECTDIR}/_ext/1942341467/mapper.o /cygdrive/C/Users/mvyvermn/Documents/NetBeansProjects/alfalfa/mapper.cpp
 
 ${OBJECTDIR}/_ext/1942341467/dp.o: /cygdrive/C/Users/mvyvermn/Documents/NetBeansProjects/alfalfa/dp.cpp 
 	${MKDIR} -p ${OBJECTDIR}/_ext/1942341467

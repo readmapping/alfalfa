@@ -27,11 +27,8 @@
 #include <fstream>
 #include <vector>
 
-#include "dp.h"
-#include "sparseSA.h"
-#include "options.h"
 #include "fasta.h"
-#include "utils.h"
+#include "mapper.h"
 
 #include <time.h>
 #include <stdio.h>
@@ -110,9 +107,9 @@ void *query_thread(void *arg_) {
       if(hasRead){
           seq_cnt++;
           if(!arg->opt->noFW)
-                sa->inexactMatch(read, arg->opt->alnOptions, true, print);
+                inexactMatch(*sa, read, arg->opt->alnOptions, true, print);
           if(!arg->opt->noRC)
-                sa->inexactMatch(read, arg->opt->alnOptions, false, print);
+                inexactMatch(*sa, read, arg->opt->alnOptions, false, print);
           read.postprocess(arg->opt->alnOptions.scores);
           //From global to local pos and write to stringstream
           stringstream * ss = new stringstream;
