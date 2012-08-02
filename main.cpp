@@ -84,6 +84,14 @@ struct mapOptions_t{//commentary + sort + constructor
         alnOptions.fixedMinLength = false;
         alnOptions.unique = false;
         unpairedQ = pair1 = pair2 = ref_fasta = outputName = "";
+        pairedOpt.contain = true;
+        pairedOpt.discordant = true;
+        pairedOpt.dovetail = false;
+        pairedOpt.maxInsert = 500;
+        pairedOpt.minInsert = 0;
+        pairedOpt.mixed = true;
+        pairedOpt.orientation = PAIR_FR;
+        pairedOpt.overlap = true;
     }
     //performance options
     int K;//sparsity factor
@@ -103,6 +111,8 @@ struct mapOptions_t{//commentary + sort + constructor
     //alignment options
     align_opt alnOptions;
     bool noFW; bool noRC;
+    //paired end options
+    paired_opt pairedOpt;
 };
 //output struct
 struct samOutput{//construct
@@ -203,27 +213,57 @@ void *query_thread(void *arg_) {
   pthread_exit(NULL);
 }
 
-static const char * short_options = "s:k:l:frnt:q:d:vm:u:o:e:cC:T:Hhx:U:1:2:S:";
+static const char * short_options = "s:k:l:nq:d:m:u:o:e:C:T:hx:U:1:2:S:I:X:";
+
+//Reads from - to ; trim ; phred quals
+enum {
+    ARG_NO_OPT,          //not found
+    ARG_TRY_HARDER,      //--tryharder
+    ARG_SEED_THREADS,    //--seedthreads
+    ARG_NOFW,            //--noFw
+    ARG_NORC,            //--noRc
+    ARG_CLIP,            //--softclipping
+    ARG_VERBOSE,         //--verbose
+    ARG_FR,              //--fr
+    ARG_RF,              //--rf
+    ARG_FF,              //--ff
+    ARG_NO_MIXED,        //--no-mixed
+    ARG_NO_DISCORDANT,   //--no-discordant
+    ARG_DOVETAIL,        //--dovetail
+    ARG_NO_CONTAIN,      //--no-contain
+    ARG_NO_OVERLAP       //--no-overlap
+};
+
 static struct option long_options[] = {
     {(char*)"sparsityfactor",   required_argument, 0,            's'},
     {(char*)"threads",          required_argument, 0,            'q'},
-    {(char*)"verbose",          no_argument,       0,            'v'},
+    {(char*)"verbose",          no_argument,       0,            ARG_VERBOSE},
     {(char*)"seedminlength",    required_argument, 0,            'l'},
     {(char*)"alignments",       required_argument, 0,            'k'},
     {(char*)"trials",           required_argument, 0,            'T'},
     {(char*)"mincoverage",      required_argument, 0,            'C'},
     {(char*)"errors",           required_argument, 0,            'd'},
-    {(char*)"tryharder",        no_argument,       0,            'H'},
-    {(char*)"seedthreads",      required_argument, 0,            't'},
-    {(char*)"noFw",             no_argument,       0,            'f'},
-    {(char*)"noRc",             no_argument,       0,            'r'},
+    {(char*)"tryharder",        no_argument,       0,            ARG_TRY_HARDER},
+    {(char*)"seedthreads",      required_argument, 0,            ARG_SEED_THREADS},
+    {(char*)"noFw",             no_argument,       0,            ARG_NOFW},
+    {(char*)"noRc",             no_argument,       0,            ARG_NORC},
     {(char*)"wildcards",        no_argument,       0,            'N'},
-    {(char*)"softclipping",     no_argument,       0,            'c'},
+    {(char*)"softclipping",     no_argument,       0,            ARG_CLIP},
     {(char*)"match",            required_argument, 0,            'm'},
     {(char*)"mismatch",         required_argument, 0,            'u'},
     {(char*)"gapopen",          required_argument, 0,            'o'},
     {(char*)"gapextend",        required_argument, 0,            'e'},
+    {(char*)"minins",           required_argument, 0,            'I'},
+    {(char*)"maxins",           required_argument, 0,            'X'},
     {(char*)"help",             no_argument,       0,            'h'},
+    {(char*)"fr",               no_argument,       0,            ARG_FR},
+    {(char*)"rf",               no_argument,       0,            ARG_RF},
+    {(char*)"ff",               no_argument,       0,            ARG_FF},
+    {(char*)"no-mixed",         no_argument,       0,            ARG_NO_MIXED},
+    {(char*)"no-discordant",    no_argument,       0,            ARG_NO_DISCORDANT},
+    {(char*)"dovetail",         no_argument,       0,            ARG_DOVETAIL},
+    {(char*)"no-contain",       no_argument,       0,            ARG_NO_CONTAIN},
+    {(char*)"no-overlap",       no_argument,       0,            ARG_NO_OVERLAP},
     {(char*)0, 0, 0, 0} // terminator
 };
 
@@ -251,12 +291,12 @@ void usage(const string prog) {
   cerr << "-k/--alignments (int)      expected number of alignments required per strand per read [50]" << endl;
   cerr << "-T/--trials (int)          maximum number of times alignment is attempted before we give up [10]" << endl;
   cerr << "-C/--mincoverage (int)     minimum percent of bases of read the seeds have to cover [25]" << endl;
-  cerr << "-H/--tryharder             enable: 'try harder': when no seeds have been found, search using less stringent parameters" << endl;
-  cerr << "-t/--seedthreads (int)     number of threads for calculating the seeds [1]" << endl;
-  cerr << "-f/--noFw                  do not compute forward matches" << endl;
-  cerr << "-r/--noRc                  do not compute reverse complement matches" << endl;
+  cerr << "--tryharder                enable: 'try harder': when no seeds have been found, search using less stringent parameters" << endl;
+  cerr << "--seedthreads (int)        number of threads for calculating the seeds [1]" << endl;
+  cerr << "--noFw                     do not compute forward matches" << endl;
+  cerr << "--noRc                     do not compute reverse complement matches" << endl;
   cerr << "-n/--wildcards             treat Ns as wildcard characters" << endl;
-  cerr << "-c/--softclipping          allow soft clipping at the beginning and end of an alignment" << endl;
+  cerr << "--softclipping          allow soft clipping at the beginning and end of an alignment" << endl;
   cerr << endl;
   cerr << "DYNAMIC PROGRAMMING OPTIONS " << endl;
   cerr << "-m/--match (int)           match bonus [0]" << endl;
@@ -264,8 +304,19 @@ void usage(const string prog) {
   cerr << "-o/--gapopen (int)         gap open penalty (set 0 for non-affine gap-penalties) [0]" << endl;
   cerr << "-e/--gapextend (int)       gap extension penalty [-2]" << endl;
   cerr << endl;
+  cerr << "PAIRED END OPTIONS " << endl;
+  cerr << "-I/--minins (int)          minimum insert size [0]" << endl;
+  cerr << "-X/--maxins (int)          maximum insert sier [500]" << endl;
+  cerr << "--fr/--rf/--ff             orientation of the mates: fr means forward upstream mate 1" << endl; 
+  cerr << "                           and reverse complement downstream mate 2, or vise versa. rf and ff are similar [fr]" << endl;
+  cerr << "--no-mixed                 never search single mate alignments" << endl;
+  cerr << "--no-discordant            never discordant alignments" << endl;
+  cerr << "--dovetail                 allow reads to dovetail (changing up- and downstream of reads)" << endl;
+  cerr << "--no-contain               disallow a mate to be fully contained in the other" << endl;
+  cerr << "--no-overlap               disallow a mate to overlap with the other" << endl;
+  cerr << endl;
   cerr << "MISC OPTIONS " << endl;
-  cerr << "-v/--verbose               enable verbose mode (not by default)" << endl;
+  cerr << "--verbose               enable verbose mode (not by default)" << endl;
   cerr << "-h/--help                  print this statement" << endl;
   exit(1);
 }
@@ -307,11 +358,11 @@ int main(int argc, char* argv[]){
                 case 's': opt.K = atoi(optarg); break;
                 case 'k': opt.alnOptions.alignmentCount = atoi(optarg); break;
                 case 'l': opt.alnOptions.minMemLength = atoi(optarg); opt.alnOptions.fixedMinLength = true; break;
-                case 'f': opt.noFW = 1; break;
-                case 'r': opt.noRC = 1; break;
+                case ARG_NOFW: opt.noFW = 1; break;
+                case ARG_NORC: opt.noRC = 1; break;
                 case 'n': opt.nucleotidesOnly = 1; break;
-                case 'v': opt.verbose = 1; break;
-                case 'c': opt.alnOptions.noClipping = false; break;
+                case ARG_VERBOSE: opt.verbose = 1; break;
+                case ARG_CLIP: opt.alnOptions.noClipping = false; break;
                 case 't': opt.alnOptions.numThreads = atoi(optarg); break;
                 case 'q': opt.query_threads = atoi(optarg); break;
                 case 'm': opt.alnOptions.scores.match = atoi(optarg); break;
@@ -321,8 +372,18 @@ int main(int argc, char* argv[]){
                 case 'd': opt.alnOptions.errorPercent = atof(optarg); break;
                 case 'T': opt.alnOptions.maxTrial = atoi(optarg); break;
                 case 'C': opt.alnOptions.minCoverage = atoi(optarg); break;
-                case 'H': opt.alnOptions.tryHarder = true; break;
+                case ARG_TRY_HARDER: opt.alnOptions.tryHarder = true; break;
                 case 'h': usage(PROG); break;
+                case 'I': opt.pairedOpt.minInsert = atoi(optarg); break;
+                case 'X': opt.pairedOpt.maxInsert = atoi(optarg); break;
+                case ARG_FR: opt.pairedOpt.orientation = PAIR_FR; break;
+                case ARG_RF: opt.pairedOpt.orientation = PAIR_RF; break;
+                case ARG_FF: opt.pairedOpt.orientation = PAIR_FF; break;
+                case ARG_NO_MIXED: opt.pairedOpt.mixed = false; break;
+                case ARG_NO_DISCORDANT: opt.pairedOpt.discordant = false; break;
+                case ARG_DOVETAIL: opt.pairedOpt.dovetail = true; break;
+                case ARG_NO_CONTAIN: opt.pairedOpt.contain = false; break;
+                case ARG_NO_OVERLAP: opt.pairedOpt.overlap = false; break;
                 case -1: /* Done with options. */
 				break;
                 case 0: if (long_options[option_index].flag != 0) break;
@@ -400,6 +461,36 @@ int main(int argc, char* argv[]){
                 cerr << "mapping unpaired: done" << endl;
                 cerr << "time for mapping: " << cpu_time << endl;
                 delete queryReader;
+            }
+            //SECOND: Paired reads
+            if(!opt.pair1.empty() && !opt.pair2.empty()){
+//                queryReader = new fastqInputReader(opt.unpairedQ, opt.nucleotidesOnly);
+//                pthread_mutex_init(&writeLock_, NULL);
+//                pthread_attr_t attr;  pthread_attr_init(&attr);
+//                pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+//                vector<query_arg> args(opt.query_threads);
+//                vector<pthread_t> thread_ids(opt.query_threads);
+//                cerr << "Mapping unpaired reads to the index using " << opt.query_threads << " threads ..." << endl;
+//                clock_t start = clock();
+//                // Initialize additional thread data.
+//                for(int i = 0; i < opt.query_threads; i++) {
+//                    args[i].skip = opt.query_threads;
+//                    args[i].skip0 = i;
+//                    args[i].opt = & opt;
+//                    args[i].readLock = &queryReader->readLock_;
+//                    args[i].writeLock = &writeLock_;
+//                }
+//                // Create joinable threads to find MEMs.
+//                for(int i = 0; i < opt.query_threads; i++)
+//                    pthread_create(&thread_ids[i], &attr, query_thread, (void *)&args[i]);
+//                // Wait for all threads to terminate.
+//                for(int i = 0; i < opt.query_threads; i++)
+//                    pthread_join(thread_ids[i], NULL);
+//                clock_t end = clock();
+//                double cpu_time = (double)( end - start ) /CLOCKS_PER_SEC;
+//                cerr << "mapping unpaired: done" << endl;
+//                cerr << "time for mapping: " << cpu_time << endl;
+//                delete queryReader;
             }
             fclose( outfile );
             delete sa;

@@ -87,6 +87,19 @@ struct align_opt {
     bool unique;
 };
 
+enum orientation_t { PAIR_FR, PAIR_RF, PAIR_FF};
+
+struct paired_opt {
+    int minInsert;
+    int maxInsert;
+    bool mixed;
+    bool discordant;
+    bool dovetail;
+    bool contain;
+    bool overlap;
+    orientation_t orientation;
+};
+
 // Match find by findMEM.
 struct match_t {
   match_t(): ref(0), query(0), len(0) {}
