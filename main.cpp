@@ -221,13 +221,15 @@ void *paired_thread(void *arg_) {
   bool print = arg->opt->verbose;
   long seq_cnt = 0;
   bool hasRead = true;
-//  while(hasRead){
-//      read_t read;
-//      pthread_mutex_lock(arg->readLock);
-//      hasRead = queryReader->nextRead(read.qname,read.sequence,read.qual);
-//      pthread_mutex_unlock(arg->readLock);
-//      if(hasRead){
-//          seq_cnt++;
+  while(hasRead){
+      read_t mate1;
+      read_t mate2;
+      pthread_mutex_lock(arg->readLock);
+      hasRead = mate1Reader->nextRead(mate1.qname,mate1.sequence,mate1.qual);
+      hasRead = mate2Reader->nextRead(mate2.qname,mate2.sequence,mate2.qual);
+      pthread_mutex_unlock(arg->readLock);
+      if(hasRead){
+          seq_cnt++;
 //          if(!arg->opt->noFW)
 //                sa->inexactMatch(read, arg->opt->alnOptions, true, print);
 //          if(!arg->opt->noRC)
@@ -265,8 +267,8 @@ void *paired_thread(void *arg_) {
 //          fprintf(outfile,"%s",ss->str().c_str());
 //          pthread_mutex_unlock(arg->writeLock);
 //          delete ss;
-//      }
-//  }
+      }
+  }
   printf("sequences mapped: %ld\n", seq_cnt);
   
   pthread_exit(NULL);
