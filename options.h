@@ -9,6 +9,8 @@
 #define	OPTIONS_H
 
 #include <getopt.h>
+#include <stdio.h>
+#include <string.h>
 #include "dp.h"
 
 //match options
@@ -40,6 +42,7 @@ struct paired_opt {
 };
 
 enum mum_t { MUM, MAM, MEM, SMAM };
+static const int MINOPTIONCOUNT = 2;
 enum command_t {INDEX, MATCHES, ALN};
 
 struct mapOptions_t{//commentary + sort + constructor
@@ -73,11 +76,20 @@ struct mapOptions_t{//commentary + sort + constructor
         pairedOpt.mixed = true;
         pairedOpt.orientation = PAIR_FR;
         pairedOpt.overlap = true;
+        unpairedQ = pair1 = pair2 = ref_fasta = outputName = "";
+        command = ALN;
     }
+    //command option
+    command_t command;
     //performance options
     int K;//sparsity factor
     int query_threads;
     //I/O options
+    string unpairedQ;
+    string pair1;
+    string pair2;
+    string ref_fasta;
+    string outputName;
     bool _4column;//for MEM output
     bool verbose;
     //Sequence options
@@ -144,6 +156,143 @@ static struct option long_options[] = {
     {(char*)"no-overlap",       no_argument,       0,            ARG_NO_OVERLAP},
     {(char*)0, 0, 0, 0} // terminator
 };
+
+static void usage(const string prog) {
+  cerr << "Usage: " << prog << " COMMAND [options] -x <reference-file> -1 <m1> -2 <m2> -U <unpaired> [-S ouput-file]" << endl;
+  cerr << "Command should be one of the following: " << endl;
+  cerr << "index                      only build the index for given <reference-file>, used for time calculations" << endl;
+  cerr << "aln                        map the reads to the index build for <reference-file>" << endl;
+  cerr << "the options are ordered by functionality: " << endl;
+  cerr << endl;
+  cerr << "I/O OPTIONS " << endl;
+  cerr << "-x (string)                reference sequence in mult-fasta" << endl;
+  cerr << "-1                         query file with first mates (fasta or fastq)" << endl;
+  cerr << "-2                         query file with second mates (fasta or fastq)" << endl;
+  cerr << "-U                         query file with unpaired reads (fasta or fastq)" << endl;
+  cerr << "-S                         output file name (will be sam)" << endl;
+  cerr << endl;
+  cerr << "PERFORMANCE OPTIONS " << endl;
+  cerr << "-s/--sparsityfactor (int)  the sparsity factor of the sparse suffix array index, values between 1 and 4 are preferred [1]" << endl;
+  cerr << "-q/--threads (int)    number of threads [1]" << endl;
+  cerr << endl;
+  cerr << "ALIGNMENT OPTIONS " << endl;
+  cerr << "-d/--errors (double)       percentage of errors allowed according to the edit distance [0.08]" << endl;
+  cerr << "-l/--seedminlength (int)   minimum length of the seeds used [depending on errorPercent and read length, min 20]" << endl;
+  cerr << "-k/--alignments (int)      expected number of alignments required per strand per read [50]" << endl;
+  cerr << "-T/--trials (int)          maximum number of times alignment is attempted before we give up [10]" << endl;
+  cerr << "-C/--mincoverage (int)     minimum percent of bases of read the seeds have to cover [25]" << endl;
+  cerr << "--tryharder                enable: 'try harder': when no seeds have been found, search using less stringent parameters" << endl;
+  cerr << "--seedthreads (int)        number of threads for calculating the seeds [1]" << endl;
+  cerr << "--noFw                     do not compute forward matches" << endl;
+  cerr << "--noRc                     do not compute reverse complement matches" << endl;
+  cerr << "-n/--wildcards             treat Ns as wildcard characters" << endl;
+  cerr << "--softclipping          allow soft clipping at the beginning and end of an alignment" << endl;
+  cerr << endl;
+  cerr << "DYNAMIC PROGRAMMING OPTIONS " << endl;
+  cerr << "-m/--match (int)           match bonus [0]" << endl;
+  cerr << "-u/--mismatch (int)        mismatch penalty [-2]" << endl;
+  cerr << "-o/--gapopen (int)         gap open penalty (set 0 for non-affine gap-penalties) [0]" << endl;
+  cerr << "-e/--gapextend (int)       gap extension penalty [-2]" << endl;
+  cerr << endl;
+  cerr << "PAIRED END OPTIONS " << endl;
+  cerr << "-I/--minins (int)          minimum insert size [0]" << endl;
+  cerr << "-X/--maxins (int)          maximum insert sier [500]" << endl;
+  cerr << "--fr/--rf/--ff             orientation of the mates: fr means forward upstream mate 1" << endl; 
+  cerr << "                           and reverse complement downstream mate 2, or vise versa. rf and ff are similar [fr]" << endl;
+  cerr << "--no-mixed                 never search single mate alignments" << endl;
+  cerr << "--no-discordant            never discordant alignments" << endl;
+  cerr << "--dovetail                 allow reads to dovetail (changing up- and downstream of reads)" << endl;
+  cerr << "--no-contain               disallow a mate to be fully contained in the other" << endl;
+  cerr << "--no-overlap               disallow a mate to overlap with the other" << endl;
+  cerr << endl;
+  cerr << "MISC OPTIONS " << endl;
+  cerr << "--verbose               enable verbose mode (not by default)" << endl;
+  cerr << "-h/--help                  print this statement" << endl;
+  exit(1);
+}
+
+static void processParameters(int argc, char* argv[], mapOptions_t& opt, const string program){
+    if(argc < MINOPTIONCOUNT)
+        usage(program);
+    else{
+        //parse the command
+        if(strcmp(argv[1], "index") == 0) opt.command = INDEX;
+        else if(strcmp(argv[1], "mem") == 0){
+        opt.command = MATCHES;
+            printf("This command is not yet supported\n");
+            exit(1);
+        }
+        else if(strcmp(argv[1], "aln") == 0) opt.command = ALN;
+        else{
+            fprintf(stderr, "[main] unrecognized command '%s'\n", argv[1]);
+            exit(1);
+        }
+        cerr << "COMMAND: " << argv[1] << endl;
+        cerr << "parsing options: ..." << endl;
+        int option_index = 0;
+        int c;
+        while ((c = getopt_long(
+        argc-1, argv+1,
+        short_options, long_options, &option_index)) != -1) {//memType cannot be chosen
+            switch (c) {
+                case 'x': opt.ref_fasta = optarg; break;
+                case 'U': opt.unpairedQ = optarg; break;
+                case '1': opt.pair1 = optarg; break;
+                case '2': opt.pair2 = optarg; break;
+                case 'S': opt.outputName = optarg; break;
+                case 's': opt.K = atoi(optarg); break;
+                case 'k': opt.alnOptions.alignmentCount = atoi(optarg); break;
+                case 'l': opt.alnOptions.minMemLength = atoi(optarg); opt.alnOptions.fixedMinLength = true; break;
+                case ARG_NOFW: opt.noFW = 1; break;
+                case ARG_NORC: opt.noRC = 1; break;
+                case 'n': opt.nucleotidesOnly = 1; break;
+                case ARG_VERBOSE: opt.verbose = 1; break;
+                case ARG_CLIP: opt.alnOptions.noClipping = false; break;
+                case 't': opt.alnOptions.numThreads = atoi(optarg); break;
+                case 'q': opt.query_threads = atoi(optarg); break;
+                case 'm': opt.alnOptions.scores.match = atoi(optarg); break;
+                case 'u': opt.alnOptions.scores.mismatch = atoi(optarg); break;
+                case 'o': opt.alnOptions.scores.openGap = atoi(optarg); break;
+                case 'e': opt.alnOptions.scores.extendGap = atoi(optarg); break;
+                case 'd': opt.alnOptions.errorPercent = atof(optarg); break;
+                case 'T': opt.alnOptions.maxTrial = atoi(optarg); break;
+                case 'C': opt.alnOptions.minCoverage = atoi(optarg); break;
+                case ARG_TRY_HARDER: opt.alnOptions.tryHarder = true; break;
+                case 'h': usage(program); break;
+                case 'I': opt.pairedOpt.minInsert = atoi(optarg); break;
+                case 'X': opt.pairedOpt.maxInsert = atoi(optarg); break;
+                case ARG_FR: opt.pairedOpt.orientation = PAIR_FR; break;
+                case ARG_RF: opt.pairedOpt.orientation = PAIR_RF; break;
+                case ARG_FF: opt.pairedOpt.orientation = PAIR_FF; break;
+                case ARG_NO_MIXED: opt.pairedOpt.mixed = false; break;
+                case ARG_NO_DISCORDANT: opt.pairedOpt.discordant = false; break;
+                case ARG_DOVETAIL: opt.pairedOpt.dovetail = true; break;
+                case ARG_NO_CONTAIN: opt.pairedOpt.contain = false; break;
+                case ARG_NO_OVERLAP: opt.pairedOpt.overlap = false; break;
+                case -1: /* Done with options. */
+                break;
+                case 0: if (long_options[option_index].flag != 0) break;
+                default: usage(program);
+                throw 1;
+            }
+        }
+        opt.alnOptions.scores.updateScoreMatrixDna();
+        initDPMatrix(2048, opt.alnOptions.scores.openGap != 0);
+        if(opt.alnOptions.alignmentCount < 1){
+            opt.alnOptions.alignmentCount = 1;
+            opt.alnOptions.unique = true;
+        }
+        //add the reference query and output files
+        if(opt.ref_fasta.empty()){
+            fprintf(stderr, "ALFALFA requires input reference file \n");
+            exit(1);
+        }
+        if(opt.command == ALN && (opt.unpairedQ.empty() && (opt.pair1.empty() || opt.pair2.empty()))){
+            fprintf(stderr, "ALFALFA requires query files (1 unpaired and/or 2 mate files \n");
+            exit(1);
+        }
+    }
+}
 
 #endif	/* OPTIONS_H */
 
