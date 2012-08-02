@@ -6,6 +6,8 @@
                    projectFiles="true">
       <itemPath>C:/Users/mvyvermn/Documents/NetBeansProjects/alfalfa/dp.h</itemPath>
       <itemPath>C:/Users/mvyvermn/Documents/NetBeansProjects/alfalfa/fasta.h</itemPath>
+      <itemPath>C:/Users/mvyvermn/Documents/NetBeansProjects/alfalfa/mapper.h</itemPath>
+      <itemPath>C:/Users/mvyvermn/Documents/NetBeansProjects/alfalfa/options.h</itemPath>
       <itemPath>C:/Users/mvyvermn/Documents/NetBeansProjects/alfalfa/sparseSA.h</itemPath>
       <itemPath>C:/Users/mvyvermn/Documents/NetBeansProjects/alfalfa/utils.h</itemPath>
     </logicalFolder>

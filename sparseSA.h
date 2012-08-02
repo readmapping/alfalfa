@@ -35,6 +35,7 @@
 
 #include "dp.h"
 #include "utils.h"
+#include "options.h"
 #include <bitset>
 
 using namespace std;
@@ -70,34 +71,6 @@ struct vec_uchar {
   // Once all the values are set, call init. This will assure the
   // values >= 255 are sorted by index for fast retrieval.
   void init() { sort(M.begin(), M.end()); cerr << "M.size()=" << M.size() << endl; }
-};
-
-//match options
-struct align_opt {
-    dp_scores scores;
-    bool noClipping;
-    double errorPercent;
-    int minMemLength;
-    int numThreads;
-    int alignmentCount;
-    int maxTrial;
-    int minCoverage;
-    bool tryHarder;
-    bool fixedMinLength;
-    bool unique;
-};
-
-enum orientation_t { PAIR_FR, PAIR_RF, PAIR_FF};
-
-struct paired_opt {
-    int minInsert;
-    int maxInsert;
-    bool mixed;
-    bool discordant;
-    bool dovetail;
-    bool contain;
-    bool overlap;
-    orientation_t orientation;
 };
 
 // Match find by findMEM.
