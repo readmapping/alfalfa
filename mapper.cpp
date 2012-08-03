@@ -22,6 +22,8 @@
  * You should have received a copy of the copyright notice with this code.
  */
 
+#include <algorithm>
+
 #include "mapper.h"
 
 bool compMatches(const match_t i, const match_t j){
@@ -42,25 +44,173 @@ void postProcess(vector<match_t> &matches){
     sort(matches.begin(),matches.end(), compMatches);
 }
 
+bool extendAlignment(const string& S, const string& P, alignment_t& alignment, vector<match_t>& matches, int begin, int end, int editDist, const align_opt & alnOptions){
+    dp_output output;
+    bool clipping = !alnOptions.noClipping;
+    int curEditDist = 0;
+    ///////////////////
+    //FIRST SEED
+    //////////////////
+    match_t firstSeed = matches[begin];
+    int refstrLB = firstSeed.ref;
+    int refstrRB = refstrLB + firstSeed.len -1;
+    int queryLB = firstSeed.query;
+    int queryRB = queryLB + firstSeed.len-1;
+    if(firstSeed.query > 0 && firstSeed.ref > 0){
+        //Alignment now!!! with beginQ-E in ref to begin match and beginQ to match
+        int alignmentBoundLeft = max(refstrLB-queryLB-editDist,0);
+        boundaries grenzen(alignmentBoundLeft,refstrLB-1,0,queryLB-1);
+        dp_type types;
+        types.freeRefB = true;
+        types.freeQueryB = clipping;
+        dpBandStatic( S, P, grenzen, alnOptions.scores, types, ERRORSTRING, output, editDist-curEditDist, false);
+        if(clipping && grenzen.queryB> 0){
+            alignment.cigarChars.push_back('S');
+            alignment.cigarLengths.push_back(grenzen.queryB);
+        }
+        alignment.cigarChars.insert(alignment.cigarChars.end(),output.cigarChars.begin(),output.cigarChars.end());
+        alignment.cigarLengths.insert(alignment.cigarLengths.end(),output.cigarLengths.begin(),output.cigarLengths.end());
+        alignment.pos = grenzen.refB+1;
+        curEditDist += output.editDist;
+        output.clear();
+    }//fill in the starting position in the ref sequence
+    else {
+        alignment.pos = firstSeed.ref + 1;
+    }
+    if (firstSeed.ref == 0 && firstSeed.query > 0) {
+        alignment.cigarChars.push_back(clipping ? 'S' : 'I');
+        alignment.cigarLengths.push_back(firstSeed.query);
+        curEditDist += clipping ? 0 : firstSeed.query;
+    }
+    alignment.cigarChars.push_back('=');
+    alignment.cigarLengths.push_back(firstSeed.len);
+    //extend seed to the right, filling gaps between mems
+    bool foundNext = true;
+    int memsIndex = begin+1;
+    //////////////////////
+    //NEXT SEEDS LOOP
+    //////////////////////
+    while (memsIndex <= end && foundNext && curEditDist < editDist) {
+        foundNext = false;
+        //search matchingstats and calc cost
+        int indexIncrease = 0;
+        int minDistMem = memsIndex - 1;
+        int minDist = P.length();
+        int minQDist = P.length();
+        int minRefDist = P.length();
+        //temporary distance for this mem
+        int dist = minDist;
+        while (indexIncrease + memsIndex <= end && dist <= minDist) {
+            match_t match = matches[memsIndex + indexIncrease];
+            //check distance: k is enlarged and compare minRef-refstrRB
+            int qDist = match.query - queryRB;
+            int refDist = match.ref - refstrRB;
+            if (qDist < 0 || refDist < 0) {
+                if (qDist >= refDist) {
+                    qDist -= refDist; //qDist insertions
+                    if (qDist + queryRB >= P.length() || 1 - refDist >= match.len)//and refDist +1 matches lost
+                        qDist = minDist + 1;
+                } else {
+                    refDist -= qDist;
+                    if (refDist + refstrRB >= S.length() || 1 - qDist >= match.len)
+                        refDist = minDist + 1;
+                }
+            }
+            if (qDist < refDist)
+                dist = refDist;
+            else
+                dist = qDist;
+            if (dist <= minDist) {
+                minDist = dist;
+                minDistMem = indexIncrease + memsIndex;
+                minQDist = qDist;
+                minRefDist = refDist;
+                foundNext = true;
+            }
+            indexIncrease++;
+        }
+        if (foundNext) {
+            match_t match = matches[minDistMem];
+            //add indels and mutations to sol
+            if (minQDist <= 0) {
+                //minRefDist deletions
+                //1+|qDist| matches lost of next mem
+                alignment.cigarChars.push_back('D');
+                alignment.cigarChars.push_back('=');
+                alignment.cigarLengths.push_back(minRefDist);
+                alignment.cigarLengths.push_back(match.len - 1 + minQDist);
+                curEditDist += Utils::contains(S, refstrRB + 1, refstrRB + minRefDist - 1, '`') ? editDist + 1 : minRefDist; //boundary of ref sequences is passed
+                //TODO: only use of contains: add inline here
+            } else if (minRefDist <= 0) {
+                alignment.cigarChars.push_back('I');
+                alignment.cigarChars.push_back('=');
+                alignment.cigarLengths.push_back(minQDist);
+                alignment.cigarLengths.push_back(match.len - 1 + minRefDist);
+                curEditDist += minQDist;
+            } else {//both distances are positive and not equal to (1,1)
+                boundaries grenzen(refstrRB + 1, refstrRB + minRefDist - 1, queryRB + 1, queryRB + minQDist - 1);
+                dp_type types;
+                dpBandStatic( S, P, grenzen, alnOptions.scores, types, ERRORSTRING, output, editDist-curEditDist, false);
+                alignment.cigarChars.insert(alignment.cigarChars.end(), output.cigarChars.begin(), output.cigarChars.end());
+                alignment.cigarLengths.insert(alignment.cigarLengths.end(), output.cigarLengths.begin(), output.cigarLengths.end());
+                alignment.cigarChars.push_back('=');
+                alignment.cigarLengths.push_back(match.len);
+                curEditDist += output.editDist;
+                output.clear();
+            }
+            //set new positions
+            memsIndex = minDistMem + 1;
+            //add matches
+            refstrRB = match.ref + match.len - 1;
+            queryRB = match.query + match.len - 1;
+        }
+    }
+    /////////////
+    //FINAL DP?
+    ////////////
+    //possible at the end characters
+    //mapInterval += Integer.toString(queryRB+1)+"]";
+    if (queryRB + 1 < P.length() && refstrRB < S.length() - 1 && curEditDist <= editDist) {
+        int refAlignRB = refstrRB + (P.length() - queryRB) + 1 + editDist - curEditDist;
+        if (refAlignRB >= S.length())
+            refAlignRB = S.length() - 1;
+        boundaries grenzen(refstrRB + 1, refAlignRB, queryRB + 1, P.length() - 1);
+        dp_type types;
+        types.freeRefE = true;
+        types.freeQueryE = clipping;
+        dpBandStatic( S, P, grenzen, alnOptions.scores, types, ERRORSTRING, output, editDist-curEditDist+1, false);
+        alignment.cigarChars.insert(alignment.cigarChars.end(), output.cigarChars.begin(), output.cigarChars.end());
+        alignment.cigarLengths.insert(alignment.cigarLengths.end(), output.cigarLengths.begin(), output.cigarLengths.end());
+        if (clipping && grenzen.queryE < P.length() - 1) {
+            alignment.cigarChars.push_back('S');
+            alignment.cigarLengths.push_back(P.length() - 1 - grenzen.queryE);
+        }
+        curEditDist += output.editDist;
+        output.clear();
+    } else if (queryRB + 1 < P.length() && curEditDist < editDist) {
+        alignment.cigarChars.push_back(clipping ? 'S' : 'I');
+        alignment.cigarLengths.push_back(P.length() - queryRB - 1);
+        curEditDist += clipping ? 0 : P.length() - 1 - queryRB;
+    }
+    //TODO: check for possible optimizations (static initialisations
+    //TODO: reorder matches according to best hits
+    if(curEditDist <= editDist){
+        alignment.editDist = curEditDist;
+        return true;
+    }
+    else
+        return false;
+}
+
 void inexactMatch(const sparseSA& sa, read_t & read,const align_opt & alnOptions, bool fwStrand, bool print){
-#ifndef NDEBUG
-    int loops = 0;
-    int dps = 0;
-    int dpsizeSum = 0;
-    if(print) printf("read %s of length %d, strand %s\n",read.qname.c_str(),read.sequence.length(), fwStrand ? "FORWARD" : "REVERSE");
-#endif
     string P = read.sequence;
     int Plength = P.length();
     int editDist = (int)(alnOptions.errorPercent*Plength)+1;
     if(!fwStrand)
         Utils::reverse_complement(P,false);
-    bool clipping = !alnOptions.noClipping;
     int min_len = alnOptions.minMemLength;
     if(!alnOptions.fixedMinLength && Plength/editDist > min_len)
         min_len = Plength/editDist;
-    const dp_scores & scores = alnOptions.scores;
-    outputType outputT = ERRORSTRING;
-    dp_output output;
     vector<match_t> matches;
     //calc seeds
     sa.SMAM(P, matches, min_len, alnOptions.alignmentCount, false);
@@ -73,19 +223,6 @@ void inexactMatch(const sparseSA& sa, read_t & read,const align_opt & alnOptions
         if(matches.empty())
             sa.SMAM(P, matches, Plength/editDist, 1000, false);
     }
-#ifndef NDEBUG
-    if(print) for(long index = 0; index < (long)matches.size(); index++) sa.print_match(matches[index]);
-    int matchesFound = matches.size();
-    int matchesOverCount = 0;
-    int matchCount[P.length()];
-    for( int i = 0; i < P.length(); i++)
-        matchCount[i] = 0;
-    for( int i = 0; i < matches.size(); i++)
-        matchCount[matches[i].query]++;
-    for(int i = 0; i < P.length(); i++)
-        if(matchCount[i] > alnOptions.alignmentCount)
-            matchesOverCount+=matchCount[i]-alnOptions.alignmentCount;
-#endif
     //sort matches
     if(matches.size()>0){
         postProcess(matches);//sort matches
@@ -123,216 +260,17 @@ void inexactMatch(const sparseSA& sa, read_t & read,const align_opt & alnOptions
             //sort matches in this interval according to query position
             begin = lisIntervals[lisIndex].begin;
             end = lisIntervals[lisIndex].end;
-#ifndef NDEBUG
-            loops++;
-            int dpSumInLoop = 0;
-if(print){
-    printf("region in reference to test: %ld + %d length\n",matches[begin].ref-matches[begin].query,Plength+editDist);
-    printf("Number of mems is %d and number of bases covered by MEMs is %d\n",end-begin+1,lisIntervals[lisIndex].len);
-    printf("This is interval %d of %d tested and there have been %d alignments found so far\n",lisIndex, lisIntervals.size(),alnCount);
-    printf("filtered\n");
-        for(long index = begin; index < end; index++) sa.print_match(matches[index]);
-}
-#endif
             //sort this candidate region by query position
             sort(matches.begin()+begin,matches.begin()+end+1, compMatchesQuery);
             alignment_t alignment;
-            int curEditDist = 0;
-            ///////////////////
-            //FIRST SEED
-            //////////////////
-            match_t firstSeed = matches[begin];
-#ifndef NDEBUG
-    if( print) printf("first seed with ref %ld, query %ld and length %ld\n",firstSeed.ref,firstSeed.query,firstSeed.len);
-#endif
-            int refstrLB = firstSeed.ref;
-            int refstrRB = refstrLB + firstSeed.len -1;
-            int queryLB = firstSeed.query;
-            int queryRB = queryLB + firstSeed.len-1;
-            output.clear();
-            //no mem starting at 0 + fill in the starting position in the ref sequence
-            if(firstSeed.query > 0 && firstSeed.ref > 0){
-                //Alignment now!!! with beginQ-E in ref to begin match and beginQ to match
-                int alignmentBoundLeft = refstrLB-queryLB-editDist;
-                if(alignmentBoundLeft < 0)
-                    alignmentBoundLeft = 0;
-                boundaries grenzen(alignmentBoundLeft,refstrLB-1,0,queryLB-1);
-                dp_type types;
-                types.freeRefB = true;
-                types.freeQueryB = clipping;
-                dpBandStatic( sa.S, P, grenzen, scores, types, outputT, output, editDist-curEditDist, false);
-                if(clipping && grenzen.queryB> 0){
-                    alignment.cigarChars.push_back('S');
-                    alignment.cigarLengths.push_back(grenzen.queryB);
-                }
-                alignment.cigarChars.insert(alignment.cigarChars.end(),output.cigarChars.begin(),output.cigarChars.end());
-                alignment.cigarLengths.insert(alignment.cigarLengths.end(),output.cigarLengths.begin(),output.cigarLengths.end());
-                alignment.pos = grenzen.refB+1;
-                curEditDist += output.editDist;
-#ifndef NDEBUG
-                    dps++;
-                    dpsizeSum += ((refstrLB-alignmentBoundLeft)*(queryLB));
-                    dpSumInLoop += ((refstrLB-alignmentBoundLeft)*(queryLB));
-    if(print)printf("primary dp executed with editDist %d\n",output.editDist);
-#endif
-                output.clear();
-            }//fill in the starting position in the ref sequence
-            else {
-                alignment.pos = firstSeed.ref + 1;
-            }
-            if (firstSeed.ref == 0 && firstSeed.query > 0) {
-                alignment.cigarChars.push_back(clipping ? 'S' : 'I');
-                alignment.cigarLengths.push_back(firstSeed.query);
-                curEditDist += clipping ? 0 : firstSeed.query;
-            }
-            alignment.cigarChars.push_back('=');
-            alignment.cigarLengths.push_back(firstSeed.len);
-            //extend seed to the right, filling gaps between mems
-            bool foundNext = true;
-            int memsIndex = begin+1;
-            //////////////////////
-            //NEXT SEEDS LOOP
-            //////////////////////
-            while (memsIndex <= end && foundNext && curEditDist < editDist) {
-                foundNext = false;
-                //search matchingstats and calc cost
-                int indexIncrease = 0;
-                int minDistMem = memsIndex - 1;
-                int minDist = P.length();
-                int minQDist = P.length();
-                int minRefDist = P.length();
-                //temporary distance for this mem
-                int dist = minDist;
-                while (indexIncrease + memsIndex <= end && dist <= minDist) {
-                    match_t match = matches[memsIndex + indexIncrease];
-                    //check distance: k is enlarged and compare minRef-refstrRB
-                    int qDist = match.query - queryRB;
-                    int refDist = match.ref - refstrRB;
-                    if (qDist < 0 || refDist < 0) {
-                        if (qDist >= refDist) {
-                            qDist -= refDist; //qDist insertions
-                            if (qDist + queryRB >= P.length() || 1 - refDist >= match.len)//and refDist +1 matches lost
-                                qDist = minDist + 1;
-                        } else {
-                            refDist -= qDist;
-                            if (refDist + refstrRB >= sa.S.length() || 1 - qDist >= match.len)
-                                refDist = minDist + 1;
-                        }
-                    }
-                    if (qDist < refDist)
-                        dist = refDist;
-                    else
-                        dist = qDist;
-                    if (dist <= minDist) {
-                        minDist = dist;
-                        minDistMem = indexIncrease + memsIndex;
-                        minQDist = qDist;
-                        minRefDist = refDist;
-                        foundNext = true;
-                    }
-                    indexIncrease++;
-                }
-                if (foundNext) {
-                    match_t match = matches[minDistMem];
-#ifndef NDEBUG
-                    if(print) printf("next match with ref %ld, query %ld and length %ld\n", match.ref, match.query, match.len);
-#endif
-                    //add indels and mutations to sol
-                    if (minQDist <= 0) {
-                        //minRefDist deletions
-                        //1+|qDist| matches lost of next mem
-                        alignment.cigarChars.push_back('D');
-                        alignment.cigarChars.push_back('=');
-                        alignment.cigarLengths.push_back(minRefDist);
-                        alignment.cigarLengths.push_back(match.len - 1 + minQDist);
-                        curEditDist += Utils::contains(sa.S, refstrRB + 1, refstrRB + minRefDist - 1, '`') ? editDist + 1 : minRefDist; //boundary of ref sequences is passed
-                        //TODO: only use of contains: add inline here
-#ifndef NDEBUG
-                       if(print) printf("extra match required deletion of %d chars, and edit increase of %d\n", minRefDist, Utils::contains(sa.S, refstrRB + 1, refstrRB + minRefDist - 1, '`') ? editDist + 1 : minRefDist);
-#endif
-                    } else if (minRefDist <= 0) {
-                        alignment.cigarChars.push_back('I');
-                        alignment.cigarChars.push_back('=');
-                        alignment.cigarLengths.push_back(minQDist);
-                        alignment.cigarLengths.push_back(match.len - 1 + minRefDist);
-                        curEditDist += minQDist;
-#ifndef NDEBUG
-     if(print)                   printf("extra match required insertion of %d chars, and edit increase of %d\n", minQDist, minQDist);
-#endif
-                    } else {//both distances are positive and not equal to (1,1)
-                        boundaries grenzen(refstrRB + 1, refstrRB + minRefDist - 1, queryRB + 1, queryRB + minQDist - 1);
-                        dp_type types;
-                        dpBandStatic( sa.S, P, grenzen, scores, types, outputT, output, editDist-curEditDist, false);
-                        alignment.cigarChars.insert(alignment.cigarChars.end(), output.cigarChars.begin(), output.cigarChars.end());
-                        alignment.cigarLengths.insert(alignment.cigarLengths.end(), output.cigarLengths.begin(), output.cigarLengths.end());
-                        alignment.cigarChars.push_back('=');
-                        alignment.cigarLengths.push_back(match.len);
-                        curEditDist += output.editDist;
-#ifndef NDEBUG
-                       if(print) printf("extra match required dp, resulting in extra edit dist of %d\n", output.editDist);
-                        dps++;
-                        dpsizeSum += ((minRefDist)*(minQDist));
-                        dpSumInLoop += ((minRefDist)*(minQDist));
-#endif
-                        output.clear();
-                    }
-                    //set new positions
-                    memsIndex = minDistMem + 1;
-                    //add matches
-                    refstrRB = match.ref + match.len - 1;
-                    queryRB = match.query + match.len - 1;
-                }
-            }
-            //possible at the end characters
-            //mapInterval += Integer.toString(queryRB+1)+"]";
-            if (queryRB + 1 < P.length() && refstrRB < sa.S.length() - 1 && curEditDist <= editDist) {
-                int refAlignRB = refstrRB + (P.length() - queryRB) + 1 + editDist - curEditDist;
-                if (refAlignRB >= sa.S.length())
-                    refAlignRB = sa.S.length() - 1;
-                boundaries grenzen(refstrRB + 1, refAlignRB, queryRB + 1, P.length() - 1);
-                dp_type types;
-                types.freeRefE = true;
-                types.freeQueryE = clipping;
-                dpBandStatic( sa.S, P, grenzen, scores, types, outputT, output, editDist-curEditDist+1, false);
-                alignment.cigarChars.insert(alignment.cigarChars.end(), output.cigarChars.begin(), output.cigarChars.end());
-                alignment.cigarLengths.insert(alignment.cigarLengths.end(), output.cigarLengths.begin(), output.cigarLengths.end());
-                if (clipping && grenzen.queryE < P.length() - 1) {
-                    alignment.cigarChars.push_back('S');
-                    alignment.cigarLengths.push_back(P.length() - 1 - grenzen.queryE);
-                }
-                curEditDist += output.editDist;
-#ifndef NDEBUG
-               if(print) printf("final dp required, resulting in extra edit dist of %d\n", output.editDist);
-                dps++;
-                dpsizeSum += ((refAlignRB-refstrRB)*(P.length()-queryRB-1));
-                dpSumInLoop += ((refAlignRB-refstrRB)*(P.length()-queryRB-1));
-#endif
-                output.clear();
-            } else if (queryRB + 1 < P.length() && curEditDist < editDist) {
-                alignment.cigarChars.push_back(clipping ? 'S' : 'I');
-                alignment.cigarLengths.push_back(P.length() - queryRB - 1);
-                curEditDist += clipping ? 0 : P.length() - 1 - queryRB;
-#ifndef NDEBUG
-              if(print)  printf("final insertion required of %d chars\n", P.length() - queryRB - 1);
-#endif
-            }
-#ifndef NDEBUG
-            if(print){
-    printf("alignment of %d edit dist found, while max is %d\n", curEditDist, editDist);
-    alignment.setFieldsFromCigar(scores);
-    printf("alignment cigar is %s\n", alignment.NMtag.c_str());
-            }
-#endif
-    //TODO: check for possible optimizations (static initialisations
-    //TODO: reorder matches according to best hits
-            if(curEditDist <= editDist){
+            bool extended = extendAlignment(sa.S, P, alignment, matches, begin, end, editDist, alnOptions);
+            if(extended){
                 if(!fwStrand){
                     alignment.flag.set(4,true);
-                    if(alnOptions.unique && !read.alignments.empty() && curEditDist < read.alignments[0].editDist)
+                    if(alnOptions.unique && !read.alignments.empty() && alignment.editDist < read.alignments[0].editDist)
                         read.alignments.pop_back();
                 }
                 alnCount++;
-                alignment.editDist = curEditDist;
                 read.alignments.push_back(alignment);
                 trial = 0;
             }
@@ -340,9 +278,4 @@ if(print){
             trial++;
         }
     }
-#ifndef NDEBUG
-       if(print){       printf("%d;%d;%d;%d\n",loops,dps,dpsizeSum,matchesFound);
-                        printf("%d\n",matchesOverCount);
-       }
-#endif
 }
