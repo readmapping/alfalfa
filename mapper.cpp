@@ -44,6 +44,34 @@ void postProcess(vector<match_t> &matches){
     sort(matches.begin(),matches.end(), compMatches);
 }
 
+void calculateSeeds(const sparseSA& sa, const string& P, int min_len, int alignmentCount, vector<match_t>& matches, bool tryHarder){
+    sa.SMAM(P, matches, min_len, alignmentCount, false);
+    if(tryHarder){//TODO: change try-harder to recalculate only after forward + reverse has been tried
+        //easy solution: try reverse and if found: skip
+        if(matches.empty())
+            sa.SMAM(P, matches, min_len, 1000, false);
+        if(matches.empty())
+            sa.SMAM(P, matches, 20, 1000, false);
+    }
+    postProcess(matches);
+}
+
+void calculateLISintervals(const vector<match_t>& matches, int qLength, int editDist, vector<lis_t>& lisIntervals){
+    int begin = 0;
+    int end = 0;
+    int len = 0;
+    while(begin < matches.size()){
+        int refEnd = matches[begin].ref - matches[begin].query + qLength + editDist;
+        while(end < matches.size() && matches[end].ref + matches[end].len <= refEnd){
+            len += matches[end].len;
+            end++;
+        }
+        lisIntervals.push_back(lis_t(&matches,begin,end-1,len));
+        begin = end;
+        len = 0;
+    }
+}
+
 bool extendAlignment(const string& S, const string& P, alignment_t& alignment, vector<match_t>& matches, int begin, int end, int editDist, const align_opt & alnOptions){
     dp_output output;
     bool clipping = !alnOptions.noClipping;
@@ -213,36 +241,14 @@ void inexactMatch(const sparseSA& sa, read_t & read,const align_opt & alnOptions
         min_len = Plength/editDist;
     vector<match_t> matches;
     //calc seeds
-    sa.SMAM(P, matches, min_len, alnOptions.alignmentCount, false);
-    if(alnOptions.tryHarder){//TODO: change try-harder to recalculate only after forward + reverse has been tried
-        //easy solution: try reverse and if found: skip
-        if(matches.empty())
-            sa.SMAM(P, matches, min_len, 1000, false);
-        if(matches.empty())
-            sa.SMAM(P, matches, 20, 1000, false);
-        if(matches.empty())
-            sa.SMAM(P, matches, Plength/editDist, 1000, false);
-    }
+    calculateSeeds(sa, P, min_len, alnOptions.alignmentCount, matches, alnOptions.tryHarder);
     //sort matches
     if(matches.size()>0){
-        postProcess(matches);//sort matches
         /////////////////////////
         //FIND CANDIDATE REGIONS
         /////////////////////////
         vector<lis_t> lisIntervals;
-        int begin = 0;
-        int end = 0;
-        int len = 0;
-        while(begin < matches.size()){
-            int refEnd = matches[begin].ref - matches[begin].query + Plength + editDist;
-            while(end < matches.size() && matches[end].ref + matches[end].len <= refEnd){
-                len += matches[end].len;
-                end++;
-            }
-            lisIntervals.push_back(lis_t(begin,end-1,len));
-            begin = end;
-            len = 0;
-        }
+        calculateLISintervals(matches, Plength, editDist, lisIntervals);
         //sort candidate regions for likelyhood of an alignment
         sort(lisIntervals.begin(),lisIntervals.end(), compIntervals);
         //for every interval, try to align
@@ -258,8 +264,8 @@ void inexactMatch(const sparseSA& sa, read_t & read,const align_opt & alnOptions
                 lisIntervals[lisIndex].len > (Plength*alnOptions.minCoverage)/100 &&
                 trial < alnOptions.maxTrial){
             //sort matches in this interval according to query position
-            begin = lisIntervals[lisIndex].begin;
-            end = lisIntervals[lisIndex].end;
+            int begin = lisIntervals[lisIndex].begin;
+            int end = lisIntervals[lisIndex].end;
             //sort this candidate region by query position
             sort(matches.begin()+begin,matches.begin()+end+1, compMatchesQuery);
             alignment_t alignment;
