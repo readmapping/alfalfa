@@ -106,41 +106,21 @@ void *query_thread(void *arg_) {
       pthread_mutex_unlock(arg->readLock);
       if(hasRead){
           seq_cnt++;
-          if(!arg->opt->noFW)
+          if(!arg->opt->noFW)//to inner funtion
                 inexactMatch(*sa, read, arg->opt->alnOptions, true, print);
-          if(!arg->opt->noRC)
-                inexactMatch(*sa, read, arg->opt->alnOptions, false, print);
-          read.postprocess(arg->opt->alnOptions.scores);
-          //From global to local pos and write to stringstream
+          if(!arg->opt->noRC){
+              read.init(arg->opt->nucleotidesOnly);
+              inexactMatch(*sa, read, arg->opt->alnOptions, false, print);
+          }
+          read.postprocess(arg->opt->alnOptions.scores, *sa);
+          //Ouput
+          pthread_mutex_lock(arg->writeLock);
           stringstream * ss = new stringstream;
           if(read.alignments.empty())
-              *ss << read.qname << "\t4\t*\t0\t0\t*\t*\t0\t0\t" 
-                      << read.sequence << "\t" << read.qual << endl;
-          else{
-                long globPos;
-                string revCompl = read.sequence;
-                //TODO: do this during thread-work, perhaps has worse locality for startpos and refdescr tables
-                Utils::reverse_complement(revCompl, false);
-                string qualRC = read.qual;
-                reverse(qualRC.begin(),qualRC.end());
-                for(int k = 0; k < read.alignments.size(); k++){
-                        alignment_t & a = read.alignments[k];
-                        globPos = a.pos;
-                        long descIndex;
-                        sa->from_set(globPos, descIndex, a.pos);
-                        a.rname = sa->descr[descIndex];
-                        *ss << read.qname << "\t" << a.flag.to_ulong() << "\t"
-                                << a.rname << "\t" << a.pos << "\t" << 
-                                a.mapq << "\t" << a.cigar << "\t" << 
-                                a.rnext << "\t" << a.pnext << "\t" << 
-                                a.tLength << "\t" << (a.flag.test(4) ? revCompl : read.sequence) <<
-                                "\t" << (a.flag.test(4) ? qualRC : read.qual) << "\tAS:i:" << 
-                                a.alignmentScore << "\tNM:i:" << a.editDist << "\tX0:Z:" << 
-                                a.NMtag << endl;
-                }
-          }
-          pthread_mutex_lock(arg->writeLock);
-          fprintf(outfile,"%s",ss->str().c_str());
+              fprintf(outfile,"%s",read.emptyAlingment().c_str());
+          else
+              for(int k = 0; k < read.alignmentCount(); k++)
+                fprintf(outfile,"%s",read.printAlignment(k).c_str());
           pthread_mutex_unlock(arg->writeLock);
           delete ss;
       }

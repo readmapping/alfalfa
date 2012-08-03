@@ -47,6 +47,14 @@ struct alignment_t {
   int editDist;
   int alignmentScore;
   int tLength;
+  void setGlobalPos(const sparseSA& sa){
+      if(rname.empty() || rname == "*"){
+        long globPos = pos;
+        long descIndex;
+        sa.from_set(globPos, descIndex, pos);
+        rname = sa.descr[descIndex];
+      }
+  }
   void createCigar(bool newVersion){
       stringstream ss;
       assert(cigarChars.size()==cigarLengths.size());
@@ -110,9 +118,20 @@ struct alignment_t {
 };
 
 struct read_t {
-    read_t(): qname(""),sequence(""),qual("*"), alignments(0) {}
-    read_t(string name, string &seq, string &qw): qname(name),sequence(seq),qual(qw), alignments(0) {}
-    void postprocess(const dp_scores & scores){
+    read_t(): qname(""),sequence(""),qual("*"),rcSequence(""),rQual(""), alignments(0) {}
+    read_t(string name, string &seq, string &qw, bool nucleotidesOnly): qname(name),sequence(seq),qual(qw), alignments(0){
+        rcSequence = sequence;//copy
+        Utils::reverse_complement(rcSequence, nucleotidesOnly);
+        rQual = qual;
+        reverse(rQual.begin(),rQual.end());
+    }
+    void init(bool nucleotidesOnly){
+        rcSequence = sequence;//copy
+        Utils::reverse_complement(rcSequence, nucleotidesOnly);
+        rQual = qual;
+        reverse(rQual.begin(),rQual.end());
+    }
+    void postprocess(const dp_scores & scores, const sparseSA& sa){
         int maxScore = scores.mismatch*sequence.length();
         assert(maxScore < 0);//works only for score<0 for now (to do: add sign switch to allow positive min scores)
         int secBestScore = scores.mismatch*sequence.length();
@@ -129,39 +148,60 @@ struct read_t {
             250*(maxScore-secBestScore)/(maxScore-scores.mismatch*sequence.length()) ;
         assert(mapq <= 255 && mapq >= 0);
         for(int j = 0; j < alignments.size(); j++){
+            alignments[j].setGlobalPos(sa);
              if(alignments[j].alignmentScore == maxScore)
                  alignments[j].mapq = mapq;
              else
                  alignments[j].flag.set(8,true);
         }
     }
+    string emptyAlingment(){
+        stringstream * ss = new stringstream;
+        *ss << qname << "\t4\t*\t0\t0\t*\t*\t0\t0\t" << sequence << "\t" << qual << endl;
+        return ss->str();
+    }
+    int alignmentCount(){
+        return alignments.size();
+    }
+    string printAlignment(int i){
+        stringstream * ss = new stringstream;
+        alignment_t & a = alignments[i];
+        *ss << qname << "\t" << a.flag.to_ulong() << "\t"
+            << a.rname << "\t" << a.pos << "\t" << 
+            a.mapq << "\t" << a.cigar << "\t" << 
+            a.rnext << "\t" << a.pnext << "\t" << 
+            a.tLength << "\t" << (a.flag.test(4) ? rcSequence : sequence) <<
+            "\t" << (a.flag.test(4) ? rQual : qual) << "\tAS:i:" << 
+            a.alignmentScore << "\tNM:i:" << a.editDist << "\tX0:Z:" << 
+            a.NMtag << endl;
+        return ss->str();
+    }
+    
     void printAlignments(){
         if(alignments.empty()){
             printf("%s\t%d\t%s\t%ld\t%d\t%s\t%s\t%ld\t%d\t%s\t%s\n",qname.c_str(),4,"*",0,0,"*","*",0,0,sequence.c_str(),qual.c_str());
         }
         else{
             alignment_t & a = alignments[0];
-            string revCompl = sequence;
-            Utils::reverse_complement(revCompl, false);
-            string qualRC = qual;
-            reverse(qualRC.begin(),qualRC.end());
             printf("%s\t%d\t%s\t%ld\t%d\t%s\t%s\t%ld\t%d\t%s\t%s\tAS:i:%d\tNH:i:%ld\tNM:i:%d\tX0:Z:%s\n",
                         qname.c_str(),(int)a.flag.to_ulong(),a.rname.c_str(),a.pos,a.mapq,a.cigar.c_str(),
-                        a.rnext.c_str(),a.pnext,a.tLength, a.flag.test(4) ? revCompl.c_str() : sequence.c_str(), a.flag.test(4) ? qualRC.c_str() : qual.c_str(),
+                        a.rnext.c_str(),a.pnext,a.tLength, a.flag.test(4) ? rcSequence.c_str() : sequence.c_str(), a.flag.test(4) ? rQual.c_str() : qual.c_str(),
                         a.alignmentScore,alignments.size(),a.editDist,a.NMtag.c_str());
             for(int i=1; i < alignments.size(); i++){
                 a = alignments[i];
                 printf("%s\t%d\t%s\t%ld\t%d\t%s\t%s\t%ld\t%d\t%s\t%s\tAS:i:%d\tNM:i:%d\tX0:Z:%s\n",
                         qname.c_str(),(int)a.flag.to_ulong(),a.rname.c_str(),a.pos,a.mapq,a.cigar.c_str(),
-                        a.rnext.c_str(),a.pnext,a.tLength,a.flag.test(4) ? revCompl.c_str() : sequence.c_str(),
-                        a.flag.test(4) ? qualRC.c_str() : qual.c_str(),a.alignmentScore,a.editDist,a.NMtag.c_str());
+                        a.rnext.c_str(),a.pnext,a.tLength,a.flag.test(4) ? rcSequence.c_str() : sequence.c_str(),
+                        a.flag.test(4) ? rQual.c_str() : qual.c_str(),a.alignmentScore,a.editDist,a.NMtag.c_str());
             }
         }
     }
     string qname;//TODO should be reference
     vector<alignment_t> alignments;
     string sequence;//TODO should be reference
+    string rcSequence;
     string qual;//TODO should be reference
+    string rQual;
 };
 
 extern void inexactMatch(const sparseSA& sa, read_t& read, const align_opt & alnOptions, bool fwStrand, bool print);
