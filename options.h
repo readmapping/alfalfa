@@ -26,6 +26,8 @@ struct align_opt {
     bool tryHarder;
     bool fixedMinLength;
     bool unique;
+    bool noFW; 
+    bool noRC;
 };
 
 enum orientation_t { PAIR_FR, PAIR_RF, PAIR_FF};
@@ -53,7 +55,7 @@ struct mapOptions_t{//commentary + sort + constructor
         nucleotidesOnly = false;
         alnOptions.minMemLength = 20;
         memType = SMAM;
-        noFW = noRC = false;
+        alnOptions.noFW = alnOptions.noRC = false;
         alnOptions.errorPercent = 0.08;
         verbose = false;
         alnOptions.scores.match = 0;//(2,-1,-2,-1);
@@ -97,8 +99,7 @@ struct mapOptions_t{//commentary + sort + constructor
     //MAM options
     enum mum_t memType;
     //alignment options
-    align_opt alnOptions;
-    bool noFW; bool noRC;
+    align_opt alnOptions;    
     //paired end options
     paired_opt pairedOpt;
 };
@@ -243,8 +244,8 @@ static void processParameters(int argc, char* argv[], mapOptions_t& opt, const s
                 case 's': opt.K = atoi(optarg); break;
                 case 'k': opt.alnOptions.alignmentCount = atoi(optarg); break;
                 case 'l': opt.alnOptions.minMemLength = atoi(optarg); opt.alnOptions.fixedMinLength = true; break;
-                case ARG_NOFW: opt.noFW = 1; break;
-                case ARG_NORC: opt.noRC = 1; break;
+                case ARG_NOFW: opt.alnOptions.noFW = 1; break;
+                case ARG_NORC: opt.alnOptions.noRC = 1; break;
                 case 'n': opt.nucleotidesOnly = 1; break;
                 case ARG_VERBOSE: opt.verbose = 1; break;
                 case ARG_CLIP: opt.alnOptions.noClipping = false; break;
