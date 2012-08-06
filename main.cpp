@@ -106,9 +106,9 @@ void *query_thread(void *arg_) {
       pthread_mutex_unlock(arg->readLock);
       if(hasRead){
           seq_cnt++;
-          if(!arg->opt->noFW)//to inner funtion
+          if(!arg->opt->alnOptions->noFW)//to inner funtion
                 inexactMatch(*sa, read, arg->opt->alnOptions, true, print);
-          if(!arg->opt->noRC){
+          if(!arg->opt->alnOptions->noRC){
               read.init(arg->opt->nucleotidesOnly);
               inexactMatch(*sa, read, arg->opt->alnOptions, false, print);
           }
