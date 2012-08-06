@@ -72,6 +72,25 @@ void calculateLISintervals(const vector<match_t>& matches, int qLength, int edit
     }
 }
 
+void calculateLISintervalsFair(const vector<match_t>& matches, int qLength, int editDist, vector<lis_t>& lisIntervals){
+    int begin = 0;
+    int end = 1;
+    int len = 0;
+    while(begin < matches.size()){
+        len = matches[begin].len;
+        int refEnd = matches[begin].ref - matches[begin].query + qLength + editDist;
+        while(end < matches.size() && matches[end].ref + matches[end].len <= refEnd){
+            int leftb = max(matches[end-1].ref+matches[end-1].len-1,matches[end].ref);
+            int rightb = min(matches[end-1].ref+matches[end-1].len-1,matches[end].ref+matches[end].len-1);
+            len += max(0,rightb-leftb+1);
+            end++;
+        }
+        lisIntervals.push_back(lis_t(&matches,begin,end-1,len));
+        begin = end;
+        end++;
+    }
+}
+
 bool extendAlignment(const string& S, const string& P, alignment_t& alignment, vector<match_t>& matches, int begin, int end, int editDist, const align_opt & alnOptions){
     dp_output output;
     bool clipping = !alnOptions.noClipping;
