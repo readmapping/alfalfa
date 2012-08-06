@@ -209,5 +209,8 @@ extern void unpairedMatch(const sparseSA& sa, read_t & read,const align_opt & al
 extern void inexactMatch(const sparseSA& sa, read_t& read, const align_opt & alnOptions, bool fwStrand, bool print);
 //TODO: calculate global position in above function
 
+//PAIRED END FUNCTIONS
+extern bool isConcordant(const alignment_t& mate1, const alignment_t& mate2, long length1, long length2, const paired_opt& options);
+
 #endif	/* MAPPER_H */
 

@@ -369,3 +369,58 @@ void unpairedMatch(const sparseSA& sa, read_t & read,const align_opt & alnOption
         }
     }
 }
+
+//PAIRED END OPTIONS
+bool isConcordant(const alignment_t& mate1, const alignment_t& mate2, long length1, long length2, const paired_opt& options){
+    bool firstLeft = true;
+    //Check same chromosome
+    if(mate1.rname != mate2.rname)
+        return false;
+    //Check strand
+    if(options.orientation == PAIR_FF){
+        if(mate1.flag.test(4)!=mate1.flag.test(4))
+            return false;
+        else
+            firstLeft = !mate1.flag.test(4);//if rc must be right
+    }
+    else if(options.orientation == PAIR_FR){
+        if(mate1.flag.test(4)==mate1.flag.test(4))
+            return false;
+        else
+            firstLeft = !mate1.flag.test(4);//if rc must be right
+    }
+    else{
+        if(mate1.flag.test(4)==mate1.flag.test(4))
+            return false;
+        else
+            firstLeft = mate1.flag.test(4);//if rc must be left
+    }
+    //check fragment insert size
+    long begin = min(mate1.pos,mate2.pos);
+    long end = max(mate1.pos+length1-1,mate2.pos+length2-1);
+    long size = end - begin +1;
+    if(size < options.minInsert || size > options.maxInsert)
+        return false;
+    long begin1 = mate1.pos;
+    long end1 = begin1 + length1-1;
+    long begin2 = mate2.pos;
+    long end2 = begin2 + length2-1;
+    //chack contain
+    bool contain = (begin1 >= begin2 && end1 <= end2) || (begin2 >= begin1 && end2 <= end1);
+    if(contain && !options.contain){
+        return false;
+    }
+    //check overlap
+    bool overlap = contain || (begin2 >= begin1 && begin2 <= end1) || (end2 >= begin1 && end2 <= end1);
+    if(!options.overlap && overlap){
+        return false;
+    }
+    //check dovetail
+    if((firstLeft && (begin2 < begin1)) || (!firstLeft && (begin1 < begin2)) ){
+        if(!overlap)
+            return false;
+        else if(!options.dovetail)
+            return false;
+    }
+    return true;
+}
