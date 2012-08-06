@@ -22,12 +22,13 @@ using namespace std;
 
 // interval in match results + bases covering the result
 struct lis_t {
-  lis_t(): begin(0), end(0), len(0) {}
-  lis_t(const vector<match_t> * matches, int b, int e, int l): matches(matches), begin(b), end(e), len(l) {}
+  lis_t(): begin(0), end(0), len(0), fw(1) {}
+  lis_t(vector<match_t> * matches, int b, int e, int l, bool fw): matches(matches), begin(b), end(e), len(l), fw(fw) {}
   int begin; // position in reference sequence
   int end; // position in query
   int len; // length of match
-  const vector<match_t> * matches;
+  bool fw;
+  vector<match_t> * matches;
 };
 
 struct alignment_t {
@@ -204,6 +205,7 @@ struct read_t {
     string rQual;
 };
 
+extern void unpairedMatch(const sparseSA& sa, read_t & read,const align_opt & alnOptions, bool print);
 extern void inexactMatch(const sparseSA& sa, read_t& read, const align_opt & alnOptions, bool fwStrand, bool print);
 //TODO: calculate global position in above function
 

@@ -108,7 +108,7 @@ static const char * short_options = "s:k:l:nq:d:m:u:o:e:C:T:hx:U:1:2:S:I:X:";
 
 //Reads from - to ; trim ; phred quals
 enum {
-    ARG_NO_OPT,          //not found
+    ARG_NO_OPT = 255,          //not found
     ARG_TRY_HARDER,      //--tryharder
     ARG_SEED_THREADS,    //--seedthreads
     ARG_NOFW,            //--noFw

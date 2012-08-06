@@ -93,6 +93,39 @@ struct query_arg {
   pthread_mutex_t *writeLock;
 };
 
+void *unpaired_thread(void *arg_) {
+
+  query_arg *arg = (query_arg *)arg_;
+  bool print = arg->opt->verbose;
+  long seq_cnt = 0;
+  bool hasRead = true;
+  while(hasRead){
+      read_t read;
+      pthread_mutex_lock(arg->readLock);
+      hasRead = queryReader->nextRead(read.qname,read.sequence,read.qual);
+      pthread_mutex_unlock(arg->readLock);
+      if(hasRead){
+          seq_cnt++;
+          read.init(arg->opt->nucleotidesOnly);
+          unpairedMatch(*sa, read, arg->opt->alnOptions, print);
+          read.postprocess(arg->opt->alnOptions.scores, *sa);
+          //Ouput
+          pthread_mutex_lock(arg->writeLock);
+          stringstream * ss = new stringstream;
+          if(read.alignments.empty())
+              fprintf(outfile,"%s",read.emptyAlingment().c_str());
+          else
+              for(int k = 0; k < read.alignmentCount(); k++)
+                fprintf(outfile,"%s",read.printAlignment(k).c_str());
+          pthread_mutex_unlock(arg->writeLock);
+          delete ss;
+      }
+  }
+  printf("sequences mapped: %ld\n", seq_cnt);
+  
+  pthread_exit(NULL);
+}
+
 void *query_thread(void *arg_) {
 
   query_arg *arg = (query_arg *)arg_;
@@ -106,9 +139,9 @@ void *query_thread(void *arg_) {
       pthread_mutex_unlock(arg->readLock);
       if(hasRead){
           seq_cnt++;
-          if(!arg->opt->alnOptions->noFW)//to inner funtion
+          if(!arg->opt->alnOptions.noFW)//to inner funtion
                 inexactMatch(*sa, read, arg->opt->alnOptions, true, print);
-          if(!arg->opt->alnOptions->noRC){
+          if(!arg->opt->alnOptions.noRC){
               read.init(arg->opt->nucleotidesOnly);
               inexactMatch(*sa, read, arg->opt->alnOptions, false, print);
           }
@@ -242,7 +275,7 @@ int main(int argc, char* argv[]){
             }
             // Create joinable threads to find MEMs.
             for(int i = 0; i < opt.query_threads; i++)
-                pthread_create(&thread_ids[i], &attr, query_thread, (void *)&args[i]);
+                pthread_create(&thread_ids[i], &attr, unpaired_thread, (void *)&args[i]);
             // Wait for all threads to terminate.
             for(int i = 0; i < opt.query_threads; i++)
                 pthread_join(thread_ids[i], NULL);

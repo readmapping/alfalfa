@@ -56,23 +56,25 @@ void calculateSeeds(const sparseSA& sa, const string& P, int min_len, int alignm
     postProcess(matches);
 }
 
-void calculateLISintervals(const vector<match_t>& matches, int qLength, int editDist, vector<lis_t>& lisIntervals){
-    int begin = 0;
-    int end = 0;
-    int len = 0;
-    while(begin < matches.size()){
-        int refEnd = matches[begin].ref - matches[begin].query + qLength + editDist;
-        while(end < matches.size() && matches[end].ref + matches[end].len <= refEnd){
-            len += matches[end].len;
-            end++;
+void calculateLISintervals(vector<match_t>& matches, bool fw, int qLength, int editDist, vector<lis_t>& lisIntervals){
+    if(matches.size() > 0){
+        int begin = 0;
+        int end = 0;
+        int len = 0;
+        while(begin < matches.size()){
+            int refEnd = matches[begin].ref - matches[begin].query + qLength + editDist;
+            while(end < matches.size() && matches[end].ref + matches[end].len <= refEnd){
+                len += matches[end].len;
+                end++;
+            }
+            lisIntervals.push_back(lis_t(&matches,begin,end-1,len,fw));
+            begin = end;
+            len = 0;
         }
-        lisIntervals.push_back(lis_t(&matches,begin,end-1,len));
-        begin = end;
-        len = 0;
     }
 }
 
-void calculateLISintervalsFair(const vector<match_t>& matches, int qLength, int editDist, vector<lis_t>& lisIntervals){
+void calculateLISintervalsFair(vector<match_t>& matches, bool fw, int qLength, int editDist, vector<lis_t>& lisIntervals){
     int begin = 0;
     int end = 1;
     int len = 0;
@@ -85,7 +87,7 @@ void calculateLISintervalsFair(const vector<match_t>& matches, int qLength, int 
             len += max(0,rightb-leftb+1);
             end++;
         }
-        lisIntervals.push_back(lis_t(&matches,begin,end-1,len));
+        lisIntervals.push_back(lis_t(&matches,fw,begin,end-1,len));
         begin = end;
         end++;
     }
@@ -254,7 +256,7 @@ void inexactMatch(const sparseSA& sa, read_t & read,const align_opt & alnOptions
     int Plength = P.length();
     int editDist = (int)(alnOptions.errorPercent*Plength)+1;
     if(!fwStrand)
-        Utils::reverse_complement(P,false);
+        P = read.rcSequence;
     int min_len = alnOptions.minMemLength;
     if(!alnOptions.fixedMinLength && Plength/editDist > min_len)
         min_len = Plength/editDist;
@@ -267,7 +269,7 @@ void inexactMatch(const sparseSA& sa, read_t & read,const align_opt & alnOptions
         //FIND CANDIDATE REGIONS
         /////////////////////////
         vector<lis_t> lisIntervals;
-        calculateLISintervals(matches, Plength, editDist, lisIntervals);
+        calculateLISintervals(matches, fwStrand, Plength, editDist, lisIntervals);
         //sort candidate regions for likelyhood of an alignment
         sort(lisIntervals.begin(),lisIntervals.end(), compIntervals);
         //for every interval, try to align
@@ -294,6 +296,69 @@ void inexactMatch(const sparseSA& sa, read_t & read,const align_opt & alnOptions
                     alignment.flag.set(4,true);
                     if(alnOptions.unique && !read.alignments.empty() && alignment.editDist < read.alignments[0].editDist)
                         read.alignments.pop_back();
+                }
+                alnCount++;
+                read.alignments.push_back(alignment);
+                trial = 0;
+            }
+            lisIndex++;
+            trial++;
+        }
+    }
+}
+
+void unpairedMatch(const sparseSA& sa, read_t & read,const align_opt & alnOptions, bool print){
+    string P = read.sequence;
+    string Prc = read.rcSequence;
+    int Plength = P.length();
+    int editDist = (int)(alnOptions.errorPercent*Plength)+1;
+    int min_len = alnOptions.minMemLength;
+    if(!alnOptions.fixedMinLength && Plength/editDist > min_len)
+        min_len = Plength/editDist;
+    vector<match_t> matches;
+    vector<match_t> matchesRC;
+    //calc seeds
+    if(!alnOptions.noFW){
+        calculateSeeds(sa, P, min_len, alnOptions.alignmentCount, matches, alnOptions.tryHarder);
+    }
+    if(!alnOptions.noRC){
+        calculateSeeds(sa, Prc, min_len, alnOptions.alignmentCount, matchesRC, alnOptions.tryHarder);
+    }
+    //sort matches
+    if(matches.size()>0 || matchesRC.size()>0){
+        /////////////////////////
+        //FIND CANDIDATE REGIONS
+        /////////////////////////
+        vector<lis_t> lisIntervals;
+        calculateLISintervals(matches, true, Plength, editDist, lisIntervals);
+        calculateLISintervals(matchesRC, false, Plength, editDist, lisIntervals);
+        //sort candidate regions for likelyhood of an alignment
+        sort(lisIntervals.begin(),lisIntervals.end(), compIntervals);
+        //for every interval, try to align
+        int alnCount = 0;
+        int lisIndex = 0;
+        //trial parameter for performance reasons
+        int trial = 0;
+        //////////////////////
+        //MAIN ALIGNMENT LOOP
+        //////////////////////
+        while(alnCount < 2*alnOptions.alignmentCount &&
+                lisIndex < lisIntervals.size() &&
+                lisIntervals[lisIndex].len > (Plength*alnOptions.minCoverage)/100 &&
+                trial < alnOptions.maxTrial){
+            //sort matches in this interval according to query position
+            int begin = lisIntervals[lisIndex].begin;
+            int end = lisIntervals[lisIndex].end;
+            vector<match_t>* matchVector = lisIntervals[lisIndex].matches;
+            //sort this candidate region by query position
+            sort(matchVector->begin()+begin,matchVector->begin()+end+1, compMatchesQuery);
+            alignment_t alignment;
+            bool extended = extendAlignment(sa.S, lisIntervals[lisIndex].fw ? P : Prc, alignment, *matchVector, begin, end, editDist, alnOptions);
+            if(extended){
+                if(!lisIntervals[lisIndex].fw){
+                    alignment.flag.set(4,true);
+//                    if(alnOptions.unique && !read.alignments.empty() && alignment.editDist < read.alignments[0].editDist)
+//                        read.alignments.pop_back();
                 }
                 alnCount++;
                 read.alignments.push_back(alignment);
