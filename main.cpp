@@ -113,7 +113,7 @@ void *unpaired_thread(void *arg_) {
           pthread_mutex_lock(arg->writeLock);
           stringstream * ss = new stringstream;
           if(read.alignments.empty())
-              fprintf(outfile,"%s",read.emptyAlingment().c_str());
+              fprintf(outfile,"%s",read.emptyAlingment(false,false).c_str());
           else
               for(int k = 0; k < read.alignmentCount(); k++)
                 fprintf(outfile,"%s",read.printAlignment(k).c_str());
@@ -150,7 +150,7 @@ void *query_thread(void *arg_) {
           pthread_mutex_lock(arg->writeLock);
           stringstream * ss = new stringstream;
           if(read.alignments.empty())
-              fprintf(outfile,"%s",read.emptyAlingment().c_str());
+              fprintf(outfile,"%s",read.emptyAlingment(false,false).c_str());
           else
               for(int k = 0; k < read.alignmentCount(); k++)
                 fprintf(outfile,"%s",read.printAlignment(k).c_str());
@@ -163,7 +163,7 @@ void *query_thread(void *arg_) {
   pthread_exit(NULL);
 }
 
-void *paired_thread(void *arg_) {
+void *paired_thread1(void *arg_) {
 
   query_arg *arg = (query_arg *)arg_;
   bool print = arg->opt->verbose;
@@ -178,43 +178,30 @@ void *paired_thread(void *arg_) {
       pthread_mutex_unlock(arg->readLock);
       if(hasRead){
           seq_cnt++;
-//          if(!arg->opt->noFW)
-//                sa->inexactMatch(read, arg->opt->alnOptions, true, print);
-//          if(!arg->opt->noRC)
-//                sa->inexactMatch(read, arg->opt->alnOptions, false, print);
-//          read.postprocess(arg->opt->alnOptions.scores);
-//          //From global to local pos and write to stringstream
-//          stringstream * ss = new stringstream;
-//          if(read.alignments.empty())
-//              *ss << read.qname << "\t4\t*\t0\t0\t*\t*\t0\t0\t" 
-//                      << read.sequence << "\t" << read.qual << endl;
-//          else{
-//                long globPos;
-//                string revCompl = read.sequence;
-//                //TODO: do this during thread-work, perhaps has worse locality for startpos and refdescr tables
-//                Utils::reverse_complement(revCompl, false);
-//                string qualRC = read.qual;
-//                reverse(qualRC.begin(),qualRC.end());
-//                for(int k = 0; k < read.alignments.size(); k++){
-//                        alignment_t & a = read.alignments[k];
-//                        globPos = a.pos;
-//                        long descIndex;
-//                        sa->from_set(globPos, descIndex, a.pos);
-//                        a.rname = sa->descr[descIndex];
-//                        *ss << read.qname << "\t" << a.flag.to_ulong() << "\t"
-//                                << a.rname << "\t" << a.pos << "\t" << 
-//                                a.mapq << "\t" << a.cigar << "\t" << 
-//                                a.rnext << "\t" << a.pnext << "\t" << 
-//                                a.tLength << "\t" << (a.flag.test(4) ? revCompl : read.sequence) <<
-//                                "\t" << (a.flag.test(4) ? qualRC : read.qual) << "\tAS:i:" << 
-//                                a.alignmentScore << "\tNM:i:" << a.editDist << "\tX0:Z:" << 
-//                                a.NMtag << endl;
-//                }
-//          }
-//          pthread_mutex_lock(arg->writeLock);
-//          fprintf(outfile,"%s",ss->str().c_str());
-//          pthread_mutex_unlock(arg->writeLock);
-//          delete ss;
+          mate1.init(arg->opt->nucleotidesOnly);
+          mate2.init(arg->opt->nucleotidesOnly);
+          pairedMatch(*sa, mate1, mate2, arg->opt->alnOptions, arg->opt->pairedOpt, 1, print);
+          mate1.postprocess(arg->opt->alnOptions.scores, *sa);
+          mate2.postprocess(arg->opt->alnOptions.scores, *sa);
+          //Ouput
+          pthread_mutex_lock(arg->writeLock);
+          stringstream * ss = new stringstream;
+          if(mate1.alignments.empty())
+              fprintf(outfile,"%s",mate1.emptyAlingment(true,mate2.alignments.empty()).c_str());
+          else{
+              for(int k = 0; k < mate1.alignmentCount(); k++)
+                  if(mate1.alignments[k].flag.test(0))
+                    fprintf(outfile,"%s",mate1.printAlignment(k).c_str());
+          }
+          if(mate2.alignments.empty())
+              fprintf(outfile,"%s",mate2.emptyAlingment(true,mate1.alignments.empty()).c_str());
+          else{
+              for(int k = 0; k < mate2.alignmentCount(); k++)
+                  if(mate2.alignments[k].flag.test(0))
+                    fprintf(outfile,"%s",mate2.printAlignment(k).c_str());
+          }
+          pthread_mutex_unlock(arg->writeLock);
+          delete ss;
       }
   }
   printf("sequences mapped: %ld\n", seq_cnt);
@@ -275,7 +262,7 @@ int main(int argc, char* argv[]){
             }
             // Create joinable threads to find MEMs.
             for(int i = 0; i < opt.query_threads; i++)
-                pthread_create(&thread_ids[i], &attr, unpaired_thread, (void *)&args[i]);
+                pthread_create(&thread_ids[i], &attr, query_thread, (void *)&args[i]);
             // Wait for all threads to terminate.
             for(int i = 0; i < opt.query_threads; i++)
                 pthread_join(thread_ids[i], NULL);
@@ -305,7 +292,7 @@ int main(int argc, char* argv[]){
             }
             // Create joinable threads to find MEMs.
             for(int i = 0; i < opt.query_threads; i++)
-                pthread_create(&thread_ids[i], &attr, paired_thread, (void *)&args[i]);
+                pthread_create(&thread_ids[i], &attr, paired_thread1, (void *)&args[i]);
             // Wait for all threads to terminate.
             for(int i = 0; i < opt.query_threads; i++)
                 pthread_join(thread_ids[i], NULL);

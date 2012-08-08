@@ -33,7 +33,9 @@ struct lis_t {
 
 struct alignment_t {
   alignment_t(): pos(0), cigar("*"), flag(0), rname("*"), mapq(0), tLength(0),
-  rnext("*"), pnext(0), editDist(0), alignmentScore(0), cigarChars(0), cigarLengths(0), NMtag("*") {}
+  rnext("*"), pnext(0), editDist(0), alignmentScore(0), cigarChars(0), cigarLengths(0), NMtag("*"), refLength(0) {}
+  alignment_t(const alignment_t & o): pos(o.pos), cigar(o.cigar), flag(o.flag.to_ulong()), rname(o.rname), mapq(o.mapq), tLength(o.tLength),
+  rnext(o.rnext), pnext(o.pnext), editDist(o.editDist), alignmentScore(o.alignmentScore), cigarChars(0), cigarLengths(0), NMtag(o.NMtag), refLength(o.refLength) {}
   string cigar;//TODO: remove this fields, only used when printed
   string NMtag;//TODO: remove this fields, only used when printed
   vector<char> cigarChars;//Change these to fixed-length values
@@ -48,6 +50,7 @@ struct alignment_t {
   int editDist;
   int alignmentScore;
   int tLength;
+  int refLength;//length in reference sequence spanned by this alignment
   void setGlobalPos(const sparseSA& sa){
       if(rname.empty() || rname == "*"){
         long globPos = pos;
@@ -87,18 +90,15 @@ struct alignment_t {
       assert(cigarChars.size()==cigarLengths.size());
       assert(cigarChars.size()>0);
       int i = 0;
-      editDist = 0;
       while(i < cigarChars.size()){
           if(cigarChars[i]=='=' || cigarChars[i]=='X'){
                 int tempLength = cigarLengths[i];
                 sNM << cigarLengths[i] << cigarChars[i];
-                editDist += (cigarChars[i]=='X' ? cigarLengths[i] : 0);
                 alignmentScore += (cigarChars[i]=='X' ? scores.mismatch*cigarLengths[i] : scores.match*cigarLengths[i]);
                 while(i < cigarChars.size()-1 && (cigarChars[i+1]=='=' || cigarChars[i+1]=='X')){
                     i++;
                     tempLength += cigarLengths[i];
                     sNM << cigarLengths[i] << cigarChars[i];
-                    editDist += (cigarChars[i]=='X' ? cigarLengths[i] : 0);
                     alignmentScore += (cigarChars[i]=='X' ? scores.mismatch*cigarLengths[i] : scores.match*cigarLengths[i]);
                 }
                 sCig << tempLength << 'M';
@@ -107,7 +107,6 @@ struct alignment_t {
             sCig << cigarLengths[i] << cigarChars[i];
             sNM << cigarLengths[i] << cigarChars[i];
             if(cigarChars[i]=='D' || cigarChars[i]=='I'){
-                editDist += cigarLengths[i];
                 alignmentScore += scores.openGap + scores.extendGap*cigarLengths[i];
             }
           }
@@ -156,8 +155,11 @@ struct read_t {
                  alignments[j].flag.set(8,true);
         }
     }
-    string emptyAlingment(){
+    string emptyAlingment(bool paired, bool mateFailed){
         stringstream * ss = new stringstream;
+        int flag = 4;
+        if(paired) flag += 1;
+        if(mateFailed) flag += 8;
         *ss << qname << "\t4\t*\t0\t0\t*\t*\t0\t0\t" << sequence << "\t" << qual << endl;
         return ss->str();
     }
@@ -210,7 +212,8 @@ extern void inexactMatch(const sparseSA& sa, read_t& read, const align_opt & aln
 //TODO: calculate global position in above function
 
 //PAIRED END FUNCTIONS
-extern bool isConcordant(const alignment_t& mate1, const alignment_t& mate2, long length1, long length2, const paired_opt& options);
+extern bool isConcordant(const alignment_t& mate1, const alignment_t& mate2, const paired_opt& options);
+extern void pairedMatch(const sparseSA& sa, read_t & mate1, read_t & mate2, const align_opt & alnOptions, const paired_opt & pairedOpt, int mode, bool print);
 
 #endif	/* MAPPER_H */
 

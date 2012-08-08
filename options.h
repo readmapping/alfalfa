@@ -64,7 +64,7 @@ struct mapOptions_t{//commentary + sort + constructor
         alnOptions.scores.extendGap = -2;
         alnOptions.noClipping = true;
         alnOptions.numThreads = 1;
-        alnOptions.alignmentCount = 50;
+        alnOptions.alignmentCount = 100;
         alnOptions.maxTrial = 10;
         alnOptions.minCoverage = 25;
         alnOptions.tryHarder = false;
