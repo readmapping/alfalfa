@@ -23,6 +23,7 @@
  */
 
 #include <algorithm>
+#include <set>
 
 #include "mapper.h"
 
@@ -40,17 +41,19 @@ bool compIntervals(const lis_t i,const lis_t j){
     return (i.len > j.len || (i.len == j.len && i.begin < j.begin));
 }
 
-bool compAlignmentOffset(const alignment_t i,const alignment_t j){
-    return (i.pos < j.pos);
-}
-
 bool compAlignmentScore(const alignment_t i,const alignment_t j){
-    return (i.alignmentScore > j.alignmentScore);
+    return (i.alignmentScore > j.alignmentScore || (i.alignmentScore == j.alignmentScore && i.globPos < j.globPos));
 }
 
 bool compPairScore(const alignment_t i,const alignment_t j){
-    return (i.flag.test(0) > j.flag.test(0) || ( i.flag.test(0) == j.flag.test(0) && i.flag.test(1) > j.flag.test(1)) ||
+    if(i.concordant > j.concordant) return true;
+    else if(i.concordant == j.concordant){
+        return (i.flag.test(1) > j.flag.test(1) || ( i.flag.test(1) == j.flag.test(1) && i.flag.test(0) > j.flag.test(0)) ||
     (i.flag.test(0) == j.flag.test(0) && i.flag.test(1) == j.flag.test(1) && i.alignmentScore > j.alignmentScore));
+    }
+    else{
+        return false;
+    }
 }
 
 void postProcess(vector<match_t> &matches){
@@ -132,12 +135,12 @@ bool extendAlignment(const string& S, const string& P, alignment_t& alignment, v
         }
         alignment.cigarChars.insert(alignment.cigarChars.end(),output.cigarChars.begin(),output.cigarChars.end());
         alignment.cigarLengths.insert(alignment.cigarLengths.end(),output.cigarLengths.begin(),output.cigarLengths.end());
-        alignment.pos = grenzen.refB+1;
+        alignment.globPos = grenzen.refB+1;
         curEditDist += output.editDist;
         output.clear();
     }//fill in the starting position in the ref sequence
     else {
-        alignment.pos = firstSeed.ref + 1;
+        alignment.globPos = firstSeed.ref + 1;
     }
     if (firstSeed.ref == 0 && firstSeed.query > 0) {
         alignment.cigarChars.push_back(clipping ? 'S' : 'I');
@@ -232,7 +235,7 @@ bool extendAlignment(const string& S, const string& P, alignment_t& alignment, v
     ////////////
     //possible at the end characters
     //mapInterval += Integer.toString(queryRB+1)+"]";
-    alignment.refLength = queryRB-alignment.pos+1;
+    alignment.refLength = queryRB-alignment.globPos+1;
     if (queryRB + 1 < P.length() && refstrRB < S.length() - 1 && curEditDist <= editDist) {
         int refAlignRB = refstrRB + (P.length() - queryRB) + 1 + editDist - curEditDist;
         if (refAlignRB >= S.length())
@@ -447,16 +450,19 @@ bool isConcordant(const alignment_t& mate1, const alignment_t& mate2, const pair
 struct pair_t {
   int mate1; // alignment in first mate
   int mate2; // alignment in second mate
+  pair_t(): mate1(0), mate2(0) {}
   pair_t(int first, int second): mate1(first), mate2(second) {}
 };
 
-void setPaired(alignment_t& toset, alignment_t& mate, bool firstMate){
+void setPairedFields(alignment_t& toset, alignment_t& mate, bool firstMate, bool concordant){
     toset.flag.set(0,true);
     toset.flag.set(1,true);
     toset.flag.set(5,mate.flag.test(4));
     toset.flag.set(6,firstMate);
     toset.flag.set(7,!firstMate);
     toset.pnext = mate.pos;
+    toset.pnextGlob = mate.pnextGlob;
+    toset.concordant = concordant;
     if(toset.rname == mate.rname){
         toset.rnext = "=";
         toset.tLength = max(toset.pos+toset.refLength-1,mate.pos+mate.refLength-1) - min(toset.pos,mate.pos) + 1;
@@ -474,7 +480,25 @@ void setUnPaired(alignment_t& toset){
     toset.flag.set(0,true);
 }
 
-//Only works when only requiring concordant pairs OR combi concordant/unpaired
+void setPaired(alignment_t& aln1, alignment_t& aln2, read_t& mate1, read_t& mate2, bool concordant){
+    if(!aln1.flag.test(0)){
+        setPairedFields(aln1, aln2, true, concordant);
+    }
+    else{
+        alignment_t newAln1(aln1);
+        setPairedFields(newAln1, aln2, true, concordant);
+        mate1.alignments.push_back(newAln1);
+    }
+    if(!aln2.flag.test(0)){
+        setPairedFields(aln2, aln1, false, concordant);
+    }
+    else{
+        alignment_t newAln2(aln2);
+        setPairedFields(newAln2, aln1, false, concordant);
+        mate2.alignments.push_back(newAln2);
+    }
+}
+
 void pairedMatch1(const sparseSA& sa, read_t & mate1, read_t & mate2, const align_opt & alnOptions, const paired_opt & pairedOpt, bool print){
     //Calculate the mappings for read 1 and 2
     unpairedMatch(sa, mate1, alnOptions, print);
@@ -487,39 +511,24 @@ void pairedMatch1(const sparseSA& sa, read_t & mate1, read_t & mate2, const alig
         vector<pair_t> discordantAln;
         //sort according to alignmentScore
         sort(mate1.alignments.begin(),mate1.alignments.end(), compAlignmentScore);
-        sort(mate1.alignments.begin(),mate1.alignments.end(), compAlignmentScore);
+        sort(mate2.alignments.begin(),mate2.alignments.end(), compAlignmentScore);
         int maxScoreFirst = mate1.alignments[0].alignmentScore;
         int maxScoreSecond = mate2.alignments[0].alignmentScore;
         for(int j = 0; j < alnCount2; j++){
-            mate2.alignments[j].setGlobalPos(sa);
+            mate2.alignments[j].setLocalPos(sa);
         }
         int i = 0;
         int alnCount = 0;
         //search concordant alignments
         while(i < alnCount1 && alnCount < alnOptions.alignmentCount){
             alignment_t & aln1 = mate1.alignments[i];
-            aln1.setGlobalPos(sa);
+            aln1.setLocalPos(sa);
             int j = 0;
             while(j < alnCount2 && alnCount < alnOptions.alignmentCount){
                 alignment_t & aln2 = mate2.alignments[j];
                 if(isConcordant(aln1, aln2, pairedOpt)){
                     //Set the concordants and add another if necessary
-                    if(!aln1.flag.test(0)){
-                        setPaired(aln1, aln2, true);
-                    }
-                    else{
-                        alignment_t newAln1(aln1);
-                        setPaired(newAln1, aln2, true);
-                        mate1.alignments.push_back(newAln1);
-                    }
-                    if(!aln2.flag.test(0)){
-                        setPaired(aln2, aln1, false);
-                    }
-                    else{
-                        alignment_t newAln2(aln2);
-                        setPaired(newAln2, aln1, false);
-                        mate2.alignments.push_back(newAln2);
-                    }
+                    setPaired(aln1,aln2,mate1,mate2, true);
                     concordant++;
                     alnCount++;
                 }
@@ -537,22 +546,7 @@ void pairedMatch1(const sparseSA& sa, read_t & mate1, read_t & mate2, const alig
             while(i < discordantAln.size() && alnCount < alnOptions.alignmentCount){
                 alignment_t & aln1 = mate1.alignments[discordantAln[i].mate1];
                 alignment_t & aln2 = mate2.alignments[discordantAln[i].mate2];
-                if(!aln1.flag.test(0)){
-                    setPaired(aln1, aln2, true);
-                }
-                else{
-                    alignment_t newAln1(aln1);
-                    setPaired(newAln1, aln2, true);
-                    mate1.alignments.push_back(newAln1);
-                }
-                if(!aln2.flag.test(0)){
-                    setPaired(aln2, aln1, false);
-                }
-                else{
-                    alignment_t newAln2(aln2);
-                    setPaired(newAln2, aln1, false);
-                    mate2.alignments.push_back(newAln2);
-                }
+                setPaired(aln1,aln2,mate1,mate2, false);
                 i++;
                 alnCount++;
             }
@@ -587,9 +581,289 @@ void pairedMatch1(const sparseSA& sa, read_t & mate1, read_t & mate2, const alig
     }
 }
 
+bool alignFromLIS(const sparseSA& sa, read_t& read, lis_t & lis, int editDist, const align_opt & alnOptions){
+    if(lis.alignment != NULL)
+        return true;
+    alignment_t alignment;
+    int begin = lis.begin;
+    int end = lis.end;
+    vector<match_t>* matchVector = lis.matches;
+    //sort this candidate region by query position
+    sort(matchVector->begin()+begin,matchVector->begin()+end+1, compMatchesQuery);
+    bool extended = extendAlignment(sa.S, lis.fw ? read.sequence : read.rcSequence, alignment, *matchVector, begin, end, editDist, alnOptions);
+    if(extended){
+        if(!lis.fw){
+            alignment.flag.set(4,true);
+        }
+        alignment.setLocalPos(sa);
+        read.alignments.push_back(alignment);
+        lis.alignment = &alignment;
+    }
+    return extended;
+}
+
+bool isPosConcordant(const lis_t& mate1, const lis_t& mate2, int editDist1, int editDist2, int M1length, int M2length, const paired_opt& options){
+    bool firstLeft = true;
+    bool mate1FW = mate1.fw;
+    bool mate2FW = mate2.fw;
+    //Check strand
+    if(options.orientation == PAIR_FF || options.orientation == PAIR_FR){
+        firstLeft = mate1FW;//if rc must be right
+    }
+    else{
+        firstLeft = !mate1FW;//if rc must be left
+    }
+    //find possible offset
+    int posLeft1 = mate1.matches->at(mate1.begin).ref-mate1.matches->at(mate1.begin).query;
+    int posLeft2 = mate2.matches->at(mate2.begin).ref-mate2.matches->at(mate2.begin).query;
+    int posRight1 = posLeft1 + M1length;
+    int posRight2 = posLeft2 + M2length;
+    //check fragment insert size
+    long minsize = max(posRight2+editDist2,posRight1+editDist1) - min(posLeft2+editDist2,posLeft1+editDist1) +1;
+    if(minsize < options.minInsert)
+        return false;
+    long maxsize = max(posRight2-editDist2,posRight1-editDist1) - min(posLeft2-editDist2,posLeft1-editDist1) +1;
+    if(maxsize > options.maxInsert)
+        return false;
+    //check flow direction is correct
+    int anchor1 = mate1FW ? posLeft1 : posRight1;
+    int anchor2 = mate2FW ? posLeft2 : posRight2;
+    if(firstLeft){
+        if(anchor1-editDist1 > anchor2 + editDist2) return false;
+    }
+    else{
+        if(anchor2 - editDist2 > anchor1 + editDist1) return false;
+    }
+    //check contain
+    bool contain = ((posLeft1-editDist1 >= posLeft2+editDist2 && posRight1+editDist1 <= posRight2-editDist2) 
+    || (posLeft2-editDist2 >= posLeft1+editDist1 && posRight2+editDist2 <= posRight1-editDist1));
+    if(contain && !options.contain){
+        return false;
+    }
+    //check overlap
+    bool overlap = contain || !(posRight2-editDist2 < posLeft1+editDist1 || posLeft2+editDist2 > posRight1-editDist1);
+    if(!options.overlap && overlap){
+        return false;
+    }
+    //check dovetail
+    if((firstLeft && (posLeft2+editDist2 < posLeft1-editDist1)) || (!firstLeft && (posLeft1+editDist1 < posLeft2-editDist2)) ){
+        if(!overlap)
+            return false;
+        else if(!options.dovetail)
+            return false;
+    }
+    return true;
+}
+
+void coupleLIS(const sparseSA& sa, 
+        read_t & mate1, 
+        read_t & mate2,
+        vector<lis_t>& lisIntervalsFM1, 
+        vector<lis_t>& lisIntervalsFM2,
+        int& concordant, 
+        int& discordant,
+        const align_opt & alnOptions,
+        const paired_opt & pairedOpt){
+    int M1length = mate1.sequence.size();
+    int M2length = mate2.sequence.size();
+    int editDistM1 = (int)(alnOptions.errorPercent*M1length)+1;
+    int editDistM2 = (int)(alnOptions.errorPercent*M2length)+1;
+    int state = 0;
+    int i = 0;
+    int j = 0;
+    int begin = j;
+    while(i < lisIntervalsFM1.size() && concordant < alnOptions.alignmentCount){
+        state = 0;
+        begin = j;
+        lis_t & lis1 = lisIntervalsFM1[i];
+        while(j < lisIntervalsFM2.size() && concordant < alnOptions.alignmentCount && state < 2){
+            lis_t & lis2 = lisIntervalsFM2[j];
+            if(isPosConcordant(lis1, lis2, editDistM1, editDistM2, M1length, M2length, pairedOpt)){//concordant (pos)
+                if(state==0){ state++; begin = j;}//first pos where a concordant alignment was found
+                //Align if necessary, 
+                bool firstAligned = alignFromLIS(sa, mate1, lis1, editDistM1, alnOptions);
+                bool secondAligned = alignFromLIS(sa, mate2, lis2, editDistM2, alnOptions);
+                //If both align: check pairing and set conc/disc: add to pairedInfo
+                if(firstAligned && secondAligned){
+                    if(isConcordant(*lis1.alignment, *lis2.alignment, pairedOpt)){//concordant
+                        concordant++;
+                        lis1.len = 0; lis2.len = 0;
+                        setPaired(*lis1.alignment,*lis2.alignment,mate1,mate2, true);
+                    }
+                    else if(pairedOpt.discordant){
+                        lis1.len = 0; lis2.len = 0;
+                        discordant++;
+                        setPaired(*lis1.alignment,*lis2.alignment,mate1,mate2, false);
+                    }
+                }
+            }
+            else if(state==1)//discordant, move on
+                state++;
+            j++;
+        }
+        j = begin;
+        i++;
+    }
+}
+
+void unpairedMatchFromLIS(const sparseSA& sa, read_t & read, vector<lis_t> & lisIntervals, const align_opt & alnOptions, int & alnCount){
+    int editDist = (int)(alnOptions.errorPercent*read.sequence.size())+1;
+    //sort candidate regions for likelyhood of an alignment
+    sort(lisIntervals.begin(),lisIntervals.end(), compIntervals);
+    //for every interval, try to align
+    int lisIndex = 0;
+    //trial parameter for performance reasons
+    int trial = 0;
+    //////////////////////
+    //MAIN ALIGNMENT LOOP
+    //////////////////////
+    while(alnCount < alnOptions.alignmentCount &&
+            lisIndex < lisIntervals.size() &&
+            lisIntervals[lisIndex].len > (read.sequence.size()*alnOptions.minCoverage)/100 &&
+            trial < alnOptions.maxTrial){
+        //sort matches in this interval according to query position
+        int begin = lisIntervals[lisIndex].begin;
+        int end = lisIntervals[lisIndex].end;
+        vector<match_t>* matchVector = lisIntervals[lisIndex].matches;
+        //sort this candidate region by query position
+        sort(matchVector->begin()+begin,matchVector->begin()+end+1, compMatchesQuery);
+        alignment_t alignment;
+        bool extended = extendAlignment(sa.S, lisIntervals[lisIndex].fw ? read.sequence : read.rcSequence, 
+                alignment, *matchVector, begin, end, editDist, alnOptions);
+        if(extended){
+            if(!lisIntervals[lisIndex].fw){
+                alignment.flag.set(4,true);
+            }
+            alnCount++;
+            alignment.setLocalPos(sa);
+            read.alignments.push_back(alignment);
+            trial = 0;
+        }
+        lisIndex++;
+        trial++;
+    }
+}
+
+//Calculate LIS of both mates, match together 2 LIS, if match, calculate both alignments
+void pairedMatch3(const sparseSA& sa, read_t & mate1, read_t & mate2, const align_opt & alnOptions, const paired_opt & pairedOpt){
+    int concordant = 0;
+    int discordant = 0;
+    int min_len = alnOptions.minMemLength;
+    if((alnOptions.noFW || alnOptions.noRC))
+        return;//no possible alignments
+    //fields
+    bool mate1FWfirst = pairedOpt.orientation == PAIR_FR || pairedOpt.orientation == PAIR_FF;
+    bool mate2FWfirst = pairedOpt.orientation == PAIR_RF || pairedOpt.orientation == PAIR_FF;
+    vector<match_t> firstmatchesM1;
+    vector<match_t> firstmatchesM2;
+    vector<match_t> secondmatchesM1;
+    vector<match_t> secondmatchesM2;
+    vector<lis_t> lisIntervalsFM1;
+    vector<lis_t> lisIntervalsFM2;
+    vector<lis_t> lisIntervalsSM1;
+    vector<lis_t> lisIntervalsSM2;
+    int M1length = mate1.sequence.size();
+    int M2length = mate2.sequence.size();
+    int editDistM1 = (int)(alnOptions.errorPercent*M1length)+1;
+    int editDistM2 = (int)(alnOptions.errorPercent*M2length)+1;
+    //Calc seeds for first direction (put this in separate function for each direction
+    calculateSeeds(sa, mate1FWfirst ? mate1.sequence : mate1.rcSequence, min_len, alnOptions.alignmentCount, firstmatchesM1, alnOptions.tryHarder);
+    calculateSeeds(sa, mate2FWfirst ? mate2.sequence : mate2.rcSequence, min_len, alnOptions.alignmentCount, firstmatchesM2, alnOptions.tryHarder);
+    if(firstmatchesM1.size()>0 && firstmatchesM2.size()>0){
+        //Calc LIS intervals
+        //lis intervals are intervals in seed matches that are ordered according to reference offset
+        calculateLISintervals(firstmatchesM1, mate1FWfirst, M1length, editDistM1, lisIntervalsFM1);
+        calculateLISintervals(firstmatchesM2, mate2FWfirst, M2length, editDistM2, lisIntervalsFM2);
+        //find concordant intervals
+        coupleLIS(sa, mate1, mate2, lisIntervalsFM1, lisIntervalsFM2, concordant, discordant, alnOptions, pairedOpt);
+    }
+    //Do the same for other direction if necessary
+    if(concordant < alnOptions.alignmentCount){
+        calculateSeeds(sa, mate1FWfirst ? mate1.rcSequence : mate1.sequence, min_len, alnOptions.alignmentCount, secondmatchesM1, alnOptions.tryHarder);
+        calculateSeeds(sa, mate2FWfirst ? mate2.rcSequence : mate2.sequence, min_len, alnOptions.alignmentCount, secondmatchesM2, alnOptions.tryHarder);
+        if(secondmatchesM1.size()>0 && secondmatchesM2.size()>0){
+            //Calc LIS intervals
+            //lis intervals are intervals in seed matches that are ordered according to reference offset
+            calculateLISintervals(secondmatchesM1, !mate1FWfirst, M1length, editDistM1, lisIntervalsSM1);
+            calculateLISintervals(secondmatchesM2, !mate2FWfirst, M2length, editDistM2, lisIntervalsSM2);
+            //find concordant intervals
+            coupleLIS(sa, mate1, mate2, lisIntervalsSM1, lisIntervalsSM2, concordant, discordant, alnOptions, pairedOpt);
+        }
+    }
+    concordant = concordant + discordant;
+    int maxScoreFirst;
+    int maxScoreSecond;
+    //preprocessing for discordant and mixed: calculate more alignments
+    if(concordant < alnOptions.alignmentCount && (pairedOpt.discordant || pairedOpt.mixed)){
+        //concatenate the lists per mate
+        lisIntervalsFM1.insert(lisIntervalsFM1.end(),lisIntervalsSM1.begin(),lisIntervalsSM1.end());
+        lisIntervalsFM2.insert(lisIntervalsFM2.end(),lisIntervalsSM2.begin(),lisIntervalsSM2.end());
+        //try to align some more LIS intervals
+        unpairedMatchFromLIS(sa, mate1, lisIntervalsFM1, alnOptions, concordant);
+        unpairedMatchFromLIS(sa, mate2, lisIntervalsFM2, alnOptions, concordant);
+        //sort according to alignmentScore and globalPos
+        sort(mate1.alignments.begin(),mate1.alignments.end(), compAlignmentScore);
+        sort(mate2.alignments.begin(),mate2.alignments.end(), compAlignmentScore);
+        maxScoreFirst = mate1.alignments[0].alignmentScore;
+        maxScoreSecond = mate2.alignments[0].alignmentScore;
+    }
+    if(pairedOpt.discordant && concordant < alnOptions.alignmentCount ){
+        //extra discordant searches depending on max score
+        int i=0;
+        while(i < mate1.alignmentCount() && 
+                concordant < alnOptions.alignmentCount && 
+                mate1.alignments[i].alignmentScore == maxScoreFirst){
+            set<long> globPosMate;
+            if(mate1.alignments[i].flag.test(0))
+                globPosMate.insert(mate1.alignments[i].pnextGlob);
+            i++;
+            while(i < mate1.alignmentCount() && 
+                    mate1.alignments[i].globPos == mate1.alignments[i-1].globPos &&
+                    mate1.alignments[i].alignmentScore == maxScoreFirst){
+                if(mate1.alignments[i].flag.test(0))
+                    globPosMate.insert(mate1.alignments[i].pnextGlob);
+                i++;
+            }
+            int j = 0;
+            while(j < mate2.alignmentCount() && 
+                    concordant < alnOptions.alignmentCount &&
+                    mate2.alignments[j].alignmentScore == maxScoreSecond){
+                if((j==0 || mate2.alignments[j].globPos != mate2.alignments[j-1].globPos ) && globPosMate.count(mate2.alignments[j].globPos)>0){
+                    //found extra discordant
+                    concordant++;
+                    setPaired(mate1.alignments[i-1],mate2.alignments[j],mate1,mate2, false);
+                }
+                j++;
+            }
+        }
+    }
+    if(pairedOpt.mixed && concordant < alnOptions.alignmentCount ){
+        //extra unpaired alignments
+        int i = 0;
+        int alnCountFirst = concordant;
+        while(i < mate1.alignmentCount() && alnCountFirst < alnOptions.alignmentCount){
+            if(!mate1.alignments[i].flag.test(0))
+                setUnPaired(mate1.alignments[i]);
+            i++;
+            alnCountFirst++;
+        }
+        i = 0;
+        int alnCountSecond = concordant;
+        while(i < mate2.alignmentCount() && alnCountSecond < alnOptions.alignmentCount){
+            if(!mate2.alignments[i].flag.test(0))
+                setUnPaired(mate2.alignments[i]);
+            i++;
+            alnCountSecond++;
+        }
+    }
+}
+
 void pairedMatch(const sparseSA& sa, read_t & mate1, read_t & mate2, const align_opt & alnOptions, const paired_opt & pairedOpt, int mode, bool print){
     if(mode==1){
         pairedMatch1(sa, mate1, mate2, alnOptions, pairedOpt, print);
+    }
+    else if(mode==3){
+        pairedMatch3(sa, mate1, mate2, alnOptions, pairedOpt);
     }
     else{
         //mode unknown

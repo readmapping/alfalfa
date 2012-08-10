@@ -20,40 +20,32 @@
 
 using namespace std;
 
-// interval in match results + bases covering the result
-struct lis_t {
-  lis_t(): begin(0), end(0), len(0), fw(1) {}
-  lis_t(vector<match_t> * matches, int b, int e, int l, bool fw): matches(matches), begin(b), end(e), len(l), fw(fw) {}
-  int begin; // position in reference sequence
-  int end; // position in query
-  int len; // length of match
-  bool fw;
-  vector<match_t> * matches;
-};
 
 struct alignment_t {
-  alignment_t(): pos(0), cigar("*"), flag(0), rname("*"), mapq(0), tLength(0),
+  alignment_t(): pnextGlob(0), concordant(false), globPos(0), pos(0), cigar("*"), flag(0), rname("*"), mapq(0), tLength(0),
   rnext("*"), pnext(0), editDist(0), alignmentScore(0), cigarChars(0), cigarLengths(0), NMtag("*"), refLength(0) {}
-  alignment_t(const alignment_t & o): pos(o.pos), cigar(o.cigar), flag(o.flag.to_ulong()), rname(o.rname), mapq(o.mapq), tLength(o.tLength),
-  rnext(o.rnext), pnext(o.pnext), editDist(o.editDist), alignmentScore(o.alignmentScore), cigarChars(0), cigarLengths(0), NMtag(o.NMtag), refLength(o.refLength) {}
+  alignment_t(const alignment_t & o): concordant(false), globPos(o.globPos), pos(o.pos), cigar(o.cigar), flag(o.flag.to_ulong()), rname(o.rname), mapq(o.mapq), tLength(o.tLength),
+  rnext(o.rnext), pnext(o.pnext), pnextGlob(o.pnextGlob), editDist(o.editDist), alignmentScore(o.alignmentScore), cigarChars(o.cigarChars), cigarLengths(o.cigarLengths), NMtag(o.NMtag), refLength(o.refLength) {}
   string cigar;//TODO: remove this fields, only used when printed
   string NMtag;//TODO: remove this fields, only used when printed
   vector<char> cigarChars;//Change these to fixed-length values
   vector<int> cigarLengths;//Change these to fixed-length values (make sure to increase them when necessary): make own string and vector classes
   string rname;//leave out, only for printing
+  long globPos; // position in index (concat of all reference sequences)
   long pos; // position in reference sequence
   bitset<11> flag;
   int mapq;
   //TODO: paired-end mapping
   string rnext;
   long pnext;
+  long pnextGlob;
   int editDist;
   int alignmentScore;
   int tLength;
   int refLength;//length in reference sequence spanned by this alignment
-  void setGlobalPos(const sparseSA& sa){
+  bool concordant;
+  void setLocalPos(const sparseSA& sa){
       if(rname.empty() || rname == "*"){
-        long globPos = pos;
         long descIndex;
         sa.from_set(globPos, descIndex, pos);
         rname = sa.descr[descIndex];
@@ -117,6 +109,18 @@ struct alignment_t {
   }
 };
 
+// interval in match results + bases covering the result
+struct lis_t {
+  lis_t(): begin(0), end(0), len(0), fw(1), alignment(NULL) {}
+  lis_t(vector<match_t> * matches, int b, int e, int l, bool fw): matches(matches), begin(b), end(e), len(l), fw(fw) { alignment = NULL;}
+  int begin; // position in reference sequence
+  int end; // position in query
+  int len; // length of match
+  bool fw;
+  vector<match_t> * matches;
+  alignment_t * alignment;
+};
+
 struct read_t {
     read_t(): qname(""),sequence(""),qual("*"),rcSequence(""),rQual(""), alignments(0) {}
     read_t(string name, string &seq, string &qw, bool nucleotidesOnly): qname(name),sequence(seq),qual(qw), alignments(0){
@@ -148,7 +152,7 @@ struct read_t {
             250*(maxScore-secBestScore)/(maxScore-scores.mismatch*sequence.length()) ;
         assert(mapq <= 255 && mapq >= 0);
         for(int j = 0; j < alignments.size(); j++){
-            alignments[j].setGlobalPos(sa);
+            alignments[j].setLocalPos(sa);
              if(alignments[j].alignmentScore == maxScore)
                  alignments[j].mapq = mapq;
              else
