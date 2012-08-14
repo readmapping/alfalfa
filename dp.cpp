@@ -32,7 +32,7 @@
 using namespace std;
 
 struct dp_matrices{
-    dp_matrices(): L1(0), L2(0), bandSize(0), banded(false) {}
+    dp_matrices(): L1(0), L2(0), bandSize(0), bandLeft(0), bandRight(0), banded(false) {}
     int ** M;
     char ** traceBack;
     int ** gapUp;
@@ -40,6 +40,8 @@ struct dp_matrices{
     int L1;
     int L2;
     int bandSize;
+    int bandLeft;
+    int bandRight;
     bool banded;
 };
 
@@ -107,7 +109,7 @@ int initializeMatrix(dp_matrices& matrices,const dp_scores& scores,const dp_type
         matrices.traceBack[i][0] = '0';
     for(int i = 1; i <= matrices.L1; i++)
         matrices.traceBack[0][i] = '0';
-    assert(!banded || (!type.freeQueryB && !type.freeRefB));
+    //assert(!banded || (!type.freeQueryB && !type.freeRefB));
     if(type.freeQueryB)
         for(int i = 1; i <= matrices.L2; i++)
             matrices.M[i][0] = 0;
@@ -132,7 +134,7 @@ int updateMatrix(dp_matrices& matrices,const dp_scores& scores,const dp_type& ty
     }
     if(newDim > DP_DIM)
         resizeDPMatrix(newDim, scores.openGap != 0);
-    assert(!banded || (!type.freeQueryB && !type.freeRefB));
+    //assert(!banded || (!type.freeQueryB && !type.freeRefB));
     M[0][0] = 0;
     if(type.freeQueryB)//no need for reinitialization if same values
         for(int i = 1; i <= matrices.L2; i++)
@@ -217,6 +219,7 @@ int deleteMatrix(dp_matrices& matrices){
     return 0;
 }
 
+//not yet adjusted for different band sizes
 int findTraceBackPos(const dp_matrices& matrices, int* const i, int* const j,const dp_type& type){
     //find beginPosition for traceBack and find dpScore
     int maximum = matrices.M[*i][*j];
@@ -267,9 +270,12 @@ int findTraceBackPos(const dp_matrices& matrices, int* const i, int* const j,con
     return 0;
 }
 
+//--> possible bug ? do not take into account forward or reverse
 int findTraceBackPosStatic(const dp_matrices& matrices, int* const i, int* const j,const dp_type& type){
     //find beginPosition for traceBack and find dpScore
     int maximum = M[*i][*j];
+    int bandLeft = max(matrices.bandLeft, matrices.bandSize);
+    int bandRight = max(matrices.bandRight, matrices.bandSize);
     if((type.freeQueryE && type.freeRefE) || type.local){//local
         if(!matrices.banded){
             for(int idx = matrices.L2; idx >= 0; idx--){
@@ -284,7 +290,7 @@ int findTraceBackPosStatic(const dp_matrices& matrices, int* const i, int* const
         }
         else{
             for(int idx = matrices.L2; idx >= 0; idx--){
-                for(int idx2 = min(idx+matrices.bandSize,matrices.L1); idx2 >= max(0,idx-matrices.bandSize); idx2--){
+                for(int idx2 = min(idx+bandRight,matrices.L1); idx2 >= max(0,idx-bandLeft); idx2--){
                     if(M[idx][idx2] > maximum){
                         maximum = M[idx][idx2];
                         *i = idx;
@@ -295,8 +301,8 @@ int findTraceBackPosStatic(const dp_matrices& matrices, int* const i, int* const
         }
     }
     else if(type.freeQueryE){//banded update
-        for(int idx = min(matrices.L2, matrices.L1 + matrices.bandSize); 
-                idx >= min(matrices.L2, max(0,matrices.L1 - matrices.bandSize)); 
+        for(int idx = min(matrices.L2, matrices.L1 + bandRight); 
+                idx >= min(matrices.L2, max(0,matrices.L1 - bandLeft)); 
                 idx--){
             if(M[idx][*j] > maximum){
                 maximum = M[idx][*j];
@@ -305,8 +311,8 @@ int findTraceBackPosStatic(const dp_matrices& matrices, int* const i, int* const
         }
     }
     else if(type.freeRefE){
-        for(int idx = min(matrices.L1, matrices.L2 + matrices.bandSize); 
-                idx >= min(matrices.L1, max(0,matrices.L2 - matrices.bandSize)); 
+        for(int idx = min(matrices.L1, matrices.L2 + bandRight); 
+                idx >= min(matrices.L1, max(0,matrices.L2 - bandLeft)); 
                 idx--){
             if(M[*i][idx] > maximum){
                 maximum = M[*i][idx];
@@ -340,6 +346,7 @@ inline int  maximum( int f1, int f2, int f3, char * ptr )
         return  max ;
 }
 
+//not yet adjusted for different band sizes
 int dpFill(dp_matrices& matrices,const string& ref,const string& query, bool forward,
         const boundaries& offset, const dp_scores& scores, 
         const dp_type& type){
@@ -411,10 +418,11 @@ int dpFillStatic(dp_matrices& matrices,const string& ref,const string& query, bo
         const dp_type& type){
     int        d = 0;
     int        local = type.local || (type.freeQueryB && type.freeRefB) ? 0 : 1;
-
+    int bandLeft = max(matrices.bandLeft, matrices.bandSize);
+    int bandRight = max(matrices.bandRight, matrices.bandSize);
     for(int i = 1; i <= matrices.L2; i++ ){
-        int idx2 = forward ? i-matrices.bandSize : matrices.L1-matrices.L2 + i - matrices.bandSize;
-        int colRB = forward ? i+matrices.bandSize : matrices.L1-matrices.L2 + i + matrices.bandSize;
+        int idx2 = forward ? i-bandLeft : matrices.L1-matrices.L2 + i - bandLeft;
+        int colRB = forward ? i+bandRight : matrices.L1-matrices.L2 + i + bandRight;
         if(idx2>0){//left value undefined
             d = scores.scoreMatrix[ref[offset.refB+idx2-1]][query[offset.queryB+i-1]];
             M[ i ][ idx2 ] = M[ i-1 ][ idx2-1 ] + d;
@@ -449,6 +457,7 @@ int dpFillStatic(dp_matrices& matrices,const string& ref,const string& query, bo
     return 0;
 }
 
+//not yet adjusted for different band sizes
 int dpFillOpt(dp_matrices& matrices,const string& ref,const string& query, bool forward, 
         const boundaries& offset, const dp_scores& scores, const dp_type& type){
     //TODO: when changed to mallocs: use row-order traversal
@@ -511,10 +520,11 @@ int dpFillOptStatic(dp_matrices& matrices,const string& ref,const string& query,
     //TODO: when changed to mallocs: use row-order traversal
     int        d = 0;
     int        local = type.local || (type.freeQueryB && type.freeRefB) ? 0 : 1;
-    
+    int bandLeft = max(matrices.bandLeft, matrices.bandSize);
+    int bandRight = max(matrices.bandRight, matrices.bandSize);
     for(int i = 1; i <= matrices.L2; i++ ){
-        int idx2 = forward ? i-matrices.bandSize : matrices.L1-matrices.L2 + i - matrices.bandSize;
-        int colRB = forward ? i+matrices.bandSize : matrices.L1-matrices.L2 + i + matrices.bandSize;
+        int idx2 = forward ? i-bandLeft : matrices.L1-matrices.L2 + i - bandLeft;
+        int colRB = forward ? i+bandRight : matrices.L1-matrices.L2 + i + bandRight;
         if(idx2>0){
             d = scores.scoreMatrix[ref[offset.refB+idx2-1]][query[offset.queryB+i-1]];
             M[ i ][ idx2 ] = max(M[ i-1 ][ idx2-1 ] + d, M[ i-1 ][ idx2 ] + scores.extendGap);
@@ -537,6 +547,7 @@ int dpFillOptStatic(dp_matrices& matrices,const string& ref,const string& query,
     return 0;
 }
 
+//not yet adjusted for different band sizes
 int dpTraceBack(const dp_matrices& matrices, int& i, int& j, dp_output& output, std::stringstream & ss){
     //TODO: after mallocs: change this traversal to row-order
     //change stringstream to char array of length dimensions array
@@ -574,6 +585,8 @@ int dpTraceBackStatic(const dp_matrices& matrices,
     //TODO: after mallocs: change this traversal to row-order
     //change stringstream to char array of length dimensions array
     int qBound = 0; int rBound = 0;
+    int bandLeft = max(matrices.bandLeft, matrices.bandSize);
+    int bandRight = max(matrices.bandRight, matrices.bandSize);
     if(type.freeQueryB)
         qBound = matrices.L2;
     if(type.freeRefB)
@@ -590,12 +603,12 @@ int dpTraceBackStatic(const dp_matrices& matrices,
             output.editDist++;
             i-- ;  j-- ;
         }
-        else if(j > 0 && j > i+bandCorrection - matrices.bandSize && M[ i ][ j ] == LEFT[ i ][ j ]){
+        else if(j > 0 && j > i+bandCorrection - bandLeft && M[ i ][ j ] == LEFT[ i ][ j ]){
             ss << 'D';
             output.editDist++;
             j-- ;
         }
-        else if(i > 0 && j < i+bandCorrection + matrices.bandSize && M[ i ][ j ] == UP[ i ][ j ]){
+        else if(i > 0 && j < i+bandCorrection + bandRight && M[ i ][ j ] == UP[ i ][ j ]){
             ss << 'I';
             output.editDist++;
             i-- ;
@@ -609,7 +622,7 @@ int dpTraceBackStatic(const dp_matrices& matrices,
                 cerr << "Scores: Diag "    << M[ i-1 ][ j-1 ] << endl;
                 cerr << "Characters "    << ref[offset.refB+j-1] << "  " << query[offset.queryB+i-1] << endl; 
             }
-            cerr << "BandSize " << matrices.bandSize << endl;
+            cerr << "BandSize " << max(max(matrices.bandSize, matrices.bandLeft),matrices.bandRight) << endl;
             if(j > 0)
                 cerr << "Scores: Left "    << M[ i ][ j-1 ] << endl;
             if(i > 0)
@@ -627,6 +640,8 @@ int dpTraceBackOptStatic(const dp_matrices& matrices,
     //TODO: after mallocs: change this traversal to row-order
     //change stringstream to char array of length dimensions array
     int qBound = 0; int rBound = 0;
+    int bandLeft = max(matrices.bandLeft, matrices.bandSize);
+    int bandRight = max(matrices.bandRight, matrices.bandSize);
     if(type.freeQueryB)
         qBound = matrices.L2;
     if(type.freeRefB)
@@ -643,12 +658,12 @@ int dpTraceBackOptStatic(const dp_matrices& matrices,
             output.editDist++;
             i-- ;  j-- ;
         }
-        else if(j > 0 && j > i+bandCorrection - matrices.bandSize && M[ i ][ j ] == M[ i ][ j-1 ] + scores.extendGap){
+        else if(j > 0 && j > i+bandCorrection - bandLeft && M[ i ][ j ] == M[ i ][ j-1 ] + scores.extendGap){
             ss << 'D';
             output.editDist++;
             j-- ;
         }
-        else if(i > 0 && j < i+bandCorrection + matrices.bandSize && M[ i ][ j ] == M[ i-1 ][ j ] + scores.extendGap){
+        else if(i > 0 && j < i+bandCorrection + bandRight && M[ i ][ j ] == M[ i-1 ][ j ] + scores.extendGap){
             ss << 'I';
             output.editDist++;
             i-- ;
@@ -662,7 +677,7 @@ int dpTraceBackOptStatic(const dp_matrices& matrices,
                 cerr << "Scores: Diag "    << M[ i-1 ][ j-1 ] << endl;
                 cerr << "Characters "    << ref[offset.refB+j-1] << "  " << query[offset.queryB+i-1] << endl; 
             }
-            cerr << "BandSize " << matrices.bandSize << endl;
+            cerr << "BandSize " << max(max(matrices.bandSize, matrices.bandLeft),matrices.bandRight) << endl;
             if(j > 0)
                 cerr << "Scores: Left "    << M[ i ][ j-1 ] << endl;
             if(i > 0)
@@ -1109,6 +1124,85 @@ int dpBandStatic( const string&     ref,
             dpTraceBackStatic(matrices, i, j, scores, type, output, ss, offset, !type.freeQueryB && !type.freeRefB, ref, query);
         else
             dpTraceBackOptStatic(matrices, i, j, scores, type, output, ss, offset, !type.freeQueryB && !type.freeRefB, ref, query);
+        //Edit Dist ouput
+        if( i > 0 && !type.freeQueryB)
+            output.editDist += i;
+        if(j > 0 && !type.freeRefB)
+            output.editDist += j;
+        //Errorstring output
+        if(oType == ERRORSTRING || oType == ALL){
+            string errorString = ss.str();
+            if(i > 0 && !type.freeQueryB)
+                errorString.append(i,'I');
+            else if(j > 0 && !type.freeRefB)
+                errorString.append(j, 'D');
+            reverse( errorString.begin(), errorString.end() );
+            //create output: errorString
+            int iter = 0;
+            int temp;
+            while(iter < errorString.length()){
+                temp = iter;
+                while(iter+1 < errorString.length() && errorString[iter+1]==errorString[temp])
+                    iter++;
+                iter++;
+                output.cigarChars.push_back(errorString[temp]);
+                output.cigarLengths.push_back(iter-temp);
+            }
+        }
+    }
+    //change boundaries for local and freeGap types to return changed free boundaries.
+    if(type.freeQueryB && i > 0)
+        offset.queryB = offset.queryB+i;
+    if(type.freeRefB && j > 0)
+        offset.refB = offset.refB+j;
+
+    return 0;
+}
+
+int dpBandFull( const string& ref, 
+        const string&     query,
+        boundaries& offset,
+        const dp_scores&  scores,
+        const dp_type&    type,
+        const outputType& oType,
+        dp_output&  output, 
+        int bandLeft, 
+        int bandRight, 
+        bool print){
+    dp_matrices matrices;
+    matrices.L1 = offset.refE-offset.refB+1;
+    matrices.L2 = offset.queryE-offset.queryB+1;
+    matrices.bandSize = 0;
+    matrices.banded = true;
+    matrices.bandLeft = bandLeft;
+    matrices.bandRight = bandRight;
+    assert(matrices.L1 >=0 && matrices.L2 >= 0 && bandLeft >0 && bandRight > 0);
+    //build matrices
+    updateMatrix(matrices, scores, type);
+    bool affine = scores.openGap != 0;
+    //dp
+    if(affine)
+        dpFillStatic(matrices, ref, query, true, offset, scores, type);
+    else
+        dpFillOptStatic(matrices, ref, query, true, offset, scores, type);
+    //traceback and output
+    int        i = min(matrices.L2,matrices.L1+matrices.bandLeft), j = min(matrices.L1,matrices.L2+matrices.bandRight);
+    //find beginPosition for traceBack and find dpScore
+    findTraceBackPosStatic(matrices,&i,&j,type);
+    output.dpScore = M[i][j];
+    //Next is for output only
+    if(oType>DPSCORE){
+        //Alter boundaries to return the new positions when free gaps were introduced.
+        if(type.freeQueryE && i < matrices.L2)
+            offset.queryE = offset.queryB+i-1;
+        if(type.freeRefE && j < matrices.L1)
+            offset.refE = offset.refB+j-1;
+        //traceBack
+        std::stringstream ss;
+        if(affine)
+            dpTraceBackStatic(matrices, i, j, scores, type, output, ss, offset, true, ref, query);
+        else
+            dpTraceBackOptStatic(matrices, i, j, scores, type, output, ss, offset, true, ref, query);
         //Edit Dist ouput
         if( i > 0 && !type.freeQueryB)
             output.editDist += i;

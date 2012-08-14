@@ -97,5 +97,8 @@ extern int dpBand( const string&, const string&, boundaries&, const dp_scores&,
 extern int dpBandStatic( const string&, const string&, boundaries&, const dp_scores&, 
         const dp_type&, const outputType&, dp_output&, int bandSize, bool print = false);
 
+extern int dpBandFull( const string&, const string&, boundaries&, const dp_scores&, 
+        const dp_type&, const outputType&, dp_output&, int bandLeft, int bandRight, bool print = false);
+
 #endif	/* DP_H */
 
