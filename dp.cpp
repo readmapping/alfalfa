@@ -271,9 +271,11 @@ int findTraceBackPos(const dp_matrices& matrices, int* const i, int* const j,con
 }
 
 //--> possible bug ? do not take into account forward or reverse
-int findTraceBackPosStatic(const dp_matrices& matrices, int* const i, int* const j,const dp_type& type){
+//it was ok for non-local dp or when gaps are not allowed in both begin and end, which was the only case untill now
+int findTraceBackPosStatic(const dp_matrices& matrices, bool forward, int* const i, int* const j,const dp_type& type){
     //find beginPosition for traceBack and find dpScore
     int maximum = M[*i][*j];
+    int bandCorrection = forward ? 0 : matrices.L1-matrices.L2;
     int bandLeft = max(matrices.bandLeft, matrices.bandSize);
     int bandRight = max(matrices.bandRight, matrices.bandSize);
     if((type.freeQueryE && type.freeRefE) || type.local){//local
@@ -290,7 +292,7 @@ int findTraceBackPosStatic(const dp_matrices& matrices, int* const i, int* const
         }
         else{
             for(int idx = matrices.L2; idx >= 0; idx--){
-                for(int idx2 = min(idx+bandRight,matrices.L1); idx2 >= max(0,idx-bandLeft); idx2--){
+                for(int idx2 = min(bandCorrection+idx+bandRight,matrices.L1); idx2 >= max(0,bandCorrection+idx-bandLeft); idx2--){
                     if(M[idx][idx2] > maximum){
                         maximum = M[idx][idx2];
                         *i = idx;
@@ -301,8 +303,8 @@ int findTraceBackPosStatic(const dp_matrices& matrices, int* const i, int* const
         }
     }
     else if(type.freeQueryE){//banded update
-        for(int idx = min(matrices.L2, matrices.L1 + bandRight); 
-                idx >= min(matrices.L2, max(0,matrices.L1 - bandLeft)); 
+        for(int idx = min(matrices.L2, bandCorrection + matrices.L1 + bandRight); 
+                idx >= min(matrices.L2, max(0, bandCorrection + matrices.L1 - bandLeft)); 
                 idx--){
             if(M[idx][*j] > maximum){
                 maximum = M[idx][*j];
@@ -311,8 +313,8 @@ int findTraceBackPosStatic(const dp_matrices& matrices, int* const i, int* const
         }
     }
     else if(type.freeRefE){
-        for(int idx = min(matrices.L1, matrices.L2 + bandRight); 
-                idx >= min(matrices.L1, max(0,matrices.L2 - bandLeft)); 
+        for(int idx = min(matrices.L1, bandCorrection + matrices.L2 + bandRight); 
+                idx >= min(matrices.L1, max(0, bandCorrection + matrices.L2 - bandLeft)); 
                 idx--){
             if(M[*i][idx] > maximum){
                 maximum = M[*i][idx];
@@ -1109,7 +1111,7 @@ int dpBandStatic( const string&     ref,
     //traceback and output
     int        i = min(matrices.L2,matrices.L1+matrices.bandSize), j = min(matrices.L1,matrices.L2+matrices.bandSize);
     //find beginPosition for traceBack and find dpScore
-    findTraceBackPosStatic(matrices,&i,&j,type);
+    findTraceBackPosStatic(matrices,(!type.freeQueryB && !type.freeRefB), &i,&j,type);
     output.dpScore = M[i][j];
     //Next is for output only
     if(oType>DPSCORE){
@@ -1188,7 +1190,7 @@ int dpBandFull( const string& ref,
     //traceback and output
     int        i = min(matrices.L2,matrices.L1+matrices.bandLeft), j = min(matrices.L1,matrices.L2+matrices.bandRight);
     //find beginPosition for traceBack and find dpScore
-    findTraceBackPosStatic(matrices,&i,&j,type);
+    findTraceBackPosStatic(matrices, true, &i,&j,type);
     output.dpScore = M[i][j];
     //Next is for output only
     if(oType>DPSCORE){
