@@ -79,26 +79,56 @@ enum outputType{
     ALL
 };
 
+struct dynProg {
+
 //These fields should maybe be positioned somewhere else for multi-threading!!!
-static int ** M;
-static int ** UP;
-static int ** LEFT;
-static int DP_DIM;
-extern void initDPMatrix(int dimension, bool affine);
-extern void resizeDPMatrix(int dimension, bool affine);
-extern void deleteDPMatrix(bool affine);
+int ** M;
+int ** UP;
+int ** LEFT;
+int DP_DIM;
+int L1;
+int L2;
+int bandSize;
+int bandLeft;
+int bandRight;
+bool banded;
+dp_scores& scores;
 
-extern int dp( const string&, const string&, boundaries&, const dp_scores&, 
-        const dp_type&, const outputType&, dp_output&, bool print = false);
+// Constructor builds sparse suffix array.
+dynProg(int dimension, bool affine, dp_scores& scoreFunction);
+~dynProg();
 
-extern int dpBand( const string&, const string&, boundaries&, const dp_scores&, 
+void initDPMatrix(int dimension, bool affine);
+void resizeDPMatrix(int dimension, bool affine);
+void deleteDPMatrix(bool affine);
+
+int updateMatrix(const dp_type& type);
+int dpFillOptStatic(const string& ref,const string& query, bool forward, 
+        const boundaries& offset, const dp_type& type);
+int dpFillStatic(const string& ref,const string& query, bool forward,
+        const boundaries& offset, const dp_type& type);
+int findTraceBackPosStatic(bool forward, int* const i, int* const j,const dp_type& type);
+int dpTraceBackStatic(int& i, int& j, const dp_type& type, dp_output& output, 
+        stringstream & ss, const boundaries& offset, bool forward, const string& ref, const string& query);
+int dpTraceBackOptStatic(int& i, int& j, const dp_type& type, dp_output& output, 
+        stringstream & ss, const boundaries& offset, bool forward, const string& ref, const string& query);
+
+void  print_matrices(const string& ref, const string& query, const boundaries& offset, bool gapMatrices );
+void  print_seq( const string& ref,const string& query, boundaries& offset );
+
+//int dp( const string&, const string&, boundaries&, const dp_type&, 
+//        const outputType&, dp_output&, bool print = false);
+
+//int dpBand( const string&, const string&, boundaries&, const dp_type&, 
+//        const outputType&, dp_output&, int bandSize, bool print = false);
+
+int dpBandStatic( const string&, const string&, boundaries&, 
         const dp_type&, const outputType&, dp_output&, int bandSize, bool print = false);
 
-extern int dpBandStatic( const string&, const string&, boundaries&, const dp_scores&, 
-        const dp_type&, const outputType&, dp_output&, int bandSize, bool print = false);
-
-extern int dpBandFull( const string&, const string&, boundaries&, const dp_scores&, 
+int dpBandFull( const string&, const string&, boundaries&, 
         const dp_type&, const outputType&, dp_output&, int bandLeft, int bandRight, bool print = false);
+
+};
 
 #endif	/* DP_H */
 

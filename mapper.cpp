@@ -113,7 +113,9 @@ void calculateLISintervalsFair(vector<match_t>& matches, bool fw, int qLength, i
     }
 }
 
-bool extendAlignment(const string& S, const string& P, alignment_t& alignment, vector<match_t>& matches, int begin, int end, int editDist, const align_opt & alnOptions){
+bool extendAlignment(dynProg& dp_, const string& S, const string& P, 
+        alignment_t& alignment, vector<match_t>& matches, 
+        int begin, int end, int editDist, const align_opt & alnOptions){
     dp_output output;
     bool clipping = !alnOptions.noClipping;
     int curEditDist = 0;
@@ -132,7 +134,7 @@ bool extendAlignment(const string& S, const string& P, alignment_t& alignment, v
         dp_type types;
         types.freeRefB = true;
         types.freeQueryB = clipping;
-        dpBandStatic( S, P, grenzen, alnOptions.scores, types, ERRORSTRING, output, editDist-curEditDist, false);
+        dp_.dpBandStatic( S, P, grenzen, types, ERRORSTRING, output, editDist-curEditDist, false);
         if(clipping && grenzen.queryB> 0){
             alignment.cigarChars.push_back('S');
             alignment.cigarLengths.push_back(grenzen.queryB);
@@ -219,7 +221,7 @@ bool extendAlignment(const string& S, const string& P, alignment_t& alignment, v
             } else {//both distances are positive and not equal to (1,1)
                 boundaries grenzen(refstrRB + 1, refstrRB + minRefDist - 1, queryRB + 1, queryRB + minQDist - 1);
                 dp_type types;
-                dpBandStatic( S, P, grenzen, alnOptions.scores, types, ERRORSTRING, output, editDist-curEditDist, false);
+                dp_.dpBandStatic( S, P, grenzen, types, ERRORSTRING, output, editDist-curEditDist, false);
                 alignment.cigarChars.insert(alignment.cigarChars.end(), output.cigarChars.begin(), output.cigarChars.end());
                 alignment.cigarLengths.insert(alignment.cigarLengths.end(), output.cigarLengths.begin(), output.cigarLengths.end());
                 alignment.cigarChars.push_back('=');
@@ -248,7 +250,7 @@ bool extendAlignment(const string& S, const string& P, alignment_t& alignment, v
         dp_type types;
         types.freeRefE = true;
         types.freeQueryE = clipping;
-        dpBandStatic( S, P, grenzen, alnOptions.scores, types, ERRORSTRING, output, editDist-curEditDist+1, false);
+        dp_.dpBandStatic( S, P, grenzen, types, ERRORSTRING, output, editDist-curEditDist+1, false);
         if(grenzen.queryE > queryRB){
             int addToLength = grenzen.queryE-queryRB;
             if(output.cigarChars[output.cigarChars.size()-1] == 'I')
@@ -278,7 +280,7 @@ bool extendAlignment(const string& S, const string& P, alignment_t& alignment, v
         return false;
 }
 
-void inexactMatch(const sparseSA& sa, read_t & read,const align_opt & alnOptions, bool fwStrand, bool print){
+void inexactMatch(const sparseSA& sa, dynProg& dp_, read_t & read,const align_opt & alnOptions, bool fwStrand, bool print){
     string P = read.sequence;
     int Plength = P.length();
     int editDist = (int)(alnOptions.errorPercent*Plength)+1;
@@ -317,7 +319,7 @@ void inexactMatch(const sparseSA& sa, read_t & read,const align_opt & alnOptions
             //sort this candidate region by query position
             sort(matches.begin()+begin,matches.begin()+end+1, compMatchesQuery);
             alignment_t alignment;
-            bool extended = extendAlignment(sa.S, P, alignment, matches, begin, end, editDist, alnOptions);
+            bool extended = extendAlignment(dp_, sa.S, P, alignment, matches, begin, end, editDist, alnOptions);
             if(extended){
                 if(!fwStrand){
                     alignment.flag.set(4,true);
@@ -334,7 +336,7 @@ void inexactMatch(const sparseSA& sa, read_t & read,const align_opt & alnOptions
     }
 }
 
-void unpairedMatch(const sparseSA& sa, read_t & read,const align_opt & alnOptions, bool print){
+void unpairedMatch(const sparseSA& sa, dynProg& dp_, read_t & read,const align_opt & alnOptions, bool print){
     string P = read.sequence;
     string Prc = read.rcSequence;
     int Plength = P.length();
@@ -380,7 +382,7 @@ void unpairedMatch(const sparseSA& sa, read_t & read,const align_opt & alnOption
             //sort this candidate region by query position
             sort(matchVector->begin()+begin,matchVector->begin()+end+1, compMatchesQuery);
             alignment_t alignment;
-            bool extended = extendAlignment(sa.S, lisIntervals[lisIndex].fw ? P : Prc, alignment, *matchVector, begin, end, editDist, alnOptions);
+            bool extended = extendAlignment(dp_, sa.S, lisIntervals[lisIndex].fw ? P : Prc, alignment, *matchVector, begin, end, editDist, alnOptions);
             if(extended){
                 if(!lisIntervals[lisIndex].fw){
                     alignment.flag.set(4,true);
@@ -503,10 +505,10 @@ void setPaired(alignment_t& aln1, alignment_t& aln2, read_t& mate1, read_t& mate
     }
 }
 
-void pairedMatch1(const sparseSA& sa, read_t & mate1, read_t & mate2, const align_opt & alnOptions, const paired_opt & pairedOpt, bool print){
+void pairedMatch1(const sparseSA& sa, dynProg& dp_, read_t & mate1, read_t & mate2, const align_opt & alnOptions, const paired_opt & pairedOpt, bool print){
     //Calculate the mappings for read 1 and 2
-    unpairedMatch(sa, mate1, alnOptions, print);
-    unpairedMatch(sa, mate2, alnOptions, print);
+    unpairedMatch(sa, dp_, mate1, alnOptions, print);
+    unpairedMatch(sa, dp_, mate2, alnOptions, print);
     int alnCount1 = mate1.alignmentCount();
     int alnCount2 = mate2.alignmentCount();
     if(alnCount1>0 && alnCount2>0){
@@ -585,7 +587,7 @@ void pairedMatch1(const sparseSA& sa, read_t & mate1, read_t & mate2, const alig
     }
 }
 
-bool alignFromLIS(const sparseSA& sa, read_t& read, lis_t & lis, int editDist, const align_opt & alnOptions){
+bool alignFromLIS(const sparseSA& sa, dynProg& dp_, read_t& read, lis_t & lis, int editDist, const align_opt & alnOptions){
     if(lis.alignment != NULL)
         return true;
     alignment_t alignment;
@@ -594,7 +596,7 @@ bool alignFromLIS(const sparseSA& sa, read_t& read, lis_t & lis, int editDist, c
     vector<match_t>* matchVector = lis.matches;
     //sort this candidate region by query position
     sort(matchVector->begin()+begin,matchVector->begin()+end+1, compMatchesQuery);
-    bool extended = extendAlignment(sa.S, lis.fw ? read.sequence : read.rcSequence, alignment, *matchVector, begin, end, editDist, alnOptions);
+    bool extended = extendAlignment(dp_, sa.S, lis.fw ? read.sequence : read.rcSequence, alignment, *matchVector, begin, end, editDist, alnOptions);
     if(extended){
         if(!lis.fw){
             alignment.flag.set(4,true);
@@ -660,6 +662,7 @@ bool isPosConcordant(const lis_t& mate1, const lis_t& mate2, int editDist1, int 
 }
 
 void coupleLIS(const sparseSA& sa, 
+        dynProg & dp_,
         read_t & mate1, 
         read_t & mate2,
         vector<lis_t>& lisIntervalsFM1, 
@@ -685,8 +688,8 @@ void coupleLIS(const sparseSA& sa,
             if(isPosConcordant(lis1, lis2, editDistM1, editDistM2, M1length, M2length, pairedOpt)){//concordant (pos)
                 if(state==0){ state++; begin = j;}//first pos where a concordant alignment was found
                 //Align if necessary, 
-                bool firstAligned = alignFromLIS(sa, mate1, lis1, editDistM1, alnOptions);
-                bool secondAligned = alignFromLIS(sa, mate2, lis2, editDistM2, alnOptions);
+                bool firstAligned = alignFromLIS(sa, dp_, mate1, lis1, editDistM1, alnOptions);
+                bool secondAligned = alignFromLIS(sa, dp_, mate2, lis2, editDistM2, alnOptions);
                 //If both align: check pairing and set conc/disc: add to pairedInfo
                 if(firstAligned && secondAligned){
                     if(isConcordant(*lis1.alignment, *lis2.alignment, pairedOpt)){//concordant
@@ -710,7 +713,7 @@ void coupleLIS(const sparseSA& sa,
     }
 }
 
-void unpairedMatchFromLIS(const sparseSA& sa, read_t & read, vector<lis_t> & lisIntervals, const align_opt & alnOptions, int & alnCount){
+void unpairedMatchFromLIS(const sparseSA& sa, dynProg& dp_, read_t & read, vector<lis_t> & lisIntervals, const align_opt & alnOptions, int & alnCount){
     int editDist = (int)(alnOptions.errorPercent*read.sequence.size())+1;
     //sort candidate regions for likelyhood of an alignment
     sort(lisIntervals.begin(),lisIntervals.end(), compIntervals);
@@ -732,7 +735,7 @@ void unpairedMatchFromLIS(const sparseSA& sa, read_t & read, vector<lis_t> & lis
         //sort this candidate region by query position
         sort(matchVector->begin()+begin,matchVector->begin()+end+1, compMatchesQuery);
         alignment_t alignment;
-        bool extended = extendAlignment(sa.S, lisIntervals[lisIndex].fw ? read.sequence : read.rcSequence, 
+        bool extended = extendAlignment(dp_, sa.S, lisIntervals[lisIndex].fw ? read.sequence : read.rcSequence, 
                 alignment, *matchVector, begin, end, editDist, alnOptions);
         if(extended){
             if(!lisIntervals[lisIndex].fw){
@@ -749,7 +752,7 @@ void unpairedMatchFromLIS(const sparseSA& sa, read_t & read, vector<lis_t> & lis
 }
 
 //Calculate LIS of both mates, match together 2 LIS, if match, calculate both alignments
-void pairedMatch3(const sparseSA& sa, read_t & mate1, read_t & mate2, const align_opt & alnOptions, const paired_opt & pairedOpt){
+void pairedMatch3(const sparseSA& sa, dynProg& dp_, read_t & mate1, read_t & mate2, const align_opt & alnOptions, const paired_opt & pairedOpt){
     int concordant = 0;
     int discordant = 0;
     int min_len = alnOptions.minMemLength;
@@ -779,7 +782,7 @@ void pairedMatch3(const sparseSA& sa, read_t & mate1, read_t & mate2, const alig
         calculateLISintervals(firstmatchesM1, mate1FWfirst, M1length, editDistM1, lisIntervalsFM1);
         calculateLISintervals(firstmatchesM2, mate2FWfirst, M2length, editDistM2, lisIntervalsFM2);
         //find concordant intervals
-        coupleLIS(sa, mate1, mate2, lisIntervalsFM1, lisIntervalsFM2, concordant, discordant, alnOptions, pairedOpt);
+        coupleLIS(sa, dp_, mate1, mate2, lisIntervalsFM1, lisIntervalsFM2, concordant, discordant, alnOptions, pairedOpt);
     }
     //Do the same for other direction if necessary
     if(concordant < alnOptions.alignmentCount){
@@ -791,7 +794,7 @@ void pairedMatch3(const sparseSA& sa, read_t & mate1, read_t & mate2, const alig
             calculateLISintervals(secondmatchesM1, !mate1FWfirst, M1length, editDistM1, lisIntervalsSM1);
             calculateLISintervals(secondmatchesM2, !mate2FWfirst, M2length, editDistM2, lisIntervalsSM2);
             //find concordant intervals
-            coupleLIS(sa, mate1, mate2, lisIntervalsSM1, lisIntervalsSM2, concordant, discordant, alnOptions, pairedOpt);
+            coupleLIS(sa, dp_, mate1, mate2, lisIntervalsSM1, lisIntervalsSM2, concordant, discordant, alnOptions, pairedOpt);
         }
     }
     concordant = concordant + discordant;
@@ -803,8 +806,8 @@ void pairedMatch3(const sparseSA& sa, read_t & mate1, read_t & mate2, const alig
         lisIntervalsFM1.insert(lisIntervalsFM1.end(),lisIntervalsSM1.begin(),lisIntervalsSM1.end());
         lisIntervalsFM2.insert(lisIntervalsFM2.end(),lisIntervalsSM2.begin(),lisIntervalsSM2.end());
         //try to align some more LIS intervals
-        unpairedMatchFromLIS(sa, mate1, lisIntervalsFM1, alnOptions, concordant);
-        unpairedMatchFromLIS(sa, mate2, lisIntervalsFM2, alnOptions, concordant);
+        unpairedMatchFromLIS(sa, dp_, mate1, lisIntervalsFM1, alnOptions, concordant);
+        unpairedMatchFromLIS(sa, dp_, mate2, lisIntervalsFM2, alnOptions, concordant);
         //sort according to alignmentScore and globalPos
         sort(mate1.alignments.begin(),mate1.alignments.end(), compAlignmentScore);
         sort(mate2.alignments.begin(),mate2.alignments.end(), compAlignmentScore);
@@ -916,6 +919,7 @@ bool isConcordantAlnToLis(const alignment_t& mate1, const lis_t& mate2, bool mat
 }
 
 void matchStrandOfPair(const sparseSA& sa, 
+        dynProg & dp_,
         read_t & mate1, 
         read_t & mate2,
         vector<lis_t>& lisIntervalsFM1, 
@@ -953,7 +957,7 @@ void matchStrandOfPair(const sparseSA& sa,
             //sort this candidate region by query position
             sort(matchVector->begin()+begin,matchVector->begin()+end+1, compMatchesQuery);
             alignment_t alignment;
-            extended = extendAlignment(sa.S, lisIntervalsFM1[lisIndex].fw ? mate1.sequence : mate1.rcSequence, 
+            extended = extendAlignment(dp_, sa.S, lisIntervalsFM1[lisIndex].fw ? mate1.sequence : mate1.rcSequence, 
                     alignment, *matchVector, begin, end, editDistM1, alnOptions);
             if(extended){
                 if(!lisIntervalsFM1[lisIndex].fw)
@@ -980,7 +984,7 @@ void matchStrandOfPair(const sparseSA& sa,
                 }
                 else if(lis2.alignment == NULL && isConcordantAlnToLis(aln1, lis2, mate1isFirst, editDistM2, M2length, pairedOpt)){
                     state=1;
-                    if(alignFromLIS(sa, mate2, lis2, editDistM2, alnOptions)){
+                    if(alignFromLIS(sa, dp_, mate2, lis2, editDistM2, alnOptions)){
                         if(isConcordant(mate1isFirst ? aln1 : *lis2.alignment, mate1isFirst ? *lis2.alignment : aln1, pairedOpt)){//concordant
                             concordant++;
                             mate1isFirst ? setPaired(aln1,*lis2.alignment,mate1,mate2 , true) : setPaired(*lis2.alignment,aln1,mate2,mate1 , true);
@@ -1002,7 +1006,7 @@ void matchStrandOfPair(const sparseSA& sa,
 }
 
 //Calculate LIS of both mates, match together 2 LIS, if match, calculate both alignments
-void pairedMatch4(const sparseSA& sa, read_t & mate1, read_t & mate2, const align_opt & alnOptions, const paired_opt & pairedOpt){
+void pairedMatch4(const sparseSA& sa, dynProg& dp_, read_t & mate1, read_t & mate2, const align_opt & alnOptions, const paired_opt & pairedOpt){
     int concordant = 0;
     int discordant = 0;
     int min_len = alnOptions.minMemLength;
@@ -1032,7 +1036,7 @@ void pairedMatch4(const sparseSA& sa, read_t & mate1, read_t & mate2, const alig
         calculateLISintervals(firstmatchesM1, mate1FWfirst, M1length, editDistM1, lisIntervalsFM1);
         calculateLISintervals(firstmatchesM2, mate2FWfirst, M2length, editDistM2, lisIntervalsFM2);
         //find concordant intervals
-        matchStrandOfPair(sa, mate1, mate2, lisIntervalsFM1, lisIntervalsFM2, concordant, discordant, true, alnOptions, pairedOpt);
+        matchStrandOfPair(sa, dp_, mate1, mate2, lisIntervalsFM1, lisIntervalsFM2, concordant, discordant, true, alnOptions, pairedOpt);
     }
     //Do the same for other direction if necessary
     if(concordant < alnOptions.alignmentCount){
@@ -1044,21 +1048,21 @@ void pairedMatch4(const sparseSA& sa, read_t & mate1, read_t & mate2, const alig
             calculateLISintervals(secondmatchesM1, !mate1FWfirst, M1length, editDistM1, lisIntervalsSM1);
             calculateLISintervals(secondmatchesM2, !mate2FWfirst, M2length, editDistM2, lisIntervalsSM2);
             //find concordant intervals
-            matchStrandOfPair(sa, mate1, mate2, lisIntervalsSM1, lisIntervalsSM2, concordant, discordant, true, alnOptions, pairedOpt);
+            matchStrandOfPair(sa, dp_, mate1, mate2, lisIntervalsSM1, lisIntervalsSM2, concordant, discordant, true, alnOptions, pairedOpt);
         }
     }
     //Do the same for first direction of other mate
     if(concordant < alnOptions.alignmentCount){
         if(firstmatchesM1.size()>0 && firstmatchesM2.size()>0){
             //find concordant intervals
-            matchStrandOfPair(sa, mate2, mate1, lisIntervalsFM2, lisIntervalsFM1, concordant, discordant, false, alnOptions, pairedOpt);
+            matchStrandOfPair(sa, dp_, mate2, mate1, lisIntervalsFM2, lisIntervalsFM1, concordant, discordant, false, alnOptions, pairedOpt);
         }
     }
     //Do the same for second direction of other mate
     if(concordant < alnOptions.alignmentCount){
         if(secondmatchesM1.size()>0 && secondmatchesM2.size()>0){
             //find concordant intervals
-            matchStrandOfPair(sa, mate2, mate1, lisIntervalsSM2, lisIntervalsSM1, concordant, discordant, false, alnOptions, pairedOpt);
+            matchStrandOfPair(sa, dp_, mate2, mate1, lisIntervalsSM2, lisIntervalsSM1, concordant, discordant, false, alnOptions, pairedOpt);
         }
     }
     concordant = concordant + discordant;
@@ -1187,6 +1191,7 @@ bool dpWindow(const alignment_t& mate1, bool mate1isFirst, int editDist2, int M2
 }
 
 void pairedBowtie2(const sparseSA& sa, 
+        dynProg& dp_,
         read_t & mate1, 
         read_t & mate2,
         bool alignFirstMate,
@@ -1230,7 +1235,7 @@ void pairedBowtie2(const sparseSA& sa,
                 int end = lisIntervals[lisIndex].end;
                 sort(matches.begin()+begin,matches.begin()+end+1, compMatchesQuery);
                 alignment_t alignment;
-                bool extended = extendAlignment(sa.S, P, alignment, matches, begin, end, editDistBase, alnOptions);
+                bool extended = extendAlignment(dp_, sa.S, P, alignment, matches, begin, end, editDistBase, alnOptions);
                 if(extended){
                     alignment.setLocalPos(sa);
                     if(!forward)
@@ -1249,8 +1254,8 @@ void pairedBowtie2(const sparseSA& sa,
                     //find dp window
                     if(dpWindow(alignment, alignFirstMate, editDistOther, Olength, pairedOpt, 
                             grenzen, otherFW, bandLeft, bandRight))
-                        dpBandFull( sa.S, otherFW ? other.sequence : other.rcSequence, grenzen, 
-                            alnOptions.scores, types, ERRORSTRING, output, bandLeft, bandRight, false);
+                        dp_.dpBandFull( sa.S, otherFW ? other.sequence : other.rcSequence, grenzen, 
+                            types, ERRORSTRING, output, bandLeft, bandRight, false);
                     else
                         output.editDist = 2*editDistOther;
                     if(output.editDist <= editDistOther){
@@ -1283,7 +1288,7 @@ void pairedBowtie2(const sparseSA& sa,
 
 //Calculate Mates 1 at a time, without calculating seeds for the other
 //Optimalization: use 'Bailing' method: to enable/disable the calculation for the other mate
-void pairedMatch2(const sparseSA& sa, read_t & mate1, read_t & mate2, const align_opt & alnOptions, const paired_opt & pairedOpt){
+void pairedMatch2(const sparseSA& sa, dynProg& dp_, read_t & mate1, read_t & mate2, const align_opt & alnOptions, const paired_opt & pairedOpt){
     int concordant = 0;
     if((alnOptions.noFW || alnOptions.noRC))
         return;//no possible alignments
@@ -1291,13 +1296,13 @@ void pairedMatch2(const sparseSA& sa, read_t & mate1, read_t & mate2, const alig
     bool mate1FWfirst = pairedOpt.orientation == PAIR_FR || pairedOpt.orientation == PAIR_FF;
     bool mate2FWfirst = pairedOpt.orientation == PAIR_RF || pairedOpt.orientation == PAIR_FF;
     //concordant
-    pairedBowtie2(sa, mate1, mate2, true, mate1FWfirst, concordant, alnOptions, pairedOpt);
+    pairedBowtie2(sa, dp_, mate1, mate2, true, mate1FWfirst, concordant, alnOptions, pairedOpt);
     if(concordant < alnOptions.alignmentCount)
-        pairedBowtie2(sa, mate1, mate2, true, !mate1FWfirst, concordant, alnOptions, pairedOpt);
+        pairedBowtie2(sa, dp_, mate1, mate2, true, !mate1FWfirst, concordant, alnOptions, pairedOpt);
     if(concordant < alnOptions.alignmentCount)
-        pairedBowtie2(sa, mate1, mate2, false, mate2FWfirst, concordant, alnOptions, pairedOpt);
+        pairedBowtie2(sa, dp_, mate1, mate2, false, mate2FWfirst, concordant, alnOptions, pairedOpt);
     if(concordant < alnOptions.alignmentCount)
-        pairedBowtie2(sa, mate1, mate2, false, !mate2FWfirst, concordant, alnOptions, pairedOpt);
+        pairedBowtie2(sa, dp_, mate1, mate2, false, !mate2FWfirst, concordant, alnOptions, pairedOpt);
     //
     concordant = concordant;
     int maxScoreFirst;
@@ -1361,18 +1366,18 @@ void pairedMatch2(const sparseSA& sa, read_t & mate1, read_t & mate2, const alig
     }
 }
 
-void pairedMatch(const sparseSA& sa, read_t & mate1, read_t & mate2, const align_opt & alnOptions, const paired_opt & pairedOpt, int mode, bool print){
+void pairedMatch(const sparseSA& sa, dynProg& dp_, read_t & mate1, read_t & mate2, const align_opt & alnOptions, const paired_opt & pairedOpt, int mode, bool print){
     if(mode==1){
-        pairedMatch1(sa, mate1, mate2, alnOptions, pairedOpt, print);
+        pairedMatch1(sa, dp_, mate1, mate2, alnOptions, pairedOpt, print);
     }
     else if(mode==2){
-        pairedMatch2(sa, mate1, mate2, alnOptions, pairedOpt);
+        pairedMatch2(sa, dp_, mate1, mate2, alnOptions, pairedOpt);
     }
     else if(mode==3){
-        pairedMatch3(sa, mate1, mate2, alnOptions, pairedOpt);
+        pairedMatch3(sa, dp_, mate1, mate2, alnOptions, pairedOpt);
     }
     else if(mode==4){
-        pairedMatch4(sa, mate1, mate2, alnOptions, pairedOpt);
+        pairedMatch4(sa, dp_, mate1, mate2, alnOptions, pairedOpt);
     }
     else{
         //mode unknown

@@ -277,8 +277,6 @@ static void processParameters(int argc, char* argv[], mapOptions_t& opt, const s
                 throw 1;
             }
         }
-        opt.alnOptions.scores.updateScoreMatrixDna();
-        initDPMatrix(2048, opt.alnOptions.scores.openGap != 0);
         if(opt.alnOptions.alignmentCount < 1){
             opt.alnOptions.alignmentCount = 1;
             opt.alnOptions.unique = true;

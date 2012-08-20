@@ -89,6 +89,7 @@ struct query_arg {
   int skip0;
   int skip;
   mapOptions_t * opt;
+  dynProg * dp;
   pthread_mutex_t *readLock;
   pthread_mutex_t *writeLock;
 };
@@ -107,7 +108,7 @@ void *unpaired_thread(void *arg_) {
       if(hasRead){
           seq_cnt++;
           read.init(arg->opt->nucleotidesOnly);
-          unpairedMatch(*sa, read, arg->opt->alnOptions, print);
+          unpairedMatch(*sa, *arg->dp, read, arg->opt->alnOptions, print);
           read.postprocess(arg->opt->alnOptions.scores, *sa);
           //Ouput
           pthread_mutex_lock(arg->writeLock);
@@ -122,7 +123,7 @@ void *unpaired_thread(void *arg_) {
       }
   }
   printf("sequences mapped: %ld\n", seq_cnt);
-  
+  delete arg->dp;
   pthread_exit(NULL);
 }
 
@@ -140,10 +141,10 @@ void *query_thread(void *arg_) {
       if(hasRead){
           seq_cnt++;
           if(!arg->opt->alnOptions.noFW)//to inner funtion
-                inexactMatch(*sa, read, arg->opt->alnOptions, true, print);
+                inexactMatch(*sa, *arg->dp, read, arg->opt->alnOptions, true, print);
           if(!arg->opt->alnOptions.noRC){
               read.init(arg->opt->nucleotidesOnly);
-              inexactMatch(*sa, read, arg->opt->alnOptions, false, print);
+              inexactMatch(*sa, *arg->dp, read, arg->opt->alnOptions, false, print);
           }
           read.postprocess(arg->opt->alnOptions.scores, *sa);
           //Ouput
@@ -159,7 +160,7 @@ void *query_thread(void *arg_) {
       }
   }
   printf("sequences mapped: %ld\n", seq_cnt);
-  
+  delete arg->dp;
   pthread_exit(NULL);
 }
 
@@ -180,7 +181,7 @@ void *paired_thread1(void *arg_) {
           seq_cnt++;
           mate1.init(arg->opt->nucleotidesOnly);
           mate2.init(arg->opt->nucleotidesOnly);
-          pairedMatch(*sa, mate1, mate2, arg->opt->alnOptions, arg->opt->pairedOpt, 1, print);
+          pairedMatch(*sa, *arg->dp, mate1, mate2, arg->opt->alnOptions, arg->opt->pairedOpt, 1, print);
           mate1.postprocess(arg->opt->alnOptions.scores, *sa);
           mate2.postprocess(arg->opt->alnOptions.scores, *sa);
           //Ouput
@@ -205,7 +206,7 @@ void *paired_thread1(void *arg_) {
       }
   }
   printf("sequences mapped: %ld\n", seq_cnt);
-  
+  delete arg->dp;
   pthread_exit(NULL);
 }
 
@@ -259,6 +260,7 @@ int main(int argc, char* argv[]){
                 args[i].opt = & opt;
                 args[i].readLock = &queryReader->readLock_;
                 args[i].writeLock = &writeLock_;
+                args[i].dp = new dynProg(2048, opt.alnOptions.scores.openGap!=0, opt.alnOptions.scores);
             }
             // Create joinable threads to find MEMs.
             for(int i = 0; i < opt.query_threads; i++)
@@ -289,6 +291,7 @@ int main(int argc, char* argv[]){
                 args[i].opt = & opt;
                 args[i].readLock = &mate1Reader->readLock_;
                 args[i].writeLock = &writeLock_;
+                args[i].dp = new dynProg(2048, opt.alnOptions.scores.openGap!=0, opt.alnOptions.scores);
             }
             // Create joinable threads to find MEMs.
             for(int i = 0; i < opt.query_threads; i++)
@@ -309,7 +312,6 @@ int main(int argc, char* argv[]){
         }
         fclose( outfile );
         delete sa;
-        deleteDPMatrix(opt.alnOptions.scores.openGap != 0);
         cerr << "FINISHED" << endl;
     }
     return 0;

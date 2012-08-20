@@ -211,13 +211,13 @@ struct read_t {
     string rQual;
 };
 
-extern void unpairedMatch(const sparseSA& sa, read_t & read,const align_opt & alnOptions, bool print);
-extern void inexactMatch(const sparseSA& sa, read_t& read, const align_opt & alnOptions, bool fwStrand, bool print);
+extern void unpairedMatch(const sparseSA& sa, dynProg& dp_, read_t & read,const align_opt & alnOptions, bool print);
+extern void inexactMatch(const sparseSA& sa, dynProg& dp_, read_t& read, const align_opt & alnOptions, bool fwStrand, bool print);
 //TODO: calculate global position in above function
 
 //PAIRED END FUNCTIONS
 extern bool isConcordant(const alignment_t& mate1, const alignment_t& mate2, const paired_opt& options);
-extern void pairedMatch(const sparseSA& sa, read_t & mate1, read_t & mate2, const align_opt & alnOptions, const paired_opt & pairedOpt, int mode, bool print);
+extern void pairedMatch(const sparseSA& sa, dynProg& dp_, read_t & mate1, read_t & mate2, const align_opt & alnOptions, const paired_opt & pairedOpt, int mode, bool print);
 
 #endif	/* MAPPER_H */
 
