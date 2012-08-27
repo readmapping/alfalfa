@@ -65,7 +65,8 @@ void postProcess(vector<match_t> &matches){
 }
 
 void calculateSeeds(const sparseSA& sa, const string& P, int min_len, int alignmentCount, vector<match_t>& matches, bool tryHarder){
-    sa.SMAM(P, matches, min_len, alignmentCount, false);
+    int maxBranchWidth = max(alignmentCount,20);
+    sa.SMAM(P, matches, min_len, maxBranchWidth, false);
     if(tryHarder){//TODO: change try-harder to recalculate only after forward + reverse has been tried
         //easy solution: try reverse and if found: skip
         if(matches.empty())
