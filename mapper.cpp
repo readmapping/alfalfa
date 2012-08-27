@@ -1366,17 +1366,17 @@ void pairedMatch2(const sparseSA& sa, dynProg& dp_, read_t & mate1, read_t & mat
     }
 }
 
-void pairedMatch(const sparseSA& sa, dynProg& dp_, read_t & mate1, read_t & mate2, const align_opt & alnOptions, const paired_opt & pairedOpt, int mode, bool print){
-    if(mode==1){
+void pairedMatch(const sparseSA& sa, dynProg& dp_, read_t & mate1, read_t & mate2, const align_opt & alnOptions, const paired_opt & pairedOpt, bool print){
+    if(pairedOpt.mode==1){
         pairedMatch1(sa, dp_, mate1, mate2, alnOptions, pairedOpt, print);
     }
-    else if(mode==2){
+    else if(pairedOpt.mode==2){
         pairedMatch2(sa, dp_, mate1, mate2, alnOptions, pairedOpt);
     }
-    else if(mode==3){
+    else if(pairedOpt.mode==3){
         pairedMatch3(sa, dp_, mate1, mate2, alnOptions, pairedOpt);
     }
-    else if(mode==4){
+    else if(pairedOpt.mode==4){
         pairedMatch4(sa, dp_, mate1, mate2, alnOptions, pairedOpt);
     }
     else{

@@ -181,7 +181,7 @@ void *paired_thread1(void *arg_) {
           seq_cnt++;
           mate1.init(arg->opt->nucleotidesOnly);
           mate2.init(arg->opt->nucleotidesOnly);
-          pairedMatch(*sa, *arg->dp, mate1, mate2, arg->opt->alnOptions, arg->opt->pairedOpt, 1, print);
+          pairedMatch(*sa, *arg->dp, mate1, mate2, arg->opt->alnOptions, arg->opt->pairedOpt, print);
           mate1.postprocess(arg->opt->alnOptions.scores, *sa);
           mate2.postprocess(arg->opt->alnOptions.scores, *sa);
           //Ouput

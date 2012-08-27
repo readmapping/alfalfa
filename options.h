@@ -40,6 +40,7 @@ struct paired_opt {
     bool dovetail;
     bool contain;
     bool overlap;
+    int mode;
     orientation_t orientation;
 };
 
@@ -78,6 +79,7 @@ struct mapOptions_t{//commentary + sort + constructor
         pairedOpt.mixed = true;
         pairedOpt.orientation = PAIR_FR;
         pairedOpt.overlap = true;
+        pairedOpt.mode = 1;
         unpairedQ = pair1 = pair2 = ref_fasta = outputName = "";
         command = ALN;
     }
@@ -104,7 +106,7 @@ struct mapOptions_t{//commentary + sort + constructor
     paired_opt pairedOpt;
 };
 
-static const char * short_options = "s:k:l:nq:d:m:u:o:e:C:T:hx:U:1:2:S:I:X:";
+static const char * short_options = "s:k:L:np:d:m:u:o:e:C:T:hx:U:1:2:S:I:X:";
 
 //Reads from - to ; trim ; phred quals
 enum {
@@ -122,22 +124,23 @@ enum {
     ARG_NO_DISCORDANT,   //--no-discordant
     ARG_DOVETAIL,        //--dovetail
     ARG_NO_CONTAIN,      //--no-contain
-    ARG_NO_OVERLAP       //--no-overlap
+    ARG_NO_OVERLAP,      //--no-overlap
+    ARG_PAIR_MODE        //--paired-mode
 };
 
 static struct option long_options[] = {
     {(char*)"sparsityfactor",   required_argument, 0,            's'},
-    {(char*)"threads",          required_argument, 0,            'q'},
+    {(char*)"threads",          required_argument, 0,            'p'},
     {(char*)"verbose",          no_argument,       0,            ARG_VERBOSE},
-    {(char*)"seedminlength",    required_argument, 0,            'l'},
+    {(char*)"seedminlength",    required_argument, 0,            'L'},
     {(char*)"alignments",       required_argument, 0,            'k'},
     {(char*)"trials",           required_argument, 0,            'T'},
     {(char*)"mincoverage",      required_argument, 0,            'C'},
     {(char*)"errors",           required_argument, 0,            'd'},
     {(char*)"tryharder",        no_argument,       0,            ARG_TRY_HARDER},
     {(char*)"seedthreads",      required_argument, 0,            ARG_SEED_THREADS},
-    {(char*)"noFw",             no_argument,       0,            ARG_NOFW},
-    {(char*)"noRc",             no_argument,       0,            ARG_NORC},
+    {(char*)"nofw",             no_argument,       0,            ARG_NOFW},
+    {(char*)"norc",             no_argument,       0,            ARG_NORC},
     {(char*)"wildcards",        no_argument,       0,            'N'},
     {(char*)"softclipping",     no_argument,       0,            ARG_CLIP},
     {(char*)"match",            required_argument, 0,            'm'},
@@ -155,6 +158,7 @@ static struct option long_options[] = {
     {(char*)"dovetail",         no_argument,       0,            ARG_DOVETAIL},
     {(char*)"no-contain",       no_argument,       0,            ARG_NO_CONTAIN},
     {(char*)"no-overlap",       no_argument,       0,            ARG_NO_OVERLAP},
+    {(char*)"paired-mode",      required_argument, 0,            ARG_PAIR_MODE},
     {(char*)0, 0, 0, 0} // terminator
 };
 
@@ -174,18 +178,18 @@ static void usage(const string prog) {
   cerr << endl;
   cerr << "PERFORMANCE OPTIONS " << endl;
   cerr << "-s/--sparsityfactor (int)  the sparsity factor of the sparse suffix array index, values between 1 and 4 are preferred [1]" << endl;
-  cerr << "-q/--threads (int)    number of threads [1]" << endl;
+  cerr << "-p/--threads (int)    number of threads [1]" << endl;
   cerr << endl;
   cerr << "ALIGNMENT OPTIONS " << endl;
   cerr << "-d/--errors (double)       percentage of errors allowed according to the edit distance [0.08]" << endl;
-  cerr << "-l/--seedminlength (int)   minimum length of the seeds used [depending on errorPercent and read length, min 20]" << endl;
+  cerr << "-L/--seedminlength (int)   minimum length of the seeds used [depending on errorPercent and read length, min 20]" << endl;
   cerr << "-k/--alignments (int)      expected number of alignments required per strand per read [50]" << endl;
   cerr << "-T/--trials (int)          maximum number of times alignment is attempted before we give up [10]" << endl;
   cerr << "-C/--mincoverage (int)     minimum percent of bases of read the seeds have to cover [25]" << endl;
   cerr << "--tryharder                enable: 'try harder': when no seeds have been found, search using less stringent parameters" << endl;
   cerr << "--seedthreads (int)        number of threads for calculating the seeds [1]" << endl;
-  cerr << "--noFw                     do not compute forward matches" << endl;
-  cerr << "--noRc                     do not compute reverse complement matches" << endl;
+  cerr << "--nofw                     do not compute forward matches" << endl;
+  cerr << "--norc                     do not compute reverse complement matches" << endl;
   cerr << "-n/--wildcards             treat Ns as wildcard characters" << endl;
   cerr << "--softclipping          allow soft clipping at the beginning and end of an alignment" << endl;
   cerr << endl;
@@ -205,6 +209,7 @@ static void usage(const string prog) {
   cerr << "--dovetail                 allow reads to dovetail (changing up- and downstream of reads)" << endl;
   cerr << "--no-contain               disallow a mate to be fully contained in the other" << endl;
   cerr << "--no-overlap               disallow a mate to overlap with the other" << endl;
+  cerr << "--paired-mode (int)        choose algorithm to calculate paired-end reads" << endl;
   cerr << endl;
   cerr << "MISC OPTIONS " << endl;
   cerr << "--verbose               enable verbose mode (not by default)" << endl;
@@ -243,14 +248,14 @@ static void processParameters(int argc, char* argv[], mapOptions_t& opt, const s
                 case 'S': opt.outputName = optarg; break;
                 case 's': opt.K = atoi(optarg); break;
                 case 'k': opt.alnOptions.alignmentCount = atoi(optarg); break;
-                case 'l': opt.alnOptions.minMemLength = atoi(optarg); opt.alnOptions.fixedMinLength = true; break;
+                case 'L': opt.alnOptions.minMemLength = atoi(optarg); opt.alnOptions.fixedMinLength = true; break;
                 case ARG_NOFW: opt.alnOptions.noFW = 1; break;
                 case ARG_NORC: opt.alnOptions.noRC = 1; break;
                 case 'n': opt.nucleotidesOnly = 1; break;
                 case ARG_VERBOSE: opt.verbose = 1; break;
                 case ARG_CLIP: opt.alnOptions.noClipping = false; break;
                 case 't': opt.alnOptions.numThreads = atoi(optarg); break;
-                case 'q': opt.query_threads = atoi(optarg); break;
+                case 'p': opt.query_threads = atoi(optarg); break;
                 case 'm': opt.alnOptions.scores.match = atoi(optarg); break;
                 case 'u': opt.alnOptions.scores.mismatch = atoi(optarg); break;
                 case 'o': opt.alnOptions.scores.openGap = atoi(optarg); break;
@@ -270,6 +275,7 @@ static void processParameters(int argc, char* argv[], mapOptions_t& opt, const s
                 case ARG_DOVETAIL: opt.pairedOpt.dovetail = true; break;
                 case ARG_NO_CONTAIN: opt.pairedOpt.contain = false; break;
                 case ARG_NO_OVERLAP: opt.pairedOpt.overlap = false; break;
+                case ARG_PAIR_MODE: opt.pairedOpt.mode = atoi(optarg); break;
                 case -1: /* Done with options. */
                 break;
                 case 0: if (long_options[option_index].flag != 0) break;
