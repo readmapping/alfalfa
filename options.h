@@ -177,12 +177,12 @@ static void usage(const string prog) {
   cerr << "-S                         output file name (will be sam)" << endl;
   cerr << endl;
   cerr << "PERFORMANCE OPTIONS " << endl;
-  cerr << "-s/--sparsityfactor (int)  the sparsity factor of the sparse suffix array index, values between 1 and 4 are preferred [1]" << endl;
+  cerr << "-s/--sparsityfactor (int)  the sparsity factor of the sparse suffix array index, value needs to be lower than -L parameter [1]" << endl;
   cerr << "-p/--threads (int)    number of threads [1]" << endl;
   cerr << endl;
   cerr << "ALIGNMENT OPTIONS " << endl;
   cerr << "-d/--errors (double)       percentage of errors allowed according to the edit distance [0.08]" << endl;
-  cerr << "-L/--seedminlength (int)   minimum length of the seeds used [depending on errorPercent and read length, min 20]" << endl;
+  cerr << "-L/--seedminlength (int)   minimum length of the seeds used [depending on errorPercent and read length, [min 20]" << endl;
   cerr << "-k/--alignments (int)      expected number of alignments required per strand per read [50]" << endl;
   cerr << "-T/--trials (int)          maximum number of times alignment is attempted before we give up [10]" << endl;
   cerr << "-C/--mincoverage (int)     minimum percent of bases of read the seeds have to cover [25]" << endl;

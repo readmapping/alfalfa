@@ -54,3 +54,18 @@ v0.3.4
 v0.3.5
 *changed dynamic programming: only initialise when necessairy, instead of for every run of the routine.
 *changed dynamic programming: calculate trace after filling the DP matrix, instead of working with a trace matrix
+
+v0.5.0
+*reordered code and separated classes to enable easier extension of the code
+*changed behaviour for parameter 'k'. Now 'k' means the maximum amount of alignments to be searched for read (both strands included)
+*fixed bug for k=1, where 0 alignments were searched
+*added new unpaired reads mapping function that first calculates candidate region for both orientations of the read before extension
+*changed command line parameters to be more like bowtie2
+
+*paired-end read support!!!
+*added api for paired-end reads
+*added 4 different algorithms to map paired end reads
+
+*fixed multithreading issue with semi-static DP matrix, now every thread has its own DP matrix.
+*fixed bug in traceback of DP algorithm
+*added banded DP mode with non-symmetrical band (used in paired-end algorithm)
