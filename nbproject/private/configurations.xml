@@ -106,8 +106,9 @@
           <runcommandpicklistitem>"${OUTPUT_PATH}" aln -s 1 C:/data/reference/drosophila/genome.fasta C:/data/reference/drosophila/reads_454/SRR034673.10k.fastq</runcommandpicklistitem>
           <runcommandpicklistitem>"${OUTPUT_PATH}" aln -s 1 -x C:/data/reference/drosophila/genome.fasta -U C:/data/reference/drosophila/reads_454/SRR034673.10k.fastq</runcommandpicklistitem>
           <runcommandpicklistitem>"${OUTPUT_PATH}" aln -s 1 -x C:/data/reference/drosophila/genome.fasta -U C:/data/reference/drosophila/reads_454/SRR034673.10k.fastq -S C:/data/reference/drosophila/reads_454/SRR034673.10k.sam</runcommandpicklistitem>
+          <runcommandpicklistitem>"${OUTPUT_PATH}" aln -s 1 -x C:/data/reference/drosophila/chr22.fa -U C:/data/reference/drosophila/hg_400Roche -S C:/data/reference/drosophila/test.sam</runcommandpicklistitem>
         </runcommandpicklist>
-        <runcommand>"${OUTPUT_PATH}" aln -s 1 -x C:/data/reference/drosophila/genome.fasta -U C:/data/reference/drosophila/reads_454/SRR034673.10k.fastq -S C:/data/reference/drosophila/reads_454/SRR034673.10k.sam</runcommand>
+        <runcommand>"${OUTPUT_PATH}" aln -s 1 -x C:/data/reference/drosophila/chr22.fa -U C:/data/reference/drosophila/hg_400Roche -S C:/data/reference/drosophila/test.sam</runcommand>
         <rundir></rundir>
         <buildfirst>true</buildfirst>
         <terminal-type>0</terminal-type>

@@ -310,7 +310,7 @@ void inexactMatch(const sparseSA& sa, dynProg& dp_, read_t & read,const align_op
         //////////////////////
         //MAIN ALIGNMENT LOOP
         //////////////////////
-        while(alnCount < alnOptions.alignmentCount/2 &&
+        while(alnCount < max(1,alnOptions.alignmentCount/2) &&
                 lisIndex < lisIntervals.size() &&
                 lisIntervals[lisIndex].len > (Plength*alnOptions.minCoverage)/100 &&
                 trial < alnOptions.maxTrial){

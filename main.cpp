@@ -47,7 +47,7 @@ using namespace std;
 //mapper options
 static const string PROG = "ALFALFA";
 static const string SAM_VERSION = "1.4";
-static const string PROG_VERSION = "0.3.5";
+static const string PROG_VERSION = "0.5.0";
 static string NAN = "*";
 
 //output struct
