@@ -136,6 +136,9 @@ bool extendAlignment(dynProg& dp_, const string& S, const string& P,
         types.freeRefB = true;
         types.freeQueryB = clipping;
         dp_.dpBandStatic( S, P, grenzen, types, ERRORSTRING, output, editDist-curEditDist, false);
+        queryLB = grenzen.queryB;
+        if(output.cigarChars[output.cigarChars[0]] == 'I')
+                queryLB += output.cigarLengths[0];
         if(clipping && grenzen.queryB> 0){
             alignment.cigarChars.push_back('S');
             alignment.cigarLengths.push_back(grenzen.queryB);
@@ -242,7 +245,7 @@ bool extendAlignment(dynProg& dp_, const string& S, const string& P,
     ////////////
     //possible at the end characters
     //mapInterval += Integer.toString(queryRB+1)+"]";
-    alignment.refLength = queryRB-alignment.globPos+1;
+    alignment.refLength = queryRB-queryLB;
     if (queryRB + 1 < P.length() && refstrRB < S.length() - 1 && curEditDist <= editDist) {
         int refAlignRB = refstrRB + (P.length() - queryRB) + 1 + editDist - curEditDist;
         if (refAlignRB >= S.length())
@@ -472,6 +475,10 @@ void setPairedFields(alignment_t& toset, alignment_t& mate, bool firstMate, bool
     toset.concordant = concordant;
     if(toset.rname == mate.rname){
         toset.rnext = "=";
+//        printf("toset.pos %ld\n", toset.pos);
+//        printf("toset.refLength %ld\n", toset.refLength);
+//        printf("mate.pos %ld\n", mate.pos);
+//        printf("mate.refLength %ld\n", mate.refLength);
         toset.tLength = max(toset.pos+toset.refLength-1,mate.pos+mate.refLength-1) - min(toset.pos,mate.pos) + 1;
         long firstPos = toset.flag.test(4) ? toset.pos+toset.refLength-1 : toset.pos;
         long secondPos = mate.flag.test(4) ? mate.pos+mate.refLength-1 : mate.pos;
@@ -1265,7 +1272,7 @@ void pairedBowtie2(const sparseSA& sa,
                         mate.cigarChars.insert(mate.cigarChars.end(),output.cigarChars.begin(),output.cigarChars.end());
                         mate.cigarLengths.insert(mate.cigarLengths.end(),output.cigarLengths.begin(),output.cigarLengths.end());
                         mate.globPos = grenzen.refB+1;
-                        mate.refLength = grenzen.queryE-alignment.globPos+1;
+                        mate.refLength = grenzen.refE-grenzen.refB+1;
                         mate.editDist = output.editDist;
                         if(!otherFW)
                             mate.flag.set(4,true);
@@ -1367,6 +1374,7 @@ void pairedMatch2(const sparseSA& sa, dynProg& dp_, read_t & mate1, read_t & mat
     }
 }
 
+//MODE 3 AND 4 NOT WORKING: [3] crash, [4] not pairing!!!
 void pairedMatch(const sparseSA& sa, dynProg& dp_, read_t & mate1, read_t & mate2, const align_opt & alnOptions, const paired_opt & pairedOpt, bool print){
     if(pairedOpt.mode==1){
         pairedMatch1(sa, dp_, mate1, mate2, alnOptions, pairedOpt, print);

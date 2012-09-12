@@ -99,6 +99,8 @@ void *unpaired_thread(void *arg_) {
   query_arg *arg = (query_arg *)arg_;
   bool print = arg->opt->verbose;
   long seq_cnt = 0;
+  long seq_mapped = 0;
+  long alignments_printed = 0;
   bool hasRead = true;
   while(hasRead){
       read_t read;
@@ -113,16 +115,22 @@ void *unpaired_thread(void *arg_) {
           //Ouput
           pthread_mutex_lock(arg->writeLock);
           stringstream * ss = new stringstream;
-          if(read.alignments.empty())
+          if(read.alignments.empty()){
               fprintf(outfile,"%s",read.emptyAlingment(false,false).c_str());
-          else
+          }
+          else{
+              seq_mapped++;
+              alignments_printed += read.alignmentCount();
               for(int k = 0; k < read.alignmentCount(); k++)
                 fprintf(outfile,"%s",read.printAlignment(k).c_str());
+          }
           pthread_mutex_unlock(arg->writeLock);
           delete ss;
       }
   }
-  printf("sequences mapped: %ld\n", seq_cnt);
+  printf("sequences read: %ld\n", seq_cnt);
+  printf("sequences mapped: %ld\n", seq_mapped);
+  printf("alignments printed: %ld\n", alignments_printed);
   delete arg->dp;
   pthread_exit(NULL);
 }
@@ -132,6 +140,8 @@ void *query_thread(void *arg_) {
   query_arg *arg = (query_arg *)arg_;
   bool print = arg->opt->verbose;
   long seq_cnt = 0;
+  long seq_mapped = 0;
+  long alignments_printed = 0;
   bool hasRead = true;
   while(hasRead){
       read_t read;
@@ -140,8 +150,9 @@ void *query_thread(void *arg_) {
       pthread_mutex_unlock(arg->readLock);
       if(hasRead){
           seq_cnt++;
-          if(!arg->opt->alnOptions.noFW)//to inner funtion
-                inexactMatch(*sa, *arg->dp, read, arg->opt->alnOptions, true, print);
+          if(!arg->opt->alnOptions.noFW){//to inner funtion
+              inexactMatch(*sa, *arg->dp, read, arg->opt->alnOptions, true, print);
+          }
           if(!arg->opt->alnOptions.noRC){
               read.init(arg->opt->nucleotidesOnly);
               inexactMatch(*sa, *arg->dp, read, arg->opt->alnOptions, false, print);
@@ -152,14 +163,19 @@ void *query_thread(void *arg_) {
           stringstream * ss = new stringstream;
           if(read.alignments.empty())
               fprintf(outfile,"%s",read.emptyAlingment(false,false).c_str());
-          else
+          else{
+              seq_mapped++;
+              alignments_printed += read.alignmentCount();
               for(int k = 0; k < read.alignmentCount(); k++)
                 fprintf(outfile,"%s",read.printAlignment(k).c_str());
+          }
           pthread_mutex_unlock(arg->writeLock);
           delete ss;
       }
   }
-  printf("sequences mapped: %ld\n", seq_cnt);
+  printf("sequences read: %ld\n", seq_cnt);
+  printf("sequences mapped: %ld\n", seq_mapped);
+  printf("alignments printed: %ld\n", alignments_printed);
   delete arg->dp;
   pthread_exit(NULL);
 }
@@ -169,6 +185,10 @@ void *paired_thread1(void *arg_) {
   query_arg *arg = (query_arg *)arg_;
   bool print = arg->opt->verbose;
   long seq_cnt = 0;
+  long seq_mapped1 = 0;
+  long alignments_printed1 = 0;
+  long seq_mapped2 = 0;
+  long alignments_printed2 = 0;
   bool hasRead = true;
   while(hasRead){
       read_t mate1;
@@ -178,6 +198,10 @@ void *paired_thread1(void *arg_) {
       hasRead = mate2Reader->nextRead(mate2.qname,mate2.sequence,mate2.qual);
       pthread_mutex_unlock(arg->readLock);
       if(hasRead){
+          if(mate1.qname.length() > 2 && mate1.qname[mate1.qname.length()-2]=='/')
+              mate1.qname.erase(mate1.qname.length()-2);
+          if(mate2.qname.length() > 2 && mate2.qname[mate2.qname.length()-2]=='/')
+              mate2.qname.erase(mate2.qname.length()-2);
           seq_cnt++;
           mate1.init(arg->opt->nucleotidesOnly);
           mate2.init(arg->opt->nucleotidesOnly);
@@ -190,6 +214,8 @@ void *paired_thread1(void *arg_) {
           if(mate1.alignments.empty())
               fprintf(outfile,"%s",mate1.emptyAlingment(true,mate2.alignments.empty()).c_str());
           else{
+              seq_mapped1++;
+              alignments_printed1+= mate1.alignmentCount();
               for(int k = 0; k < mate1.alignmentCount(); k++)
                   if(mate1.alignments[k].flag.test(0))
                     fprintf(outfile,"%s",mate1.printAlignment(k).c_str());
@@ -197,6 +223,8 @@ void *paired_thread1(void *arg_) {
           if(mate2.alignments.empty())
               fprintf(outfile,"%s",mate2.emptyAlingment(true,mate1.alignments.empty()).c_str());
           else{
+              seq_mapped2++;
+              alignments_printed2+= mate2.alignmentCount();
               for(int k = 0; k < mate2.alignmentCount(); k++)
                   if(mate2.alignments[k].flag.test(0))
                     fprintf(outfile,"%s",mate2.printAlignment(k).c_str());
@@ -204,8 +232,13 @@ void *paired_thread1(void *arg_) {
           pthread_mutex_unlock(arg->writeLock);
           delete ss;
       }
+      //hasRead = false;
   }
-  printf("sequences mapped: %ld\n", seq_cnt);
+  printf("sequences read: %ld\n", seq_cnt);
+  printf("sequences mapped (mate1): %ld\n", seq_mapped1);
+  printf("sequences mapped (mate2): %ld\n", seq_mapped2);
+  printf("alignments printed (mate1): %ld\n", alignments_printed1);
+  printf("alignments printed (mate2): %ld\n", alignments_printed2);
   delete arg->dp;
   pthread_exit(NULL);
 }
