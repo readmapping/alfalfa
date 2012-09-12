@@ -32,42 +32,43 @@
 using namespace std;
 
 dynProg::dynProg(int dimension, bool affine, dp_scores& scoreFunction): 
-    L1(0), L2(0), DP_DIM(0), bandSize(0), bandLeft(0), bandRight(0), banded(false), scores(scoreFunction) {
+    L1(0), L2(0), DP_L2(0), DP_L1(0), bandSize(0), bandLeft(0), bandRight(0), banded(false), scores(scoreFunction) {
     scores.updateScoreMatrixDna();
-    initDPMatrix(dimension, affine);
+    initDPMatrix(dimension, dimension, affine);
 }
 
 dynProg::~dynProg(){
     deleteDPMatrix(scores.openGap!=0);
 }
 
-void dynProg::initDPMatrix(int dimension, bool affine){
-    DP_DIM = dimension;
-    M = new int * [DP_DIM];
-    for(int i = 0; i < DP_DIM; i++){
-        M[i] = new int[DP_DIM];
+void dynProg::initDPMatrix(int dimensionL2, int dimensionL1, bool affine){
+    DP_L2 = dimensionL2;
+    DP_L1 = dimensionL1;
+    M = new int * [DP_L2];
+    for(int i = 0; i < DP_L2; i++){
+        M[i] = new int[DP_L1];
     }
     if(affine){
-        UP = new int * [DP_DIM];
-        LEFT = new int * [DP_DIM];
-        for(int i = 0; i < DP_DIM; i++){
-            UP[i] = new int[DP_DIM];
-            LEFT[i] = new int[DP_DIM];
+        UP = new int * [DP_L1];
+        LEFT = new int * [DP_L1];
+        for(int i = 0; i < DP_L2; i++){
+            UP[i] = new int[DP_L1];
+            LEFT[i] = new int[DP_L1];
         }
     }
 }
 
-void dynProg::resizeDPMatrix(int dimension, bool affine){
+void dynProg::resizeDPMatrix(int dimensionL2, int dimensionL1, bool affine){
     deleteDPMatrix(affine);
-    initDPMatrix(dimension, affine);
+    initDPMatrix(dimensionL2, dimensionL1, affine);
 }
 
 void dynProg::deleteDPMatrix(bool affine){
-    for(int i = 0; i < DP_DIM; i++)
+    for(int i = 0; i < DP_L2; i++)
         delete[] M[ i ];
     delete[] M;
     if(affine){
-        for(int i = 0; i < DP_DIM; i++){
+        for(int i = 0; i < DP_L2; i++){
             delete[] UP[ i ];
             delete[] LEFT[ i ];
         }
@@ -123,13 +124,16 @@ void dp_scores::updateScoreMatrixDna(){//presumes match/mismatch has been added 
 int dynProg::updateMatrix(const dp_type& type){
     //TODO: change this to mallocs and initialize once per thread + realloc if nec.
     assert(L1 >=0 && L2 >= 0);
-    int maxDim = max(L1, L2);
-    int newDim = DP_DIM;
-    while(maxDim+1 > newDim){
-        newDim = 2*newDim;
+    int newDimL2 = DP_L2;
+    while(L2 > newDimL2){
+        newDimL2 = 2*newDimL2;
     }
-    if(newDim > DP_DIM)
-        resizeDPMatrix(newDim, scores.openGap != 0);
+    int newDimL1 = DP_L1;
+    while(L1 > newDimL1){
+        newDimL1 = 2*newDimL1;
+    }
+    if(newDimL2 > DP_L2 || newDimL1 > DP_L1)
+        resizeDPMatrix(newDimL2, newDimL1, scores.openGap != 0);
     //assert(!banded || (!type.freeQueryB && !type.freeRefB));
     M[0][0] = 0;
     if(type.freeQueryB)//no need for reinitialization if same values

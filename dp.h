@@ -85,7 +85,8 @@ struct dynProg {
 int ** M;
 int ** UP;
 int ** LEFT;
-int DP_DIM;
+int DP_L2;
+int DP_L1;
 int L1;
 int L2;
 int bandSize;
@@ -98,8 +99,8 @@ dp_scores& scores;
 dynProg(int dimension, bool affine, dp_scores& scoreFunction);
 ~dynProg();
 
-void initDPMatrix(int dimension, bool affine);
-void resizeDPMatrix(int dimension, bool affine);
+void initDPMatrix(int dimensionL2, int dimensionL1, bool affine);
+void resizeDPMatrix(int dimensionL2, int dimensionL1, bool affine);
 void deleteDPMatrix(bool affine);
 
 int updateMatrix(const dp_type& type);
