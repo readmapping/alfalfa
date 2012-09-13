@@ -156,48 +156,48 @@ void sparseSA::computeLCP() {
 
 // Child array construction algorithm
 void sparseSA::computeChild() {
-    for(int i = 0; i < N/K; i++){
+    for(long i = 0; i < N/K; i++){
         CHILD[i] = -1;
     }
-        //Compute up and down values
-        int lastIndex  = -1;
-        stack<int,vector<int> > stapelUD;
-        stapelUD.push(0);
-        for(int i = 1; i < N/K; i++){
-            while(LCP[i] < LCP[stapelUD.top()]){
-                lastIndex = stapelUD.top();
-                stapelUD.pop();
-                if(LCP[i] <= LCP[stapelUD.top()] && LCP[stapelUD.top()] != LCP[lastIndex]){
-                    CHILD[stapelUD.top()] = lastIndex;
-                }
-            }
-            //now LCP[i] >= LCP[top] holds
-            if(lastIndex != -1){
-                CHILD[i-1] = lastIndex;
-                lastIndex = -1;
-            }
-            stapelUD.push(i);
-        }
-        while(0 < LCP[stapelUD.top()]){//last row (fix for last character of sequence not being unique
+    //Compute up and down values
+    long lastIndex  = -1;
+    stack<long,vector<long> > stapelUD;
+    stapelUD.push(0);
+    for(long i = 1; i < N/K; i++){
+        while(LCP[i] < LCP[stapelUD.top()]){
             lastIndex = stapelUD.top();
             stapelUD.pop();
-            if(0 <= LCP[stapelUD.top()] && LCP[stapelUD.top()] != LCP[lastIndex]){
+            if(LCP[i] <= LCP[stapelUD.top()] && LCP[stapelUD.top()] != LCP[lastIndex]){
                 CHILD[stapelUD.top()] = lastIndex;
             }
         }
-        //Compute Next L-index values
-        stack<int,vector<int> > stapelNL;
-        stapelNL.push(0);
-        for(int i = 1; i < N/K; i++){
-            while(LCP[i] < LCP[stapelNL.top()])
-                stapelNL.pop();
-            lastIndex = stapelNL.top();
-            if(LCP[i] == LCP[lastIndex]){
-                stapelNL.pop();
-                CHILD[lastIndex] = i;
-            }
-            stapelNL.push(i);
+        //now LCP[i] >= LCP[top] holds
+        if(lastIndex != -1){
+            CHILD[i-1] = lastIndex;
+            lastIndex = -1;
         }
+        stapelUD.push(i);
+    }
+    while(0 < LCP[stapelUD.top()]){//last row (fix for last character of sequence not being unique
+        lastIndex = stapelUD.top();
+        stapelUD.pop();
+        if(0 <= LCP[stapelUD.top()] && LCP[stapelUD.top()] != LCP[lastIndex]){
+            CHILD[stapelUD.top()] = lastIndex;
+        }
+    }
+    //Compute Next L-index values
+    stack<long,vector<long> > stapelNL;
+    stapelNL.push(0);
+    for(long i = 1; i < N/K; i++){
+        while(LCP[i] < LCP[stapelNL.top()])
+            stapelNL.pop();
+        lastIndex = stapelNL.top();
+        if(LCP[i] == LCP[lastIndex]){
+            stapelNL.pop();
+            CHILD[lastIndex] = i;
+        }
+        stapelNL.push(i);
+    }
 }
 
 
@@ -324,39 +324,39 @@ void sparseSA::traverse(const string &P, long prefix, interval_t &cur, int min_l
 // Uses the child table for faster traversal
 void sparseSA::traverse_faster(const string &P,const long prefix, interval_t &cur, int min_len) const{
         if(cur.depth >= min_len) return;
-        int c = prefix + cur.depth;
-        bool intervalFound = c < P.length();
+        long c = prefix + cur.depth;
+        bool intervalFound = c < (long) P.length();
         if(intervalFound && cur.size() > 1)
             intervalFound = top_down_child(P[c], cur);
         else if(intervalFound)
-            intervalFound = P[c] == S[SA[cur.start]+cur.depth];
+            intervalFound = P[c] == S[((long)SA[cur.start])+cur.depth];
         bool mismatchFound = false;
         while(intervalFound && !mismatchFound &&
-                c < P.length() && cur.depth < min_len){
+                c < (long) P.length() && cur.depth < (long) min_len){
             c++;
             cur.depth++;
             if(cur.start != cur.end){
                 int childLCP;
                 //calculate LCP of child node, which is now cur. the LCP value
                 //of the parent is currently c - prefix
-                if(cur.start < CHILD[cur.end] && CHILD[cur.end] <= cur.end)
+                if(cur.start < (long) CHILD[cur.end] && (long) CHILD[cur.end] <= cur.end)
                     childLCP = LCP[CHILD[cur.end]];
                 else
                     childLCP = LCP[CHILD[cur.start]];
                 int minimum = min(childLCP,min_len);
                 //match along branch
-                while(!mismatchFound && c < P.length() && cur.depth < minimum){
-                    mismatchFound = S[SA[cur.start]+cur.depth] != P[c];
+                while(!mismatchFound && c < (long) P.length() && cur.depth < (long) minimum){
+                    mismatchFound = S[((long)SA[cur.start])+cur.depth] != P[c];
                     c++;
                     cur.depth += !mismatchFound;
                 }
-                intervalFound = c < P.length() && !mismatchFound &&
-                        cur.depth < min_len && top_down_child(P[c], cur);
+                intervalFound = c < (long) P.length() && !mismatchFound &&
+                        cur.depth < (long) min_len && top_down_child(P[c], cur);
             }
             else{
-                while(!mismatchFound && c < P.length() && cur.depth < min_len){
-                    mismatchFound = SA[cur.start]+cur.depth >= S.length() ||
-                            S[SA[cur.start]+cur.depth] != P[c];
+                while(!mismatchFound && c < (long) P.length() && cur.depth < (long) min_len){
+                    mismatchFound = (long) SA[cur.start]+cur.depth >= (long) S.length() ||
+                            S[((long)SA[cur.start])+cur.depth] != P[c];
                     c++;
                     cur.depth += !mismatchFound;
                 }
@@ -538,7 +538,7 @@ void sparseSA::find_Lmaximal(const string &P, long prefix, long i,
   for(long k = 0; k < K; k++) {
     // If we reach the end and the match is long enough, print.
     if(prefix == 0 || i == 0) {
-      if(len >= min_len) {
+      if(len >= (long) min_len) {
 #ifndef NDEBUG
 	if(print) print_match(match_t(i, prefix, len), matches);
 #endif
@@ -548,7 +548,7 @@ void sparseSA::find_Lmaximal(const string &P, long prefix, long i,
     }
     else if(P[prefix-1] != S[i-1]){
       // If we reached a mismatch, print the match if it is long enough.
-      if(len >= min_len) {
+      if(len >= (long) min_len) {
 #ifndef NDEBUG
 	if(print) print_match(match_t(i, prefix, len), matches);
 #endif
@@ -742,7 +742,7 @@ void sparseSA::collectSMAMs(const string &P, long prefix,
         const interval_t mli, interval_t xmi, vector<match_t> &matches, int min_len, int maxCount, bool print) const {
   // All of the suffixes in xmi's interval are right maximal.
   //if(xmi.size() > maxCount ) return;// --> many long matches is ok, do not have to be unique!!!
-  int upperLimit = xmi.size() < maxCount ? xmi.end : xmi.start + maxCount-1;
+  long upperLimit = xmi.size() < (long) maxCount ? xmi.end : xmi.start + (long) maxCount-1;
   for(long i = xmi.start; i <= upperLimit; i++) find_Lmaximal(P, prefix, SA[i], xmi.depth, matches, min_len, print);
 }
 
@@ -798,7 +798,7 @@ void *SMAMthread(void *arg) {
 void sparseSA::SMAM(const string &P, vector<match_t> &matches, int min_len, int maxCount, bool print, int num_threads) const {
   if(min_len < K) return;
   if(num_threads == 1) {
-    for(int k = 0; k < K; k++) { findSMAM(k, P, matches, min_len, maxCount, print); }
+    for(long k = 0; k < K; k++) { findSMAM(k, P, matches, min_len, maxCount, print); }
   }
   else if(num_threads > 1) {
     vector<pthread_t> thread_ids(num_threads);
@@ -810,17 +810,17 @@ void sparseSA::SMAM(const string &P, vector<match_t> &matches, int min_len, int 
 
     // Distribute K-values evenly between num_threads.
     int t = 0;
-    for(int k = 0; k < K; k++) {
+    for(long k = 0; k < K; k++) {
       data[t].Kvalues.push_back(k);
       t++;
       if(t == num_threads) t = 0;
     }
     // Initialize additional thread data.
-    for(int i = 0; i < num_threads; i++) { data[i].sa = this; data[i].min_len = min_len;  data[i].P = &P; data[i].print = print; data[i].maxCount = maxCount; }
+    for(long i = 0; i < num_threads; i++) { data[i].sa = this; data[i].min_len = min_len;  data[i].P = &P; data[i].print = print; data[i].maxCount = maxCount; }
     // Create joinable threads to find MEMs.
-    for(int i = 0; i < num_threads; i++) pthread_create(&thread_ids[i], &attr, SMAMthread, (void *)&data[i]);
+    for(long i = 0; i < num_threads; i++) pthread_create(&thread_ids[i], &attr, SMAMthread, (void *)&data[i]);
     // Wait for all threads to terminate.
-    for(int i = 0; i < num_threads; i++) pthread_join(thread_ids[i], NULL);
+    for(long i = 0; i < num_threads; i++) pthread_join(thread_ids[i], NULL);
   }
 
 }

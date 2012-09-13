@@ -77,35 +77,35 @@ void calculateSeeds(const sparseSA& sa, const string& P, int min_len, int alignm
     postProcess(matches);
 }
 
-void calculateLISintervals(vector<match_t>& matches, bool fw, int qLength, int editDist, vector<lis_t>& lisIntervals){
+void calculateLISintervals(vector<match_t>& matches, bool fw, long qLength, long editDist, vector<lis_t>& lisIntervals){
     if(matches.size() > 0){
         int begin = 0;
         int end = 0;
-        int len = 0;
+        long len = 0;
         while(begin < matches.size()){
-            int refEnd = matches[begin].ref - matches[begin].query + qLength + editDist;
+            long refEnd = matches[begin].ref - matches[begin].query + qLength + editDist;
             while(end < matches.size() && matches[end].ref + matches[end].len <= refEnd){
                 len += matches[end].len;
                 end++;
             }
             lisIntervals.push_back(lis_t(&matches,begin,end-1,len,fw));
             begin = end;
-            len = 0;
+            len = 0L;
         }
     }
 }
 
-void calculateLISintervalsFair(vector<match_t>& matches, bool fw, int qLength, int editDist, vector<lis_t>& lisIntervals){
+void calculateLISintervalsFair(vector<match_t>& matches, bool fw, long qLength, long editDist, vector<lis_t>& lisIntervals){
     int begin = 0;
     int end = 1;
-    int len = 0;
+    long len = 0;
     while(begin < matches.size()){
         len = matches[begin].len;
-        int refEnd = matches[begin].ref - matches[begin].query + qLength + editDist;
+        long refEnd = matches[begin].ref - matches[begin].query + qLength + editDist;
         while(end < matches.size() && matches[end].ref + matches[end].len <= refEnd){
-            int leftb = max(matches[end-1].ref+matches[end-1].len-1,matches[end].ref);
-            int rightb = min(matches[end-1].ref+matches[end-1].len-1,matches[end].ref+matches[end].len-1);
-            len += max(0,rightb-leftb+1);
+            long leftb = max(matches[end-1].ref+matches[end-1].len-1,matches[end].ref);
+            long rightb = min(matches[end-1].ref+matches[end-1].len-1,matches[end].ref+matches[end].len-1);
+            len += max(0L,rightb-leftb+1L);
             end++;
         }
         lisIntervals.push_back(lis_t(&matches,fw,begin,end-1,len));
@@ -116,21 +116,21 @@ void calculateLISintervalsFair(vector<match_t>& matches, bool fw, int qLength, i
 
 bool extendAlignment(dynProg& dp_, const string& S, const string& P, 
         alignment_t& alignment, vector<match_t>& matches, 
-        int begin, int end, int editDist, const align_opt & alnOptions){
+        int begin, int end, long editDist, const align_opt & alnOptions){
     dp_output output;
     bool clipping = !alnOptions.noClipping;
-    int curEditDist = 0;
+    long curEditDist = 0;
     ///////////////////
     //FIRST SEED
     //////////////////
     match_t firstSeed = matches[begin];
-    int refstrLB = firstSeed.ref;
-    int refstrRB = refstrLB + firstSeed.len -1;
-    int queryLB = firstSeed.query;
-    int queryRB = queryLB + firstSeed.len-1;
-    if(firstSeed.query > 0 && firstSeed.ref > 0){
+    long refstrLB = firstSeed.ref;
+    long refstrRB = refstrLB + firstSeed.len -1L;
+    long queryLB = firstSeed.query;
+    long queryRB = queryLB + firstSeed.len-1L;
+    if(firstSeed.query > 0L && firstSeed.ref > 0L){
         //Alignment now!!! with beginQ-E in ref to begin match and beginQ to match
-        int alignmentBoundLeft = max(refstrLB-queryLB-editDist,0);
+        long alignmentBoundLeft = max(refstrLB-queryLB-editDist,0L);
         boundaries grenzen(alignmentBoundLeft,refstrLB-1,0,queryLB-1);
         dp_type types;
         types.freeRefB = true;
@@ -138,21 +138,21 @@ bool extendAlignment(dynProg& dp_, const string& S, const string& P,
         dp_.dpBandStatic( S, P, grenzen, types, ERRORSTRING, output, editDist-curEditDist, false);
         queryLB = grenzen.queryB;
         if(output.cigarChars[output.cigarChars[0]] == 'I')
-                queryLB += output.cigarLengths[0];
+                queryLB += (long)output.cigarLengths[0];
         if(clipping && grenzen.queryB> 0){
             alignment.cigarChars.push_back('S');
             alignment.cigarLengths.push_back(grenzen.queryB);
         }
         alignment.cigarChars.insert(alignment.cigarChars.end(),output.cigarChars.begin(),output.cigarChars.end());
         alignment.cigarLengths.insert(alignment.cigarLengths.end(),output.cigarLengths.begin(),output.cigarLengths.end());
-        alignment.globPos = grenzen.refB+1;
+        alignment.globPos = grenzen.refB+1L;
         curEditDist += output.editDist;
         output.clear();
     }//fill in the starting position in the ref sequence
     else {
-        alignment.globPos = firstSeed.ref + 1;
+        alignment.globPos = firstSeed.ref + 1L;
     }
-    if (firstSeed.ref == 0 && firstSeed.query > 0) {
+    if (firstSeed.ref == 0L && firstSeed.query > 0L) {
         alignment.cigarChars.push_back(clipping ? 'S' : 'I');
         alignment.cigarLengths.push_back(firstSeed.query);
         curEditDist += clipping ? 0 : firstSeed.query;
@@ -170,20 +170,20 @@ bool extendAlignment(dynProg& dp_, const string& S, const string& P,
         //search matchingstats and calc cost
         int indexIncrease = 0;
         int minDistMem = memsIndex - 1;
-        int minDist = P.length();
-        int minQDist = P.length();
-        int minRefDist = P.length();
+        long minDist = (long)P.length();
+        long minQDist = (long)P.length();
+        long minRefDist = (long)P.length();
         //temporary distance for this mem
-        int dist = minDist;
+        long dist = minDist;
         while (indexIncrease + memsIndex <= end && dist <= minDist) {
             match_t match = matches[memsIndex + indexIncrease];
             //check distance: k is enlarged and compare minRef-refstrRB
-            int qDist = match.query - queryRB;
-            int refDist = match.ref - refstrRB;
+            long qDist = match.query - queryRB;
+            long refDist = match.ref - refstrRB;
             if (qDist < 0 || refDist < 0) {
                 if (qDist >= refDist) {
                     qDist -= refDist; //qDist insertions
-                    if (qDist + queryRB >= P.length() || 1 - refDist >= match.len)//and refDist +1 matches lost
+                    if (qDist + queryRB >= (long)P.length() || 1 - refDist >= match.len)//and refDist +1 matches lost
                         qDist = minDist + 1;
                 } else {
                     refDist -= qDist;
@@ -214,7 +214,7 @@ bool extendAlignment(dynProg& dp_, const string& S, const string& P,
                 alignment.cigarChars.push_back('=');
                 alignment.cigarLengths.push_back(minRefDist);
                 alignment.cigarLengths.push_back(match.len - 1 + minQDist);
-                curEditDist += Utils::contains(S, refstrRB + 1, refstrRB + minRefDist - 1, '`') ? editDist + 1 : minRefDist; //boundary of ref sequences is passed
+                curEditDist += Utils::contains(S, refstrRB + 1L, refstrRB + minRefDist - 1L, '`') ? editDist + 1 : minRefDist; //boundary of ref sequences is passed
                 //TODO: only use of contains: add inline here
             } else if (minRefDist <= 0) {
                 alignment.cigarChars.push_back('I');
@@ -223,7 +223,7 @@ bool extendAlignment(dynProg& dp_, const string& S, const string& P,
                 alignment.cigarLengths.push_back(match.len - 1 + minRefDist);
                 curEditDist += minQDist;
             } else {//both distances are positive and not equal to (1,1)
-                boundaries grenzen(refstrRB + 1, refstrRB + minRefDist - 1, queryRB + 1, queryRB + minQDist - 1);
+                boundaries grenzen(refstrRB + 1L, refstrRB + minRefDist - 1L, queryRB + 1, queryRB + minQDist - 1);
                 dp_type types;
                 dp_.dpBandStatic( S, P, grenzen, types, ERRORSTRING, output, editDist-curEditDist, false);
                 alignment.cigarChars.insert(alignment.cigarChars.end(), output.cigarChars.begin(), output.cigarChars.end());
@@ -236,8 +236,8 @@ bool extendAlignment(dynProg& dp_, const string& S, const string& P,
             //set new positions
             memsIndex = minDistMem + 1;
             //add matches
-            refstrRB = match.ref + match.len - 1;
-            queryRB = match.query + match.len - 1;
+            refstrRB = match.ref + match.len - 1L;
+            queryRB = match.query + match.len - 1L;
         }
     }
     /////////////
@@ -246,11 +246,11 @@ bool extendAlignment(dynProg& dp_, const string& S, const string& P,
     //possible at the end characters
     //mapInterval += Integer.toString(queryRB+1)+"]";
     alignment.refLength = queryRB-queryLB;
-    if (queryRB + 1 < P.length() && refstrRB < S.length() - 1 && curEditDist <= editDist) {
-        int refAlignRB = refstrRB + (P.length() - queryRB) + 1 + editDist - curEditDist;
-        if (refAlignRB >= S.length())
-            refAlignRB = S.length() - 1;
-        boundaries grenzen(refstrRB + 1, refAlignRB, queryRB + 1, P.length() - 1);
+    if (queryRB + 1 < P.length() && refstrRB < (long)S.length() - 1L && curEditDist <= editDist) {
+        long refAlignRB = refstrRB + ((long)P.length() - queryRB) + 1L + editDist - curEditDist;
+        if (refAlignRB >= (long)S.length())
+            refAlignRB = (long)S.length() - 1L;
+        boundaries grenzen(refstrRB + 1L, refAlignRB, queryRB + 1, P.length() - 1);
         dp_type types;
         types.freeRefE = true;
         types.freeQueryE = clipping;
@@ -286,8 +286,8 @@ bool extendAlignment(dynProg& dp_, const string& S, const string& P,
 
 void inexactMatch(const sparseSA& sa, dynProg& dp_, read_t & read,const align_opt & alnOptions, bool fwStrand, bool print){
     string P = read.sequence;
-    int Plength = P.length();
-    int editDist = (int)(alnOptions.errorPercent*Plength)+1;
+    long Plength = (long) P.length();
+    long editDist = (long)(alnOptions.errorPercent*Plength)+1;
     if(!fwStrand)
         P = read.rcSequence;
     int min_len = alnOptions.minMemLength;
@@ -343,8 +343,8 @@ void inexactMatch(const sparseSA& sa, dynProg& dp_, read_t & read,const align_op
 void unpairedMatch(const sparseSA& sa, dynProg& dp_, read_t & read,const align_opt & alnOptions, bool print){
     string P = read.sequence;
     string Prc = read.rcSequence;
-    int Plength = P.length();
-    int editDist = (int)(alnOptions.errorPercent*Plength)+1;
+    long Plength = (long) P.length();
+    long editDist = (long)(alnOptions.errorPercent*Plength)+1;
     int min_len = alnOptions.minMemLength;
     if(!alnOptions.fixedMinLength && Plength/editDist > min_len)
         min_len = Plength/editDist;
@@ -430,14 +430,14 @@ bool isConcordant(const alignment_t& mate1, const alignment_t& mate2, const pair
     }
     //check fragment insert size
     long begin = min(mate1.pos,mate2.pos);
-    long end = max(mate1.pos+mate1.refLength-1,mate2.pos+mate2.refLength-1);
-    long size = end - begin +1;
+    long end = max(mate1.pos+(long)mate1.refLength-1L,mate2.pos+(long)mate2.refLength-1L);
+    long size = end - begin +1L;
     if(size < options.minInsert || size > options.maxInsert)
         return false;
     long begin1 = mate1.pos;
-    long end1 = begin1 + mate1.refLength-1;
+    long end1 = begin1 + (long)mate1.refLength-1L;
     long begin2 = mate2.pos;
-    long end2 = begin2 + mate2.refLength-1;
+    long end2 = begin2 + (long)mate2.refLength-1L;
     //chack contain
     bool contain = (begin1 >= begin2 && end1 <= end2) || (begin2 >= begin1 && end2 <= end1);
     if(contain && !options.contain){
@@ -479,9 +479,9 @@ void setPairedFields(alignment_t& toset, alignment_t& mate, bool firstMate, bool
 //        printf("toset.refLength %ld\n", toset.refLength);
 //        printf("mate.pos %ld\n", mate.pos);
 //        printf("mate.refLength %ld\n", mate.refLength);
-        toset.tLength = max(toset.pos+toset.refLength-1,mate.pos+mate.refLength-1) - min(toset.pos,mate.pos) + 1;
-        long firstPos = toset.flag.test(4) ? toset.pos+toset.refLength-1 : toset.pos;
-        long secondPos = mate.flag.test(4) ? mate.pos+mate.refLength-1 : mate.pos;
+        toset.tLength = max(toset.pos+(long)toset.refLength-1L,mate.pos+(long)mate.refLength-1L) - min(toset.pos,mate.pos) + 1;
+        long firstPos = toset.flag.test(4) ? toset.pos+(long)toset.refLength-1L : toset.pos;
+        long secondPos = mate.flag.test(4) ? mate.pos+(long)mate.refLength-1L : mate.pos;
         if(firstPos > secondPos) toset.tLength *= -1;
     }
     else{
@@ -595,7 +595,7 @@ void pairedMatch1(const sparseSA& sa, dynProg& dp_, read_t & mate1, read_t & mat
     }
 }
 
-bool alignFromLIS(const sparseSA& sa, dynProg& dp_, read_t& read, lis_t & lis, int editDist, const align_opt & alnOptions){
+bool alignFromLIS(const sparseSA& sa, dynProg& dp_, read_t& read, lis_t & lis, long editDist, const align_opt & alnOptions){
     if(lis.alignment != NULL)
         return true;
     alignment_t alignment;
@@ -616,7 +616,7 @@ bool alignFromLIS(const sparseSA& sa, dynProg& dp_, read_t& read, lis_t & lis, i
     return extended;
 }
 
-bool isPosConcordant(const lis_t& mate1, const lis_t& mate2, int editDist1, int editDist2, int M1length, int M2length, const paired_opt& options){
+bool isPosConcordant(const lis_t& mate1, const lis_t& mate2, long editDist1, long editDist2, long M1length, long M2length, const paired_opt& options){
     bool firstLeft = true;
     bool mate1FW = mate1.fw;
     bool mate2FW = mate2.fw;
@@ -628,10 +628,10 @@ bool isPosConcordant(const lis_t& mate1, const lis_t& mate2, int editDist1, int 
         firstLeft = !mate1FW;//if rc must be left
     }
     //find possible offset
-    int posLeft1 = mate1.matches->at(mate1.begin).ref-mate1.matches->at(mate1.begin).query;
-    int posLeft2 = mate2.matches->at(mate2.begin).ref-mate2.matches->at(mate2.begin).query;
-    int posRight1 = posLeft1 + M1length;
-    int posRight2 = posLeft2 + M2length;
+    long posLeft1 = mate1.matches->at(mate1.begin).ref-mate1.matches->at(mate1.begin).query;
+    long posLeft2 = mate2.matches->at(mate2.begin).ref-mate2.matches->at(mate2.begin).query;
+    long posRight1 = posLeft1 + M1length;
+    long posRight2 = posLeft2 + M2length;
     //check fragment insert size
     long minsize = max(posRight2+editDist2,posRight1+editDist1) - min(posLeft2+editDist2,posLeft1+editDist1) +1;
     if(minsize < options.minInsert)
@@ -640,8 +640,8 @@ bool isPosConcordant(const lis_t& mate1, const lis_t& mate2, int editDist1, int 
     if(maxsize > options.maxInsert)
         return false;
     //check flow direction is correct
-    int anchor1 = mate1FW ? posLeft1 : posRight1;
-    int anchor2 = mate2FW ? posLeft2 : posRight2;
+    long anchor1 = mate1FW ? posLeft1 : posRight1;
+    long anchor2 = mate2FW ? posLeft2 : posRight2;
     if(firstLeft){
         if(anchor1-editDist1 > anchor2 + editDist2) return false;
     }
@@ -679,10 +679,10 @@ void coupleLIS(const sparseSA& sa,
         int& discordant,
         const align_opt & alnOptions,
         const paired_opt & pairedOpt){
-    int M1length = mate1.sequence.size();
-    int M2length = mate2.sequence.size();
-    int editDistM1 = (int)(alnOptions.errorPercent*M1length)+1;
-    int editDistM2 = (int)(alnOptions.errorPercent*M2length)+1;
+    long M1length = (long)mate1.sequence.size();
+    long M2length = (long)mate2.sequence.size();
+    long editDistM1 = (long)(alnOptions.errorPercent*M1length)+1;
+    long editDistM2 = (long)(alnOptions.errorPercent*M2length)+1;
     int state = 0;
     int i = 0;
     int j = 0;
@@ -722,7 +722,7 @@ void coupleLIS(const sparseSA& sa,
 }
 
 void unpairedMatchFromLIS(const sparseSA& sa, dynProg& dp_, read_t & read, vector<lis_t> & lisIntervals, const align_opt & alnOptions, int & alnCount){
-    int editDist = (int)(alnOptions.errorPercent*read.sequence.size())+1;
+    long editDist = (long)(alnOptions.errorPercent*read.sequence.size())+1;
     //sort candidate regions for likelyhood of an alignment
     sort(lisIntervals.begin(),lisIntervals.end(), compIntervals);
     //for every interval, try to align
@@ -777,10 +777,10 @@ void pairedMatch3(const sparseSA& sa, dynProg& dp_, read_t & mate1, read_t & mat
     vector<lis_t> lisIntervalsFM2;
     vector<lis_t> lisIntervalsSM1;
     vector<lis_t> lisIntervalsSM2;
-    int M1length = mate1.sequence.size();
-    int M2length = mate2.sequence.size();
-    int editDistM1 = (int)(alnOptions.errorPercent*M1length)+1;
-    int editDistM2 = (int)(alnOptions.errorPercent*M2length)+1;
+    long M1length = (long) mate1.sequence.size();
+    long M2length = (long) mate2.sequence.size();
+    long editDistM1 = (long)(alnOptions.errorPercent*M1length)+1;
+    long editDistM2 = (long)(alnOptions.errorPercent*M2length)+1;
     //Calc seeds for first direction (put this in separate function for each direction
     calculateSeeds(sa, mate1FWfirst ? mate1.sequence : mate1.rcSequence, min_len, alnOptions.alignmentCount, firstmatchesM1, alnOptions.tryHarder);
     calculateSeeds(sa, mate2FWfirst ? mate2.sequence : mate2.rcSequence, min_len, alnOptions.alignmentCount, firstmatchesM2, alnOptions.tryHarder);
@@ -873,7 +873,7 @@ void pairedMatch3(const sparseSA& sa, dynProg& dp_, read_t & mate1, read_t & mat
     }
 }
 
-bool isConcordantAlnToLis(const alignment_t& mate1, const lis_t& mate2, bool mate1isFirst, int editDist2, int M2length, const paired_opt& options){
+bool isConcordantAlnToLis(const alignment_t& mate1, const lis_t& mate2, bool mate1isFirst, long editDist2, long M2length, const paired_opt& options){
     bool firstLeft = true;
     bool mate1FW = !mate1.flag.test(4);
     bool mate2FW = mate2.fw;
@@ -885,20 +885,20 @@ bool isConcordantAlnToLis(const alignment_t& mate1, const lis_t& mate2, bool mat
         firstLeft = mate1isFirst ? !mate1FW : !mate2FW;//if rc must be left
     }
     //find possible offset
-    int posLeft1 = mate1.globPos;
-    int posLeft2 = mate2.matches->at(mate2.begin).ref-mate2.matches->at(mate2.begin).query;
-    int posRight1 = posLeft1 + mate1.refLength;
-    int posRight2 = posLeft2 + M2length;
+    long posLeft1 = mate1.globPos;
+    long posLeft2 = mate2.matches->at(mate2.begin).ref-mate2.matches->at(mate2.begin).query;
+    long posRight1 = posLeft1 + (long) mate1.refLength;
+    long posRight2 = posLeft2 + M2length;
     //check fragment insert size
-    long minsize = max(posRight2+editDist2,posRight1) - min(posLeft2+editDist2,posLeft1) +1;
+    long minsize = max(posRight2+editDist2,posRight1) - min(posLeft2+editDist2,posLeft1) +1L;
     if(minsize < options.minInsert)
         return false;
-    long maxsize = max(posRight2-editDist2,posRight1) - min(posLeft2-editDist2,posLeft1) +1;
+    long maxsize = max(posRight2-editDist2,posRight1) - min(posLeft2-editDist2,posLeft1) +1L;
     if(maxsize > options.maxInsert)
         return false;
     //check flow direction is correct
-    int anchor1 = mate1FW ? posLeft1 : posRight1;
-    int anchor2 = mate2FW ? posLeft2 : posRight2;
+    long anchor1 = mate1FW ? posLeft1 : posRight1;
+    long anchor2 = mate2FW ? posLeft2 : posRight2;
     if(firstLeft){
         if(anchor1 > anchor2 + editDist2) return false;
     }
@@ -937,10 +937,10 @@ void matchStrandOfPair(const sparseSA& sa,
         bool mate1isFirst,
         const align_opt & alnOptions,
         const paired_opt & pairedOpt){  
-    int M1length = mate1.sequence.size();
-    int M2length = mate2.sequence.size();
-    int editDistM1 = (int)(alnOptions.errorPercent*M1length)+1;
-    int editDistM2 = (int)(alnOptions.errorPercent*M2length)+1;
+    long M1length = (long) mate1.sequence.size();
+    long M2length = (long) mate2.sequence.size();
+    long editDistM1 = (long)(alnOptions.errorPercent*M1length)+1;
+    long editDistM2 = (long)(alnOptions.errorPercent*M2length)+1;
     //Matching strand and mate: sort acocrding to score
     sort(lisIntervalsFM1.begin(), lisIntervalsFM1.end(), compIntervals);
     //Other strand: for pairing
@@ -1031,10 +1031,10 @@ void pairedMatch4(const sparseSA& sa, dynProg& dp_, read_t & mate1, read_t & mat
     vector<lis_t> lisIntervalsFM2;
     vector<lis_t> lisIntervalsSM1;
     vector<lis_t> lisIntervalsSM2;
-    int M1length = mate1.sequence.size();
-    int M2length = mate2.sequence.size();
-    int editDistM1 = (int)(alnOptions.errorPercent*M1length)+1;
-    int editDistM2 = (int)(alnOptions.errorPercent*M2length)+1;
+    long M1length = (long) mate1.sequence.size();
+    long M2length = (long) mate2.sequence.size();
+    long editDistM1 = (long)(alnOptions.errorPercent*M1length)+1;
+    long editDistM2 = (long)(alnOptions.errorPercent*M2length)+1;
     //Calc seeds for first direction (put this in separate function for each direction
     calculateSeeds(sa, mate1FWfirst ? mate1.sequence : mate1.rcSequence, min_len, alnOptions.alignmentCount, firstmatchesM1, alnOptions.tryHarder);
     calculateSeeds(sa, mate2FWfirst ? mate2.sequence : mate2.rcSequence, min_len, alnOptions.alignmentCount, firstmatchesM2, alnOptions.tryHarder);
@@ -1135,7 +1135,7 @@ void pairedMatch4(const sparseSA& sa, dynProg& dp_, read_t & mate1, read_t & mat
     }
 }
 
-bool dpWindow(const alignment_t& mate1, bool mate1isFirst, int editDist2, int M2length, const paired_opt& options,
+bool dpWindow(const alignment_t& mate1, bool mate1isFirst, long editDist2, long M2length, const paired_opt& options,
         boundaries& grenzen, bool& otherFW, int& bandLeft, int& bandRight){
     bool firstLeft = true;
     bool mate1FW = !mate1.flag.test(4);
@@ -1154,13 +1154,13 @@ bool dpWindow(const alignment_t& mate1, bool mate1isFirst, int editDist2, int M2
     }
     grenzen.queryB = 0;
     grenzen.queryE = M2length-1;
-    int leftMate = mate1.globPos;
-    int rightMate = leftMate + mate1.refLength-1;
+    long leftMate = mate1.globPos;
+    long rightMate = leftMate + (long) mate1.refLength-1L;
     //Both first boundaries: maxfrag
-    grenzen.refB = rightMate - options.maxInsert + 1;
-    grenzen.refE = leftMate + options.maxInsert - 1;
+    grenzen.refB = rightMate - (long)options.maxInsert + 1L;
+    grenzen.refE = leftMate + (long) options.maxInsert - 1L;
     if(firstLeft){//Window to the right of already aligned mate
-		int bandEnd  = leftMate + options.minInsert -1;
+		long bandEnd  = leftMate + (long) options.minInsert -1L;
         if(!options.overlap){
             grenzen.refB = max(grenzen.refB, rightMate+1);
         }
@@ -1178,7 +1178,7 @@ bool dpWindow(const alignment_t& mate1, bool mate1isFirst, int editDist2, int M2
         bandLeft = abs(bandEnd - grenzen.refB +1);
     }
     else{//Window to the left of already aligned mate
-        int bandEnd = rightMate - options.minInsert +1;
+        long bandEnd = rightMate - options.minInsert +1;
         if(!options.overlap){
             grenzen.refE = min(grenzen.refE, leftMate-1);
         }
@@ -1211,10 +1211,10 @@ void pairedBowtie2(const sparseSA& sa,
     read_t & base = alignFirstMate ? mate1 : mate2;
     read_t & other = alignFirstMate ? mate2 : mate1;
     string & P = forward ? base.sequence : base.rcSequence;
-    int Plength = P.size();
-    int Olength = other.sequence.size();
-    int editDistBase = (int)(alnOptions.errorPercent*Plength)+1;
-    int editDistOther = (int)(alnOptions.errorPercent*Olength)+1;
+    long Plength = (long) P.size();
+    long Olength = (long) other.sequence.size();
+    long editDistBase = (long)(alnOptions.errorPercent*Plength)+1;
+    long editDistOther = (long)(alnOptions.errorPercent*Olength)+1;
     int min_len = alnOptions.minMemLength;
     if(!alnOptions.fixedMinLength && Plength/editDistBase > min_len)
         min_len = Plength/editDistBase;

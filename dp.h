@@ -32,11 +32,11 @@ using namespace std;
 
 struct boundaries{
     boundaries(): refB(0), queryB(0), refE(0), queryE(0) {}
-    boundaries(int refBegin, int refEnd, int queryBegin, int queryEnd): refB(refBegin), refE(refEnd), queryB(queryBegin), queryE(queryEnd){}
-    int refB;
-    int refE;
-    int queryB;
-    int queryE;
+    boundaries(long refBegin, long refEnd, long queryBegin, long queryEnd): refB(refBegin), refE(refEnd), queryB(queryBegin), queryE(queryEnd){}
+    long refB;
+    long refE;
+    long queryB;
+    long queryE;
 };
 
 struct dp_scores{

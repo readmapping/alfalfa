@@ -421,9 +421,9 @@ int dynProg::dpFillStatic(const string& ref,const string& query, bool forward,
     int        local = type.local || (type.freeQueryB && type.freeRefB) ? 0 : 1;
     int bandL = max(bandLeft, bandSize);
     int bandR = max(bandRight, bandSize);
-    for(int i = 1; i <= L2; i++ ){
-        int idx2 = forward ? i-bandL : L1 - L2 + i - bandL;
-        int colRB = forward ? i+bandR : L1 - L2 + i + bandR;
+    for(long i = 1; i <= L2; i++ ){
+        long idx2 = forward ? i-bandL : L1 - L2 + i - bandL;
+        long colRB = forward ? i+bandR : L1 - L2 + i + bandR;
         if(idx2>0){//left value undefined
             d = scores.scoreMatrix[ref[offset.refB+idx2-1]][query[offset.queryB+i-1]];
             M[ i ][ idx2 ] = M[ i-1 ][ idx2-1 ] + d;
@@ -434,7 +434,7 @@ int dynProg::dpFillStatic(const string& ref,const string& query, bool forward,
             M[ i ][ idx2 ] = max(M[ i ][ idx2 ], 0 + local*M[ i ][ idx2 ]);
             idx2++;
         }
-        for(int j = max( 1, idx2); j <= min(L1, colRB-1); j++ ){
+        for(long j = max( 1L, idx2); j <= min((long)L1, colRB-1); j++ ){
             //here insert substitution matrix!
             d = scores.scoreMatrix[ref[offset.refB+j-1]][query[offset.queryB+i-1]];
             UP[i][j] = max(M[ i-1 ][ j ] + scores.extendGap + scores.openGap, UP[i-1][j]+scores.extendGap);
@@ -523,16 +523,16 @@ int dynProg::dpFillOptStatic(const string& ref,const string& query, bool forward
     int        local = type.local || (type.freeQueryB && type.freeRefB) ? 0 : 1;
     int bandL = max(bandLeft, bandSize);
     int bandR = max(bandRight, bandSize);
-    for(int i = 1; i <= L2; i++ ){
-        int idx2 = forward ? i-bandL : L1 - L2 + i - bandL;
-        int colRB = forward ? i+bandR : L1 - L2 + i + bandR;
+    for(long i = 1; i <= L2; i++ ){
+        long idx2 = forward ? i-bandL : L1 - L2 + i - bandL;
+        long colRB = forward ? i+bandR : L1 - L2 + i + bandR;
         if(idx2>0){
             d = scores.scoreMatrix[ref[offset.refB+idx2-1]][query[offset.queryB+i-1]];
             M[ i ][ idx2 ] = max(M[ i-1 ][ idx2-1 ] + d, M[ i-1 ][ idx2 ] + scores.extendGap);
             M[ i ][ idx2 ] = max(M[ i ][ idx2 ], 0 + local*M[ i ][ idx2 ]);
             idx2++;
         }
-        for(int j = max( 1, idx2); j <= min(L1, colRB-1); j++ ){
+        for(long j = max( 1L, idx2); j <= min((long)L1, colRB-1); j++ ){
             d = scores.scoreMatrix[ref[offset.refB+j-1]][query[offset.queryB+i-1]];
             M[ i ][ j ] = max(M[ i-1 ][ j-1 ] + d, M[ i ][ j-1 ] + scores.extendGap);
             M[ i ][ j ] = max(M[ i ][ j ], M[ i-1 ][ j ] + scores.extendGap);
