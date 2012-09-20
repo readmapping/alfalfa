@@ -46,9 +46,6 @@
         <compilerSet>Cygwin|Cygwin</compilerSet>
       </toolsSet>
       <compileType>
-        <ccTool>
-          <commandLine>-O3</commandLine>
-        </ccTool>
       </compileType>
     </conf>
     <conf name="Release" type="1">

@@ -409,21 +409,22 @@ bool isConcordant(const alignment_t& mate1, const alignment_t& mate2, const pair
     //Check same chromosome
     if(mate1.rname != mate2.rname)
         return false;
+    printf("names are the same\n");
     //Check strand
     if(options.orientation == PAIR_FF){
-        if(mate1.flag.test(4)!=mate1.flag.test(4))
+        if(mate1.flag.test(4)!=mate2.flag.test(4))
             return false;
         else
             firstLeft = !mate1.flag.test(4);//if rc must be right
     }
     else if(options.orientation == PAIR_FR){
-        if(mate1.flag.test(4)==mate1.flag.test(4))
+        if(mate1.flag.test(4)==mate2.flag.test(4))
             return false;
         else
             firstLeft = !mate1.flag.test(4);//if rc must be right
     }
     else{
-        if(mate1.flag.test(4)==mate1.flag.test(4))
+        if(mate1.flag.test(4)==mate2.flag.test(4))
             return false;
         else
             firstLeft = mate1.flag.test(4);//if rc must be left
@@ -513,6 +514,7 @@ void setPaired(alignment_t& aln1, alignment_t& aln2, read_t& mate1, read_t& mate
     }
 }
 
+//aln both and pair
 void pairedMatch1(const sparseSA& sa, dynProg& dp_, read_t & mate1, read_t & mate2, const align_opt & alnOptions, const paired_opt & pairedOpt, bool print){
     //Calculate the mappings for read 1 and 2
     unpairedMatch(sa, dp_, mate1, alnOptions, print);
@@ -554,6 +556,7 @@ void pairedMatch1(const sparseSA& sa, dynProg& dp_, read_t & mate1, read_t & mat
             }
             i++;
         }
+        printf("concordant done\n");
         //search discordant alignments
         if(pairedOpt.discordant){
             i = 0;
@@ -566,6 +569,7 @@ void pairedMatch1(const sparseSA& sa, dynProg& dp_, read_t & mate1, read_t & mat
             }
         }
         //sort alignments such that first concordant, than discordant, than unpaired
+        printf("discordant done\n");
         if(pairedOpt.mixed){
             i = 0;
             int alnCountFirst = alnCount;
@@ -611,7 +615,7 @@ bool alignFromLIS(const sparseSA& sa, dynProg& dp_, read_t& read, lis_t & lis, l
         }
         alignment.setLocalPos(sa);
         read.alignments.push_back(alignment);
-        lis.alignment = &alignment;
+        lis.alignment = &read.alignments[read.alignmentCount()-1];
     }
     return extended;
 }
@@ -958,6 +962,7 @@ void matchStrandOfPair(const sparseSA& sa,
         //Alignment of mate1
         bool extended = true;
         if(lisIntervalsFM1[lisIndex].alignment == NULL){
+            printf("----------------------------loop: LIS no alignment \n");
             //sort matches in this interval according to query position
             int begin = lisIntervalsFM1[lisIndex].begin;
             int end = lisIntervalsFM1[lisIndex].end;
@@ -967,12 +972,13 @@ void matchStrandOfPair(const sparseSA& sa,
             alignment_t alignment;
             extended = extendAlignment(dp_, sa.S, lisIntervalsFM1[lisIndex].fw ? mate1.sequence : mate1.rcSequence, 
                     alignment, *matchVector, begin, end, editDistM1, alnOptions);
+            printf("----------------------------loop: found alignment for LIS: %d\n",extended);
             if(extended){
                 if(!lisIntervalsFM1[lisIndex].fw)
                     alignment.flag.set(4,true);
-                mate1.alignments.push_back(alignment);
                 alignment.setLocalPos(sa);
-                lisIntervalsFM1[lisIndex].alignment = &alignment;
+                mate1.alignments.push_back(alignment);
+                lisIntervalsFM1[lisIndex].alignment = &mate1.alignments[mate1.alignmentCount()-1];
             }
         }
         //If an alignment, continue to find match for other mate
@@ -981,18 +987,24 @@ void matchStrandOfPair(const sparseSA& sa,
             alignment_t & aln1 = *lisIntervalsFM1[lisIndex].alignment;
             int state = 0;
             int j = 0;
+            printf("----------------------------try to find mating LIS\n");
             while(j < lisIntervalsFM2.size() && concordant < alnOptions.alignmentCount && state < 2){
                 lis_t & lis2 = lisIntervalsFM2[j];
+                printf("----------------------------LIS2 try lis %d that has (%d) alignment and length %d\n",j,lis2.alignment != NULL,lis2.len);
                 if((lis2.alignment != NULL && isConcordant(mate1isFirst ? aln1 : *lis2.alignment, mate1isFirst ? *lis2.alignment : aln1, pairedOpt)) ){
+                    printf("----------------------------LIS2 was aligned\n");
                     state = 1;
                     if(mate1isFirst){//if not: repeated find
+                        printf("----------------------------LIS2 matches LIS1\n");
                         concordant++;
                         setPaired(aln1,*lis2.alignment,mate1,mate2, true);
                     }
                 }
                 else if(lis2.alignment == NULL && isConcordantAlnToLis(aln1, lis2, mate1isFirst, editDistM2, M2length, pairedOpt)){
+                    printf("----------------------------LIS2 was NOT aligned\n");
                     state=1;
                     if(alignFromLIS(sa, dp_, mate2, lis2, editDistM2, alnOptions)){
+                        printf("----------------------------LIS2 matches LIS1\n");
                         if(isConcordant(mate1isFirst ? aln1 : *lis2.alignment, mate1isFirst ? *lis2.alignment : aln1, pairedOpt)){//concordant
                             concordant++;
                             mate1isFirst ? setPaired(aln1,*lis2.alignment,mate1,mate2 , true) : setPaired(*lis2.alignment,aln1,mate2,mate1 , true);
@@ -1013,7 +1025,7 @@ void matchStrandOfPair(const sparseSA& sa,
     }
 }
 
-//Calculate LIS of both mates, match together 2 LIS, if match, calculate both alignments
+//Calculate LIS of both mates, align 1, match LIS to other, align 2
 void pairedMatch4(const sparseSA& sa, dynProg& dp_, read_t & mate1, read_t & mate2, const align_opt & alnOptions, const paired_opt & pairedOpt){
     int concordant = 0;
     int discordant = 0;
@@ -1038,25 +1050,31 @@ void pairedMatch4(const sparseSA& sa, dynProg& dp_, read_t & mate1, read_t & mat
     //Calc seeds for first direction (put this in separate function for each direction
     calculateSeeds(sa, mate1FWfirst ? mate1.sequence : mate1.rcSequence, min_len, alnOptions.alignmentCount, firstmatchesM1, alnOptions.tryHarder);
     calculateSeeds(sa, mate2FWfirst ? mate2.sequence : mate2.rcSequence, min_len, alnOptions.alignmentCount, firstmatchesM2, alnOptions.tryHarder);
+    printf("calculating seeds for first direction done\n");
     if(firstmatchesM1.size()>0 && firstmatchesM2.size()>0){
         //Calc LIS intervals
         //lis intervals are intervals in seed matches that are ordered according to reference offset
         calculateLISintervals(firstmatchesM1, mate1FWfirst, M1length, editDistM1, lisIntervalsFM1);
         calculateLISintervals(firstmatchesM2, mate2FWfirst, M2length, editDistM2, lisIntervalsFM2);
+        printf("calculating LIS done\n");
         //find concordant intervals
         matchStrandOfPair(sa, dp_, mate1, mate2, lisIntervalsFM1, lisIntervalsFM2, concordant, discordant, true, alnOptions, pairedOpt);
+        printf("first concordant done\n");
     }
     //Do the same for other direction if necessary
     if(concordant < alnOptions.alignmentCount){
         calculateSeeds(sa, mate1FWfirst ? mate1.rcSequence : mate1.sequence, min_len, alnOptions.alignmentCount, secondmatchesM1, alnOptions.tryHarder);
         calculateSeeds(sa, mate2FWfirst ? mate2.rcSequence : mate2.sequence, min_len, alnOptions.alignmentCount, secondmatchesM2, alnOptions.tryHarder);
+        printf("seeds for other done\n");
         if(secondmatchesM1.size()>0 && secondmatchesM2.size()>0){
             //Calc LIS intervals
             //lis intervals are intervals in seed matches that are ordered according to reference offset
             calculateLISintervals(secondmatchesM1, !mate1FWfirst, M1length, editDistM1, lisIntervalsSM1);
             calculateLISintervals(secondmatchesM2, !mate2FWfirst, M2length, editDistM2, lisIntervalsSM2);
+            printf("LIS for other done\n");
             //find concordant intervals
             matchStrandOfPair(sa, dp_, mate1, mate2, lisIntervalsSM1, lisIntervalsSM2, concordant, discordant, true, alnOptions, pairedOpt);
+            printf("concordant for other done\n");
         }
     }
     //Do the same for first direction of other mate
@@ -1064,13 +1082,16 @@ void pairedMatch4(const sparseSA& sa, dynProg& dp_, read_t & mate1, read_t & mat
         if(firstmatchesM1.size()>0 && firstmatchesM2.size()>0){
             //find concordant intervals
             matchStrandOfPair(sa, dp_, mate2, mate1, lisIntervalsFM2, lisIntervalsFM1, concordant, discordant, false, alnOptions, pairedOpt);
+            printf("concordant for the next mate dir 1\n");
         }
     }
     //Do the same for second direction of other mate
     if(concordant < alnOptions.alignmentCount){
         if(secondmatchesM1.size()>0 && secondmatchesM2.size()>0){
             //find concordant intervals
+            printf("try to do it\n");
             matchStrandOfPair(sa, dp_, mate2, mate1, lisIntervalsSM2, lisIntervalsSM1, concordant, discordant, false, alnOptions, pairedOpt);
+            printf("concordant for the next mate dir 1\n");
         }
     }
     concordant = concordant + discordant;
@@ -1083,6 +1104,7 @@ void pairedMatch4(const sparseSA& sa, dynProg& dp_, read_t & mate1, read_t & mat
         sort(mate2.alignments.begin(),mate2.alignments.end(), compAlignmentScore);
         maxScoreFirst = mate1.alignments[0].alignmentScore;
         maxScoreSecond = mate2.alignments[0].alignmentScore;
+        printf("sorted for discordant done\n");
     }
     if(pairedOpt.discordant && concordant < alnOptions.alignmentCount ){
         //extra discordant searches depending on max score

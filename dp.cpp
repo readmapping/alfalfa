@@ -1079,8 +1079,8 @@ int dynProg::dpBandStatic( const string&     ref,
     bandSize = bandS;
     banded = true;
     assert(L1 >=0 && L2 >= 0 && bandSize >0);
-    assert(!dp_type.local);
-    assert((!dp_type.freeQueryB && !dp_type.freeRefB) || (!dp_type.freeQueryE && !dp_type.freeRefE));
+    assert(!type.local);
+    assert((!type.freeQueryB && !type.freeRefB) || (!type.freeQueryE && !type.freeRefE));
     //IF no free start at begin:
     //possible end of alignment should be accessible for traceback: 
     //range of allowed traceback startpositions should have a non-empty intersection

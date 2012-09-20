@@ -74,8 +74,8 @@ struct mapOptions_t{//commentary + sort + constructor
         pairedOpt.contain = true;
         pairedOpt.discordant = true;
         pairedOpt.dovetail = false;
-        pairedOpt.maxInsert = 500;
-        pairedOpt.minInsert = 0;
+        pairedOpt.maxInsert = 4000;
+        pairedOpt.minInsert = 2000;
         pairedOpt.mixed = true;
         pairedOpt.orientation = PAIR_FR;
         pairedOpt.overlap = true;

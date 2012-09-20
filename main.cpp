@@ -232,7 +232,6 @@ void *paired_thread1(void *arg_) {
           pthread_mutex_unlock(arg->writeLock);
           delete ss;
       }
-      //hasRead = false;
   }
   printf("sequences read: %ld\n", seq_cnt);
   printf("sequences mapped (mate1): %ld\n", seq_mapped1);
