@@ -47,7 +47,7 @@ using namespace std;
 //mapper options
 static const string PROG = "ALFALFA";
 static const string SAM_VERSION = "1.4";
-static const string PROG_VERSION = "0.5.0";
+static const string PROG_VERSION = "0.5.2";
 static string NAN = "*";
 
 //output struct
@@ -122,7 +122,7 @@ void *unpaired_thread(void *arg_) {
               seq_mapped++;
               alignments_printed += read.alignmentCount();
               for(int k = 0; k < read.alignmentCount(); k++)
-                fprintf(outfile,"%s",read.printAlignment(k).c_str());
+                fprintf(outfile,"%s",read.printUnpairedAlignment(k).c_str());
           }
           pthread_mutex_unlock(arg->writeLock);
           delete ss;
@@ -167,7 +167,7 @@ void *query_thread(void *arg_) {
               seq_mapped++;
               alignments_printed += read.alignmentCount();
               for(int k = 0; k < read.alignmentCount(); k++)
-                fprintf(outfile,"%s",read.printAlignment(k).c_str());
+                fprintf(outfile,"%s",read.printUnpairedAlignment(k).c_str());
           }
           pthread_mutex_unlock(arg->writeLock);
           delete ss;
@@ -203,6 +203,7 @@ void *paired_thread1(void *arg_) {
           if(mate2.qname.length() > 2 && mate2.qname[mate2.qname.length()-2]=='/')
               mate2.qname.erase(mate2.qname.length()-2);
           seq_cnt++;
+          printf("%d\n",seq_cnt);
           mate1.init(arg->opt->nucleotidesOnly);
           mate2.init(arg->opt->nucleotidesOnly);
           pairedMatch(*sa, *arg->dp, mate1, mate2, arg->opt->alnOptions, arg->opt->pairedOpt, print);
@@ -215,19 +216,19 @@ void *paired_thread1(void *arg_) {
               fprintf(outfile,"%s",mate1.emptyAlingment(true,mate2.alignments.empty()).c_str());
           else{
               seq_mapped1++;
-              alignments_printed1+= mate1.alignmentCount();
+              alignments_printed1+= mate1.pairedAlignmentCount;
               for(int k = 0; k < mate1.alignmentCount(); k++)
                   if(mate1.alignments[k].flag.test(0))
-                    fprintf(outfile,"%s",mate1.printAlignment(k).c_str());
+                    fprintf(outfile,"%s",mate1.printPairedAlignments(k).c_str());
           }
           if(mate2.alignments.empty())
               fprintf(outfile,"%s",mate2.emptyAlingment(true,mate1.alignments.empty()).c_str());
           else{
               seq_mapped2++;
-              alignments_printed2+= mate2.alignmentCount();
+              alignments_printed2+= mate2.pairedAlignmentCount;
               for(int k = 0; k < mate2.alignmentCount(); k++)
                   if(mate2.alignments[k].flag.test(0))
-                    fprintf(outfile,"%s",mate2.printAlignment(k).c_str());
+                    fprintf(outfile,"%s",mate2.printPairedAlignments(k).c_str());
           }
           pthread_mutex_unlock(arg->writeLock);
           delete ss;

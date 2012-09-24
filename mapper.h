@@ -20,12 +20,26 @@
 
 using namespace std;
 
+struct mate_t {
+    mate_t(): pnextGlob(0), concordant(false), flag(0), tLength(0), rnext("*"), 
+    pnext(0) {}
+    mate_t(const mate_t & o): pnextGlob(o.pnextGlob), concordant(o.concordant), 
+    flag(o.flag.to_ulong()), tLength(o.tLength), rnext(o.rnext), pnext(o.pnext) {}
+    bitset<11> flag;
+    string rnext;
+    long pnext;
+    long pnextGlob;
+    int tLength;
+    bool concordant;
+};
 
 struct alignment_t {
-  alignment_t(): pnextGlob(0), concordant(false), globPos(0), pos(0), cigar("*"), flag(0), rname("*"), mapq(0), tLength(0),
-  rnext("*"), pnext(0), editDist(0), alignmentScore(0), cigarChars(0), cigarLengths(0), NMtag("*"), refLength(0) {}
-  alignment_t(const alignment_t & o): concordant(false), globPos(o.globPos), pos(o.pos), cigar(o.cigar), flag(o.flag.to_ulong()), rname(o.rname), mapq(o.mapq), tLength(o.tLength),
-  rnext(o.rnext), pnext(o.pnext), pnextGlob(o.pnextGlob), editDist(o.editDist), alignmentScore(o.alignmentScore), cigarChars(o.cigarChars), cigarLengths(o.cigarLengths), NMtag(o.NMtag), refLength(o.refLength) {}
+  alignment_t(): globPos(0), pos(0), cigar("*"), flag(0), rname("*"), mapq(0), editDist(0), 
+  alignmentScore(0), cigarChars(0), cigarLengths(0), NMtag("*"), refLength(0), mateInfo(0) {}
+  alignment_t(const alignment_t & o): globPos(o.globPos), pos(o.pos), cigar(o.cigar), flag(o.flag.to_ulong()), 
+  rname(o.rname), mapq(o.mapq), editDist(o.editDist), alignmentScore(o.alignmentScore), 
+  cigarChars(o.cigarChars), cigarLengths(o.cigarLengths), NMtag(o.NMtag), 
+  refLength(o.refLength), mateInfo(o.mateInfo) {}
   string cigar;//TODO: remove this fields, only used when printed
   string NMtag;//TODO: remove this fields, only used when printed
   vector<char> cigarChars;//Change these to fixed-length values
@@ -35,21 +49,27 @@ struct alignment_t {
   long pos; // position in reference sequence
   bitset<11> flag;
   int mapq;
-  //TODO: paired-end mapping
-  string rnext;
-  long pnext;
-  long pnextGlob;
   int editDist;
   int alignmentScore;
-  int tLength;
   int refLength;//length in reference sequence spanned by this alignment
-  bool concordant;
+  //paired-end fields
+  vector<mate_t> mateInfo;
+  //functions
+  bool paired(){
+      return !mateInfo.empty();
+  }
+  bool concordant() const{
+      return !mateInfo.empty() && mateInfo[0].concordant;
+  }
   void setLocalPos(const sparseSA& sa){
       if(rname.empty() || rname == "*"){
         long descIndex;
         sa.from_set(globPos, descIndex, pos);
         rname = sa.descr[descIndex];
       }
+  }
+  int pairedCount(){
+      return mateInfo.size();
   }
   void createCigar(bool newVersion){
       stringstream ss;
@@ -107,23 +127,48 @@ struct alignment_t {
       cigar = sCig.str();
       NMtag = sNM.str();
   }
+  void addMate(const alignment_t & o, bool concordant, bool upstream){
+      mate_t mate;
+      mate.flag.set(0,true);//positions for mate to be important: 0,1,5,6,7
+      mate.flag.set(1,true);
+      mate.flag.set(5,o.flag.test(4));
+      mate.flag.set(6,upstream);
+      mate.flag.set(7,!upstream);
+      mate.concordant = concordant;
+      mate.pnext = o.pos;
+      mate.pnextGlob = o.globPos;
+      if(rname == o.rname){
+        mate.rnext = "=";
+        mate.tLength = max(pos+(long)refLength-1L,o.pos+(long)o.refLength-1L) - min(pos,o.pos) + 1;
+        long firstPos = flag.test(4) ? pos+(long)refLength-1L : pos;
+        long secondPos = o.flag.test(4) ? o.pos+(long)o.refLength-1L : o.pos;
+        if(firstPos > secondPos) mate.tLength *= -1;
+      }
+      else{
+        mate.rnext = o.rname;
+        mate.tLength = 0;
+      }
+      mateInfo.push_back(mate);
+  }
 };
 
 // interval in match results + bases covering the result
 struct lis_t {
-  lis_t(): begin(0), end(0), len(0), fw(1), alignment(NULL) {}
-  lis_t(vector<match_t> * matches, int b, int e, int l, bool fw): matches(matches), begin(b), end(e), len(l), fw(fw) { alignment = NULL;}
+  lis_t(): begin(0), end(0), len(0), fw(1), alignment(), extended(0) {}
+  lis_t(vector<match_t> * matches, int b, int e, int l, bool fw_): matches(matches), begin(b), end(e), len(l), fw(fw_), alignment(), extended(0) {}
   int begin; // position in reference sequence
   int end; // position in query
   int len; // length of match
   bool fw;
+  bool extended;
   vector<match_t> * matches;
-  alignment_t * alignment;
+  alignment_t alignment;
 };
 
 struct read_t {
-    read_t(): qname(""),sequence(""),qual("*"),rcSequence(""),rQual(""), alignments(0) {}
-    read_t(string name, string &seq, string &qw, bool nucleotidesOnly): qname(name),sequence(seq),qual(qw), alignments(0){
+    read_t(): qname(""),sequence(""),qual("*"),rcSequence(""),rQual(""), alignments(0),pairedAlignmentCount(0) {}
+    read_t(string name, string &seq, string &qw, bool nucleotidesOnly): qname(name),
+    sequence(seq),qual(qw), alignments(0), pairedAlignmentCount(0){
         rcSequence = sequence;//copy
         Utils::reverse_complement(rcSequence, nucleotidesOnly);
         rQual = qual;
@@ -167,40 +212,41 @@ struct read_t {
         *ss << qname << "\t4\t*\t0\t0\t*\t*\t0\t0\t" << sequence << "\t" << qual << endl;
         return ss->str();
     }
-    int alignmentCount(){
+    int alignmentCount(){//check the correct use of this
         return alignments.size();
     }
-    string printAlignment(int i){
+    string printUnpairedAlignment(int i){
         stringstream * ss = new stringstream;
         alignment_t & a = alignments[i];
         *ss << qname << "\t" << a.flag.to_ulong() << "\t"
             << a.rname << "\t" << a.pos << "\t" << 
             a.mapq << "\t" << a.cigar << "\t" << 
-            a.rnext << "\t" << a.pnext << "\t" << 
-            a.tLength << "\t" << (a.flag.test(4) ? rcSequence : sequence) <<
+            "*" << "\t" << 0 << "\t" << 
+            0 << "\t" << (a.flag.test(4) ? rcSequence : sequence) <<
             "\t" << (a.flag.test(4) ? rQual : qual) << "\tAS:i:" << 
             a.alignmentScore << "\tNM:i:" << a.editDist << "\tX0:Z:" << 
             a.NMtag << endl;
         return ss->str();
     }
-    
-    void printAlignments(){
-        if(alignments.empty()){
-            printf("%s\t%d\t%s\t%ld\t%d\t%s\t%s\t%ld\t%d\t%s\t%s\n",qname.c_str(),4,"*",0,0,"*","*",0,0,sequence.c_str(),qual.c_str());
+    string printPairedAlignments(int i){
+        stringstream * ss = new stringstream;
+        alignment_t & a = alignments[i];
+        if(a.paired()){
+            for(int j = 0; j < a.pairedCount(); j++){
+                //flag has to be changed
+                *ss << qname << "\t" << (a.flag.to_ulong() |a.mateInfo[j].flag.to_ulong())  << "\t"
+                << a.rname << "\t" << a.pos << "\t" << 
+                a.mapq << "\t" << a.cigar << "\t" << 
+                a.mateInfo[j].rnext << "\t" << a.mateInfo[j].pnext << "\t" << 
+                a.mateInfo[j].tLength << "\t" << (a.flag.test(4) ? rcSequence : sequence) <<
+                "\t" << (a.flag.test(4) ? rQual : qual) << "\tAS:i:" << 
+                a.alignmentScore << "\tNM:i:" << a.editDist << "\tX0:Z:" << 
+                a.NMtag << endl;
+            }
+            return ss->str();
         }
         else{
-            alignment_t & a = alignments[0];
-            printf("%s\t%d\t%s\t%ld\t%d\t%s\t%s\t%ld\t%d\t%s\t%s\tAS:i:%d\tNH:i:%ld\tNM:i:%d\tX0:Z:%s\n",
-                        qname.c_str(),(int)a.flag.to_ulong(),a.rname.c_str(),a.pos,a.mapq,a.cigar.c_str(),
-                        a.rnext.c_str(),a.pnext,a.tLength, a.flag.test(4) ? rcSequence.c_str() : sequence.c_str(), a.flag.test(4) ? rQual.c_str() : qual.c_str(),
-                        a.alignmentScore,alignments.size(),a.editDist,a.NMtag.c_str());
-            for(int i=1; i < alignments.size(); i++){
-                a = alignments[i];
-                printf("%s\t%d\t%s\t%ld\t%d\t%s\t%s\t%ld\t%d\t%s\t%s\tAS:i:%d\tNM:i:%d\tX0:Z:%s\n",
-                        qname.c_str(),(int)a.flag.to_ulong(),a.rname.c_str(),a.pos,a.mapq,a.cigar.c_str(),
-                        a.rnext.c_str(),a.pnext,a.tLength,a.flag.test(4) ? rcSequence.c_str() : sequence.c_str(),
-                        a.flag.test(4) ? rQual.c_str() : qual.c_str(),a.alignmentScore,a.editDist,a.NMtag.c_str());
-            }
+            return printUnpairedAlignment(i);
         }
     }
     string qname;//TODO should be reference
@@ -209,6 +255,7 @@ struct read_t {
     string rcSequence;
     string qual;//TODO should be reference
     string rQual;
+    int pairedAlignmentCount;
 };
 
 extern void unpairedMatch(const sparseSA& sa, dynProg& dp_, read_t & read,const align_opt & alnOptions, bool print);
