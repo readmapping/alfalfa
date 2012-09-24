@@ -203,7 +203,6 @@ void *paired_thread1(void *arg_) {
           if(mate2.qname.length() > 2 && mate2.qname[mate2.qname.length()-2]=='/')
               mate2.qname.erase(mate2.qname.length()-2);
           seq_cnt++;
-          printf("%d\n",seq_cnt);
           mate1.init(arg->opt->nucleotidesOnly);
           mate2.init(arg->opt->nucleotidesOnly);
           pairedMatch(*sa, *arg->dp, mate1, mate2, arg->opt->alnOptions, arg->opt->pairedOpt, print);

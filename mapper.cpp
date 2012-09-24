@@ -486,6 +486,8 @@ void setUnPaired(alignment_t& toset, read_t& read){
 }
 
 void setPaired(alignment_t& mate1, alignment_t& mate2, read_t& upstream, read_t& downstream, bool concordant){
+    mate1.flag.set(0, true);
+    mate2.flag.set(0, true);
     mate1.addMate(mate2, concordant, true);
     mate2.addMate(mate1, concordant, false);
     upstream.pairedAlignmentCount++;

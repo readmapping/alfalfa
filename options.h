@@ -74,12 +74,12 @@ struct mapOptions_t{//commentary + sort + constructor
         pairedOpt.contain = true;
         pairedOpt.discordant = true;
         pairedOpt.dovetail = false;
-        pairedOpt.maxInsert = 4000;//return to default!
-        pairedOpt.minInsert = 2000;//return to default!
+        pairedOpt.maxInsert = 500;//return to default!//
+        pairedOpt.minInsert = 0;//return to default!//
         pairedOpt.mixed = true;
         pairedOpt.orientation = PAIR_FR;
         pairedOpt.overlap = true;
-        pairedOpt.mode = 2;
+        pairedOpt.mode = 1;
         unpairedQ = pair1 = pair2 = ref_fasta = outputName = "";
         command = ALN;
     }
