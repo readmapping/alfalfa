@@ -69,3 +69,8 @@ v0.5.0
 *fixed multithreading issue with semi-static DP matrix, now every thread has its own DP matrix.
 *fixed bug in traceback of DP algorithm
 *added banded DP mode with non-symmetrical band (used in paired-end algorithm)
+
+v0.5.2
+*many bugfixes in paired end mode
+*fixed possible bugs when indexing sequences larger than 2GB
+*decreased memory of DP matrix by splitting dimension of matrix in width and length

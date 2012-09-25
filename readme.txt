@@ -59,7 +59,7 @@ PAIRED END OPTIONS
 --dovetail                 allow reads to dovetail (changing up- and downstream of reads)
 --no-contain               disallow a mate to be fully contained in the other
 --no-overlap               disallow a mate to overlap with the other
---paired-mode (int)        choose algorithm to calculate paired-end reads
+--paired-mode (int)        choose algorithm to calculate paired-end reads 1,2,3,4 [1]
 
 MISC OPTIONS 
 ------------
