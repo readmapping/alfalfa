@@ -211,7 +211,7 @@ struct read_t {
         if(mateFailed) flag += 8;
         if(paired && upstream) flag += 64;
         if(paired && !upstream) flag += 128;
-        *ss << qname << "\t4\t*\t0\t0\t*\t*\t0\t0\t" << sequence << "\t" << qual << endl;
+        *ss << qname << "\t" << flag << "\t*\t0\t0\t*\t*\t0\t0\t" << sequence << "\t" << qual << endl;
         return ss->str();
     }
     int alignmentCount(){//check the correct use of this

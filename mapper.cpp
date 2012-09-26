@@ -504,6 +504,8 @@ void pairedMatch1(const sparseSA& sa, dynProg& dp_, read_t & mate1, read_t & mat
     unpairedMatch(sa, dp_, mate2, alnOptions, print);
     int alnCount1 = mate1.alignmentCount();
     int alnCount2 = mate2.alignmentCount();
+    int i = 0;
+    int alnCount = 0;
     if(alnCount1>0 && alnCount2>0){
         int concordant = 0;
         int discordant = 0;
@@ -516,8 +518,6 @@ void pairedMatch1(const sparseSA& sa, dynProg& dp_, read_t & mate1, read_t & mat
         for(int j = 0; j < alnCount2; j++){
             mate2.alignments[j].setLocalPos(sa);
         }
-        int i = 0;
-        int alnCount = 0;
         //search concordant alignments
         while(i < alnCount1 && alnCount < alnOptions.alignmentCount){
             alignment_t & aln1 = mate1.alignments[i];
@@ -550,29 +550,28 @@ void pairedMatch1(const sparseSA& sa, dynProg& dp_, read_t & mate1, read_t & mat
                 alnCount++;
             }
         }
-        //sort alignments such that first concordant, than discordant, than unpaired
-        if(pairedOpt.mixed){
-            i = 0;
-            int alnCountFirst = alnCount;
-            while(i < alnCount1 && alnCountFirst < alnOptions.alignmentCount){
-                if(!mate1.alignments[i].flag.test(0)){
-                    setUnPaired(mate1.alignments[i],mate1, true);
-                    alnCountFirst++;
-                }
-                i++;
+    }
+    //sort alignments such that first concordant, than discordant, than unpaired
+    if(pairedOpt.mixed){
+        i = 0;
+        int alnCountFirst = alnCount;
+        while(i < alnCount1 && alnCountFirst < alnOptions.alignmentCount){
+            if(!mate1.alignments[i].flag.test(0)){
+                setUnPaired(mate1.alignments[i],mate1, true);
+                alnCountFirst++;
             }
-            
-            i = 0;
-            int alnCountSecond = alnCount;
-            while(i < alnCount2 && alnCountSecond < alnOptions.alignmentCount){
-                if(!mate2.alignments[i].flag.test(0)){
-                    setUnPaired(mate2.alignments[i],mate2, false);
-                    alnCountSecond++;
-                }
-                i++;
-            }
-            mate2.pairedAlignmentCount = alnCountSecond;
+            i++;
         }
+        i = 0;
+        int alnCountSecond = alnCount;
+        while(i < alnCount2 && alnCountSecond < alnOptions.alignmentCount){
+            if(!mate2.alignments[i].flag.test(0)){
+                setUnPaired(mate2.alignments[i],mate2, false);
+                alnCountSecond++;
+            }
+            i++;
+        }
+        mate2.pairedAlignmentCount = alnCountSecond;
     }
     else if(alnCount1>0 || alnCount2>0){//bail1 + set to unpaired??? flag 3
         //IMPLEMENT BAIL ME: PARTIAL MODE2 ON THE ONE THAT IS NON_ZERO
