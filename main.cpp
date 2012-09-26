@@ -116,7 +116,7 @@ void *unpaired_thread(void *arg_) {
           pthread_mutex_lock(arg->writeLock);
           stringstream * ss = new stringstream;
           if(read.alignments.empty()){
-              fprintf(outfile,"%s",read.emptyAlingment(false,false).c_str());
+              fprintf(outfile,"%s",read.emptyAlingment(false,false,true).c_str());
           }
           else{
               seq_mapped++;
@@ -162,7 +162,7 @@ void *query_thread(void *arg_) {
           pthread_mutex_lock(arg->writeLock);
           stringstream * ss = new stringstream;
           if(read.alignments.empty())
-              fprintf(outfile,"%s",read.emptyAlingment(false,false).c_str());
+              fprintf(outfile,"%s",read.emptyAlingment(false,false,true).c_str());
           else{
               seq_mapped++;
               alignments_printed += read.alignmentCount();
@@ -212,7 +212,7 @@ void *paired_thread1(void *arg_) {
           pthread_mutex_lock(arg->writeLock);
           stringstream * ss = new stringstream;
           if(mate1.alignments.empty())
-              fprintf(outfile,"%s",mate1.emptyAlingment(true,mate2.alignments.empty()).c_str());
+              fprintf(outfile,"%s",mate1.emptyAlingment(true,mate2.alignments.empty(),true).c_str());
           else{
               seq_mapped1++;
               alignments_printed1+= mate1.pairedAlignmentCount;
@@ -221,7 +221,7 @@ void *paired_thread1(void *arg_) {
                     fprintf(outfile,"%s",mate1.printPairedAlignments(k).c_str());
           }
           if(mate2.alignments.empty())
-              fprintf(outfile,"%s",mate2.emptyAlingment(true,mate1.alignments.empty()).c_str());
+              fprintf(outfile,"%s",mate2.emptyAlingment(true,mate1.alignments.empty(),false).c_str());
           else{
               seq_mapped2++;
               alignments_printed2+= mate2.pairedAlignmentCount;

@@ -204,11 +204,13 @@ struct read_t {
                  alignments[j].flag.set(8,true);
         }
     }
-    string emptyAlingment(bool paired, bool mateFailed){
+    string emptyAlingment(bool paired, bool mateFailed, bool upstream){
         stringstream * ss = new stringstream;
         int flag = 4;
         if(paired) flag += 1;
         if(mateFailed) flag += 8;
+        if(paired && upstream) flag += 64;
+        if(paired && !upstream) flag += 128;
         *ss << qname << "\t4\t*\t0\t0\t*\t*\t0\t0\t" << sequence << "\t" << qual << endl;
         return ss->str();
     }
