@@ -480,8 +480,11 @@ struct pair_t {
   pair_t(int first, int second): mate1(first), mate2(second) {}
 };
 
-void setUnPaired(alignment_t& toset, read_t& read){
+void setUnPaired(alignment_t& toset, read_t& read, bool upstream){
     toset.flag.set(0,true);
+    toset.flag.set(6,upstream);
+    toset.flag.set(7,!upstream);
+    toset.flag.set(3,true);
     read.pairedAlignmentCount++;
 }
 
@@ -553,7 +556,7 @@ void pairedMatch1(const sparseSA& sa, dynProg& dp_, read_t & mate1, read_t & mat
             int alnCountFirst = alnCount;
             while(i < alnCount1 && alnCountFirst < alnOptions.alignmentCount){
                 if(!mate1.alignments[i].flag.test(0)){
-                    setUnPaired(mate1.alignments[i],mate1);
+                    setUnPaired(mate1.alignments[i],mate1, true);
                     alnCountFirst++;
                 }
                 i++;
@@ -563,7 +566,7 @@ void pairedMatch1(const sparseSA& sa, dynProg& dp_, read_t & mate1, read_t & mat
             int alnCountSecond = alnCount;
             while(i < alnCount2 && alnCountSecond < alnOptions.alignmentCount){
                 if(!mate2.alignments[i].flag.test(0)){
-                    setUnPaired(mate2.alignments[i],mate2);
+                    setUnPaired(mate2.alignments[i],mate2, false);
                     alnCountSecond++;
                 }
                 i++;
@@ -835,7 +838,7 @@ void pairedMatch3(const sparseSA& sa, dynProg& dp_, read_t & mate1, read_t & mat
         int alnCountFirst = concordant;
         while(i < lisIntervalsFM1.size() && lisIntervalsFM1[i].extended && alnCountFirst < alnOptions.alignmentCount){
             if(!lisIntervalsFM1[i].alignment.paired()){
-                setUnPaired(lisIntervalsFM1[i].alignment,mate1);
+                setUnPaired(lisIntervalsFM1[i].alignment,mate1, true);
                 alnCountFirst++;
             }
             i++;
@@ -844,7 +847,7 @@ void pairedMatch3(const sparseSA& sa, dynProg& dp_, read_t & mate1, read_t & mat
         int alnCountSecond = concordant;
         while(i < lisIntervalsFM2.size() && lisIntervalsFM2[i].extended && alnCountSecond < alnOptions.alignmentCount){
             if(!lisIntervalsFM2[i].alignment.paired()){
-                setUnPaired(lisIntervalsFM2[i].alignment,mate2);
+                setUnPaired(lisIntervalsFM2[i].alignment,mate2, false);
                 alnCountSecond++;
             }
             i++;
@@ -1104,7 +1107,7 @@ void pairedMatch4(const sparseSA& sa, dynProg& dp_, read_t & mate1, read_t & mat
         int alnCountFirst = concordant;
         while(i < lisIntervalsFM1.size() && lisIntervalsFM1[i].extended && alnCountFirst < alnOptions.alignmentCount){
             if(!lisIntervalsFM1[i].alignment.paired()){
-                setUnPaired(lisIntervalsFM1[i].alignment,mate1);
+                setUnPaired(lisIntervalsFM1[i].alignment,mate1, true);
                 alnCountFirst++;
             }
             i++;
@@ -1113,7 +1116,7 @@ void pairedMatch4(const sparseSA& sa, dynProg& dp_, read_t & mate1, read_t & mat
         int alnCountSecond = concordant;
         while(i < lisIntervalsFM2.size() && lisIntervalsFM2[i].extended && alnCountSecond < alnOptions.alignmentCount){
             if(!lisIntervalsFM2[i].alignment.paired()){
-                setUnPaired(lisIntervalsFM2[i].alignment,mate2);
+                setUnPaired(lisIntervalsFM2[i].alignment,mate2, false);
                 alnCountSecond++;
             }
             i++;
@@ -1344,7 +1347,7 @@ void pairedMatch2(const sparseSA& sa, dynProg& dp_, read_t & mate1, read_t & mat
         int alnCountFirst = concordant;
         while(i < mate1.alignmentCount() && alnCountFirst < alnOptions.alignmentCount){
             if(!mate1.alignments[i].paired()){
-                setUnPaired(mate1.alignments[i],mate1);
+                setUnPaired(mate1.alignments[i],mate1, true);
                 alnCountFirst++;
             }
             i++;
@@ -1353,7 +1356,7 @@ void pairedMatch2(const sparseSA& sa, dynProg& dp_, read_t & mate1, read_t & mat
         int alnCountSecond = concordant;
         while(i < mate2.alignmentCount() && alnCountSecond < alnOptions.alignmentCount){
             if(!mate2.alignments[i].paired()){
-                setUnPaired(mate2.alignments[i],mate2);
+                setUnPaired(mate2.alignments[i],mate2, false);
                 alnCountSecond++;
             }
             i++;
