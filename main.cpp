@@ -109,6 +109,8 @@ void *unpaired_thread(void *arg_) {
       pthread_mutex_unlock(arg->readLock);
       if(hasRead){
           seq_cnt++;
+          if(seq_cnt%10000==0)
+              cerr << ".";
           read.init(arg->opt->nucleotidesOnly);
           unpairedMatch(*sa, *arg->dp, read, arg->opt->alnOptions, print);
           read.postprocess(arg->opt->alnOptions.scores, *sa);
@@ -128,9 +130,9 @@ void *unpaired_thread(void *arg_) {
           delete ss;
       }
   }
-  printf("sequences read: %ld\n", seq_cnt);
-  printf("sequences mapped: %ld\n", seq_mapped);
-  printf("alignments printed: %ld\n", alignments_printed);
+  printf("sequences read by thread %d: %ld\n",arg->skip0, seq_cnt);
+  printf("sequences mapped by thread %d: %ld\n",arg->skip0, seq_mapped);
+  printf("alignments printed by thread %d: %ld\n",arg->skip0, alignments_printed);
   delete arg->dp;
   pthread_exit(NULL);
 }
@@ -150,6 +152,8 @@ void *query_thread(void *arg_) {
       pthread_mutex_unlock(arg->readLock);
       if(hasRead){
           seq_cnt++;
+          if(seq_cnt%10000==0)
+              cerr << ".";
           if(!arg->opt->alnOptions.noFW){//to inner funtion
               inexactMatch(*sa, *arg->dp, read, arg->opt->alnOptions, true, print);
           }
@@ -173,9 +177,9 @@ void *query_thread(void *arg_) {
           delete ss;
       }
   }
-  printf("sequences read: %ld\n", seq_cnt);
-  printf("sequences mapped: %ld\n", seq_mapped);
-  printf("alignments printed: %ld\n", alignments_printed);
+  printf("sequences read by thread %d: %ld\n",arg->skip0, seq_cnt);
+  printf("sequences mapped by thread %d: %ld\n",arg->skip0, seq_mapped);
+  printf("alignments printed by thread %d: %ld\n",arg->skip0, alignments_printed);
   delete arg->dp;
   pthread_exit(NULL);
 }
@@ -203,6 +207,8 @@ void *paired_thread1(void *arg_) {
           if(mate2.qname.length() > 2 && mate2.qname[mate2.qname.length()-2]=='/')
               mate2.qname.erase(mate2.qname.length()-2);
           seq_cnt++;
+          if(seq_cnt%10000==0)
+              cerr << ".";
           mate1.init(arg->opt->nucleotidesOnly);
           mate2.init(arg->opt->nucleotidesOnly);
           pairedMatch(*sa, *arg->dp, mate1, mate2, arg->opt->alnOptions, arg->opt->pairedOpt, print);
@@ -233,11 +239,11 @@ void *paired_thread1(void *arg_) {
           delete ss;
       }
   }
-  printf("sequences read: %ld\n", seq_cnt);
-  printf("sequences mapped (mate1): %ld\n", seq_mapped1);
-  printf("sequences mapped (mate2): %ld\n", seq_mapped2);
-  printf("alignments printed (mate1): %ld\n", alignments_printed1);
-  printf("alignments printed (mate2): %ld\n", alignments_printed2);
+  printf("sequences read by thread %d: %ld\n", arg->skip0,seq_cnt);
+  printf("sequences mapped (mate1) by thread %d: %ld\n", arg->skip0, seq_mapped1);
+  printf("sequences mapped (mate2) by thread %d: %ld\n", arg->skip0, seq_mapped2);
+  printf("alignments printed (mate1) by thread %d: %ld\n", arg->skip0, alignments_printed1);
+  printf("alignments printed (mate2) by thread %d: %ld\n", arg->skip0, alignments_printed2);
   delete arg->dp;
   pthread_exit(NULL);
 }
@@ -284,6 +290,7 @@ int main(int argc, char* argv[]){
             vector<query_arg> args(opt.query_threads);
             vector<pthread_t> thread_ids(opt.query_threads);
             cerr << "Mapping unpaired reads to the index using " << opt.query_threads << " threads ..." << endl;
+            cerr << "Progress (each dot represents 10.000 reads processed: ";
             clock_t start = clock();
             // Initialize additional thread data.
             for(int i = 0; i < opt.query_threads; i++) {
@@ -302,6 +309,7 @@ int main(int argc, char* argv[]){
                 pthread_join(thread_ids[i], NULL);
             clock_t end = clock();
             double cpu_time = (double)( end - start ) /CLOCKS_PER_SEC;
+            cerr << endl;
             cerr << "mapping unpaired: done" << endl;
             cerr << "time for mapping: " << cpu_time << endl;
             delete queryReader;
@@ -315,6 +323,7 @@ int main(int argc, char* argv[]){
             vector<query_arg> args(opt.query_threads);
             vector<pthread_t> thread_ids(opt.query_threads);
             cerr << "Mapping paired reads to the index using " << opt.query_threads << " threads ..." << endl;
+            cerr << "Progress (each dot represents 10.000 reads processed: ";
             clock_t start = clock();
             // Initialize additional thread data.
             for(int i = 0; i < opt.query_threads; i++) {
@@ -333,6 +342,7 @@ int main(int argc, char* argv[]){
                 pthread_join(thread_ids[i], NULL);
             clock_t end = clock();
             double cpu_time = (double)( end - start ) /CLOCKS_PER_SEC;
+            cerr << endl;
             cerr << "mapping paired: done" << endl;
             cerr << "time for mapping: " << cpu_time << endl;
             delete mate1Reader;

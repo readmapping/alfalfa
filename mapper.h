@@ -205,22 +205,22 @@ struct read_t {
         }
     }
     string emptyAlingment(bool paired, bool mateFailed, bool upstream){
-        stringstream * ss = new stringstream;
+        stringstream ss;
         int flag = 4;
         if(paired) flag += 1;
         if(mateFailed) flag += 8;
         if(paired && upstream) flag += 64;
         if(paired && !upstream) flag += 128;
-        *ss << qname << "\t" << flag << "\t*\t0\t0\t*\t*\t0\t0\t" << sequence << "\t" << qual << endl;
-        return ss->str();
+        ss << qname << "\t" << flag << "\t*\t0\t0\t*\t*\t0\t0\t" << sequence << "\t" << qual << endl;
+        return ss.str();
     }
     int alignmentCount(){//check the correct use of this
         return alignments.size();
     }
     string printUnpairedAlignment(int i){
-        stringstream * ss = new stringstream;
+        stringstream ss;
         alignment_t & a = alignments[i];
-        *ss << qname << "\t" << a.flag.to_ulong() << "\t"
+        ss << qname << "\t" << a.flag.to_ulong() << "\t"
             << a.rname << "\t" << a.pos << "\t" << 
             a.mapq << "\t" << a.cigar << "\t" << 
             "*" << "\t" << 0 << "\t" << 
@@ -228,15 +228,15 @@ struct read_t {
             "\t" << (a.flag.test(4) ? rQual : qual) << "\tAS:i:" << 
             a.alignmentScore << "\tNM:i:" << a.editDist << "\tX0:Z:" << 
             a.NMtag << endl;
-        return ss->str();
+        return ss.str();
     }
     string printPairedAlignments(int i){
-        stringstream * ss = new stringstream;
+        stringstream ss;
         alignment_t & a = alignments[i];
         if(a.paired()){
             for(int j = 0; j < a.pairedCount(); j++){
                 //flag has to be changed
-                *ss << qname << "\t" << (a.flag.to_ulong() |a.mateInfo[j].flag.to_ulong())  << "\t"
+                ss << qname << "\t" << (a.flag.to_ulong() |a.mateInfo[j].flag.to_ulong())  << "\t"
                 << a.rname << "\t" << a.pos << "\t" << 
                 a.mapq << "\t" << a.cigar << "\t" << 
                 a.mateInfo[j].rnext << "\t" << a.mateInfo[j].pnext << "\t" << 
@@ -245,7 +245,7 @@ struct read_t {
                 a.alignmentScore << "\tNM:i:" << a.editDist << "\tX0:Z:" << 
                 a.NMtag << endl;
             }
-            return ss->str();
+            return ss.str();
         }
         else{
             return printUnpairedAlignment(i);

@@ -146,8 +146,9 @@
           <runcommandpicklistitem>"${OUTPUT_PATH}" aln C:/data/reference/drosophila/genome.fasta C:/data/reference/drosophila/reads_454/SRR034673.10k.fastq</runcommandpicklistitem>
           <runcommandpicklistitem>"${OUTPUT_PATH}" aln -s 8 C:/data/reference/drosophila/genome.fasta C:/data/reference/drosophila/reads_454/SRR034673.10k.fastq</runcommandpicklistitem>
           <runcommandpicklistitem>"${OUTPUT_PATH}" aln -s 2 C:/data/reference/drosophila/genome.fasta C:/data/reference/drosophila/reads_454/SRR034673.10k.fastq</runcommandpicklistitem>
+          <runcommandpicklistitem>"${OUTPUT_PATH}" aln -s 2 -x C:/data/reference/drosophila/genome.fasta -U C:/data/reference/drosophila/reads_454/SRR034673.10k.fastq -S C:/data/reference/drosophila/reads_454/test.sam</runcommandpicklistitem>
         </runcommandpicklist>
-        <runcommand>"${OUTPUT_PATH}" aln -s 2 C:/data/reference/drosophila/genome.fasta C:/data/reference/drosophila/reads_454/SRR034673.10k.fastq</runcommand>
+        <runcommand>"${OUTPUT_PATH}" aln -s 2 -x C:/data/reference/drosophila/genome.fasta -U C:/data/reference/drosophila/reads_454/SRR034673.10k.fastq -S C:/data/reference/drosophila/reads_454/test.sam</runcommand>
         <rundir></rundir>
         <buildfirst>true</buildfirst>
         <terminal-type>0</terminal-type>
