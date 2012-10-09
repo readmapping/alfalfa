@@ -124,7 +124,11 @@ sparseSA::sparseSA(string &S_, vector<string> &descr_, vector<long> &startpos_, 
     if(K >= 4){
         hasChild = true;
         hasSufLink = false;
-        ISA.clear();
+//        ISA.clear();
+        {
+          vector<int> tmp;
+          ISA.swap(tmp);
+        }
         CHILD.resize(N/K);
         //Use algorithm by Abouelhoda et al to construct CHILD array
         computeChild();
