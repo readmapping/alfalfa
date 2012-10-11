@@ -138,7 +138,7 @@ static struct option long_options[] = {
     {(char*)"mincoverage",      required_argument, 0,            'C'},
     {(char*)"errors",           required_argument, 0,            'd'},
     {(char*)"tryharder",        no_argument,       0,            ARG_TRY_HARDER},
-    {(char*)"seedthreads",      required_argument, 0,            ARG_SEED_THREADS},
+    //{(char*)"seedthreads",      required_argument, 0,            ARG_SEED_THREADS},
     {(char*)"nofw",             no_argument,       0,            ARG_NOFW},
     {(char*)"norc",             no_argument,       0,            ARG_NORC},
     {(char*)"wildcards",        no_argument,       0,            'N'},
@@ -203,7 +203,7 @@ static void usageAln(const string prog) {
   cerr << "-T/--trials (int)          maximum number of times alignment is attempted before we give up [10]" << endl;
   cerr << "-C/--mincoverage (int)     minimum percent of bases of read the seeds have to cover [25]" << endl;
   cerr << "--tryharder                enable: 'try harder': when no seeds have been found, search using less stringent parameters" << endl;
-  cerr << "--seedthreads (int)        number of threads for calculating the seeds [1]" << endl;
+  //cerr << "--seedthreads (int)        number of threads for calculating the seeds [1]" << endl;
   cerr << "--nofw                     do not compute forward matches" << endl;
   cerr << "--norc                     do not compute reverse complement matches" << endl;
   cerr << "-n/--wildcards             treat Ns as wildcard characters" << endl;

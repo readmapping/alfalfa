@@ -48,7 +48,7 @@ using namespace std;
 //mapper options
 static const string PROG = "ALFALFA";
 static const string SAM_VERSION = "1.4";
-static const string PROG_VERSION = "0.5.4";
+static const string PROG_VERSION = "0.5.5";
 static const string NOT_AVAILABLE = "*";
 
 //output struct
@@ -224,7 +224,7 @@ void *paired_thread1(void *arg_) {
               seq_mapped1++;
               alignments_printed1+= mate1.pairedAlignmentCount;
               for(int k = 0; k < mate1.alignmentCount(); k++)
-                  if(mate1.alignments[k].flag.test(0))
+                  if(mate1.alignments[k]->flag.test(0))
                     fprintf(outfile,"%s",mate1.printPairedAlignments(k).c_str());
           }
           if(mate2.alignments.empty())
@@ -233,7 +233,7 @@ void *paired_thread1(void *arg_) {
               seq_mapped2++;
               alignments_printed2+= mate2.pairedAlignmentCount;
               for(int k = 0; k < mate2.alignmentCount(); k++)
-                  if(mate2.alignments[k].flag.test(0))
+                  if(mate2.alignments[k]->flag.test(0))
                     fprintf(outfile,"%s",mate2.printPairedAlignments(k).c_str());
           }
           pthread_mutex_unlock(arg->writeLock);
