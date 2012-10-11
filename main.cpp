@@ -29,6 +29,7 @@
 
 #include "fasta.h"
 #include "mapper.h"
+#include "performanceUtils.h"
 
 #include <time.h>
 #include <stdio.h>
@@ -47,8 +48,8 @@ using namespace std;
 //mapper options
 static const string PROG = "ALFALFA";
 static const string SAM_VERSION = "1.4";
-static const string PROG_VERSION = "0.5.2";
-static string NAN = "*";
+static const string PROG_VERSION = "0.5.5";
+static const string NOT_AVAILABLE = "*";
 
 //output struct
 struct samOutput{//construct
@@ -223,7 +224,7 @@ void *paired_thread1(void *arg_) {
               seq_mapped1++;
               alignments_printed1+= mate1.pairedAlignmentCount;
               for(int k = 0; k < mate1.alignmentCount(); k++)
-                  if(mate1.alignments[k].flag.test(0))
+                  if(mate1.alignments[k]->flag.test(0))
                     fprintf(outfile,"%s",mate1.printPairedAlignments(k).c_str());
           }
           if(mate2.alignments.empty())
@@ -232,7 +233,7 @@ void *paired_thread1(void *arg_) {
               seq_mapped2++;
               alignments_printed2+= mate2.pairedAlignmentCount;
               for(int k = 0; k < mate2.alignmentCount(); k++)
-                  if(mate2.alignments[k].flag.test(0))
+                  if(mate2.alignments[k]->flag.test(0))
                     fprintf(outfile,"%s",mate2.printPairedAlignments(k).c_str());
           }
           pthread_mutex_unlock(arg->writeLock);
@@ -250,111 +251,116 @@ void *paired_thread1(void *arg_) {
 
 int main(int argc, char* argv[]){
     cerr << "@PG\tID:" << PROG << "\tVN:" << PROG_VERSION << endl;
-    mapOptions_t opt;
-    opt.initOptions();
-    processParameters(argc, argv, opt, PROG);
-    //query name + read initialization
-    cerr << "parsing options: done" << endl;
-    cerr << "loading ref sequences: ..." << endl;
-    string ref;
-    samOutput output;
-    load_fasta(opt.ref_fasta, ref, output.refdescr, output.startpos);
-    
-    cerr << "loading ref sequences: done" << endl;
-    cerr << "# ref sequence: " << opt.ref_fasta.data() << endl;
-    if(opt.command >= INDEX){
-        //build index
-        cerr << "building index with s = " << opt.K  << " ... "<< endl;
-        clock_t start = clock();
-        sa = new sparseSA(ref, output.refdescr, output.startpos, opt._4column, opt.K);
-        clock_t end = clock();
-        double cpu_time = (double)( end - start ) /CLOCKS_PER_SEC;
-        cerr << "building index: done" << endl;
-        cerr << "time for building index structure: " << cpu_time << endl;
-
-        if(opt.command == INDEX) delete sa;
+    if(strcmp(argv[1], "check") == 0){
+        
     }
-    if(opt.command == ALN){
-        if(opt.outputName.empty()) 
-            opt.outputName = opt.ref_fasta.substr().append(".sam");
-        //Print SAM Header, require refdescre, startpos and argc/argv
-        output.createHeader(argc, argv, ref.length());
-        outfile = fopen( opt.outputName.c_str(), "w" );
-        fprintf(outfile,"%s",output.header.c_str());
-        //FIRST: Unpaired reads
-        if(!opt.unpairedQ.empty()){
-            queryReader = new fastqInputReader(opt.unpairedQ, opt.nucleotidesOnly);
-            pthread_mutex_init(&writeLock_, NULL);
-            pthread_attr_t attr;  pthread_attr_init(&attr);
-            pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
-            vector<query_arg> args(opt.query_threads);
-            vector<pthread_t> thread_ids(opt.query_threads);
-            cerr << "Mapping unpaired reads to the index using " << opt.query_threads << " threads ..." << endl;
-            cerr << "Progress (each dot represents 10.000 reads processed: ";
+    else{
+        mapOptions_t opt;
+        opt.initOptions();
+        processParameters(argc, argv, opt, PROG);
+        //query name + read initialization
+        cerr << "parsing options: done" << endl;
+        cerr << "loading ref sequences: ..." << endl;
+        string ref;
+        samOutput output;
+        load_fasta(opt.ref_fasta, ref, output.refdescr, output.startpos);
+
+        cerr << "loading ref sequences: done" << endl;
+        cerr << "# ref sequence: " << opt.ref_fasta.data() << endl;
+        if(opt.command >= INDEX){
+            //build index
+            cerr << "building index with s = " << opt.K  << " ... "<< endl;
             clock_t start = clock();
-            // Initialize additional thread data.
-            for(int i = 0; i < opt.query_threads; i++) {
-                args[i].skip = opt.query_threads;
-                args[i].skip0 = i;
-                args[i].opt = & opt;
-                args[i].readLock = &queryReader->readLock_;
-                args[i].writeLock = &writeLock_;
-                args[i].dp = new dynProg(2048, opt.alnOptions.scores.openGap!=0, opt.alnOptions.scores);
-            }
-            // Create joinable threads to find MEMs.
-            for(int i = 0; i < opt.query_threads; i++)
-                pthread_create(&thread_ids[i], &attr, query_thread, (void *)&args[i]);
-            // Wait for all threads to terminate.
-            for(int i = 0; i < opt.query_threads; i++)
-                pthread_join(thread_ids[i], NULL);
+            sa = new sparseSA(ref, output.refdescr, output.startpos, opt._4column, opt.K);
             clock_t end = clock();
             double cpu_time = (double)( end - start ) /CLOCKS_PER_SEC;
-            cerr << endl;
-            cerr << "mapping unpaired: done" << endl;
-            cerr << "time for mapping: " << cpu_time << endl;
-            delete queryReader;
+            cerr << "building index: done" << endl;
+            cerr << "time for building index structure: " << cpu_time << endl;
+
+            if(opt.command == INDEX) delete sa;
         }
-        //SECOND: Paired reads
-        if(!opt.pair1.empty() && !opt.pair2.empty()){
-            mate1Reader = new fastqInputReader(opt.pair1, opt.nucleotidesOnly);
-            mate2Reader = new fastqInputReader(opt.pair2, opt.nucleotidesOnly);
-            pthread_attr_t attr;  pthread_attr_init(&attr);
-            pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
-            vector<query_arg> args(opt.query_threads);
-            vector<pthread_t> thread_ids(opt.query_threads);
-            cerr << "Mapping paired reads to the index using " << opt.query_threads << " threads ..." << endl;
-            cerr << "Progress (each dot represents 10.000 reads processed: ";
-            clock_t start = clock();
-            // Initialize additional thread data.
-            for(int i = 0; i < opt.query_threads; i++) {
-                args[i].skip = opt.query_threads;
-                args[i].skip0 = i;
-                args[i].opt = & opt;
-                args[i].readLock = &mate1Reader->readLock_;
-                args[i].writeLock = &writeLock_;
-                args[i].dp = new dynProg(2048, opt.alnOptions.scores.openGap!=0, opt.alnOptions.scores);
+        if(opt.command == ALN){
+            if(opt.outputName.empty()) 
+                opt.outputName = opt.ref_fasta.substr().append(".sam");
+            //Print SAM Header, require refdescre, startpos and argc/argv
+            output.createHeader(argc, argv, ref.length());
+            outfile = fopen( opt.outputName.c_str(), "w" );
+            fprintf(outfile,"%s",output.header.c_str());
+            //FIRST: Unpaired reads
+            if(!opt.unpairedQ.empty()){
+                queryReader = new fastqInputReader(opt.unpairedQ, opt.nucleotidesOnly);
+                pthread_mutex_init(&writeLock_, NULL);
+                pthread_attr_t attr;  pthread_attr_init(&attr);
+                pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+                vector<query_arg> args(opt.query_threads);
+                vector<pthread_t> thread_ids(opt.query_threads);
+                cerr << "Mapping unpaired reads to the index using " << opt.query_threads << " threads ..." << endl;
+                cerr << "Progress (each dot represents 10.000 reads processed: ";
+                clock_t start = clock();
+                // Initialize additional thread data.
+                for(int i = 0; i < opt.query_threads; i++) {
+                    args[i].skip = opt.query_threads;
+                    args[i].skip0 = i;
+                    args[i].opt = & opt;
+                    args[i].readLock = &queryReader->readLock_;
+                    args[i].writeLock = &writeLock_;
+                    args[i].dp = new dynProg(2048, opt.alnOptions.scores.openGap!=0, opt.alnOptions.scores);
+                }
+                // Create joinable threads to find MEMs.
+                for(int i = 0; i < opt.query_threads; i++)
+                    pthread_create(&thread_ids[i], &attr, query_thread, (void *)&args[i]);
+                // Wait for all threads to terminate.
+                for(int i = 0; i < opt.query_threads; i++)
+                    pthread_join(thread_ids[i], NULL);
+                clock_t end = clock();
+                double cpu_time = (double)( end - start ) /CLOCKS_PER_SEC;
+                cerr << endl;
+                cerr << "mapping unpaired: done" << endl;
+                cerr << "time for mapping: " << cpu_time << endl;
+                delete queryReader;
             }
-            // Create joinable threads to find MEMs.
-            for(int i = 0; i < opt.query_threads; i++)
-                pthread_create(&thread_ids[i], &attr, paired_thread1, (void *)&args[i]);
-            // Wait for all threads to terminate.
-            for(int i = 0; i < opt.query_threads; i++)
-                pthread_join(thread_ids[i], NULL);
-            clock_t end = clock();
-            double cpu_time = (double)( end - start ) /CLOCKS_PER_SEC;
-            cerr << endl;
-            cerr << "mapping paired: done" << endl;
-            cerr << "time for mapping: " << cpu_time << endl;
-            delete mate1Reader;
-            delete mate2Reader;
+            //SECOND: Paired reads
+            if(!opt.pair1.empty() && !opt.pair2.empty()){
+                mate1Reader = new fastqInputReader(opt.pair1, opt.nucleotidesOnly);
+                mate2Reader = new fastqInputReader(opt.pair2, opt.nucleotidesOnly);
+                pthread_attr_t attr;  pthread_attr_init(&attr);
+                pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+                vector<query_arg> args(opt.query_threads);
+                vector<pthread_t> thread_ids(opt.query_threads);
+                cerr << "Mapping paired reads to the index using " << opt.query_threads << " threads ..." << endl;
+                cerr << "Progress (each dot represents 10.000 reads processed: ";
+                clock_t start = clock();
+                // Initialize additional thread data.
+                for(int i = 0; i < opt.query_threads; i++) {
+                    args[i].skip = opt.query_threads;
+                    args[i].skip0 = i;
+                    args[i].opt = & opt;
+                    args[i].readLock = &mate1Reader->readLock_;
+                    args[i].writeLock = &writeLock_;
+                    args[i].dp = new dynProg(2048, opt.alnOptions.scores.openGap!=0, opt.alnOptions.scores);
+                }
+                // Create joinable threads to find MEMs.
+                for(int i = 0; i < opt.query_threads; i++)
+                    pthread_create(&thread_ids[i], &attr, paired_thread1, (void *)&args[i]);
+                // Wait for all threads to terminate.
+                for(int i = 0; i < opt.query_threads; i++)
+                    pthread_join(thread_ids[i], NULL);
+                clock_t end = clock();
+                double cpu_time = (double)( end - start ) /CLOCKS_PER_SEC;
+                cerr << endl;
+                cerr << "mapping paired: done" << endl;
+                cerr << "time for mapping: " << cpu_time << endl;
+                delete mate1Reader;
+                delete mate2Reader;
+            }
+            else if(!opt.pair1.empty() || !opt.pair2.empty()){
+                fprintf(stderr, "ALFALFA requires 2 separate mate pairs files \n");
+                exit(1);
+            }
+            fclose( outfile );
+            delete sa;
+            cerr << "FINISHED" << endl;
         }
-        else if(!opt.pair1.empty() || !opt.pair2.empty()){
-            fprintf(stderr, "ALFALFA requires 2 separate mate pairs files \n");
-            exit(1);
-        }
-        fclose( outfile );
-        delete sa;
-        cerr << "FINISHED" << endl;
     }
     return 0;
 }

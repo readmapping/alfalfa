@@ -110,7 +110,7 @@ static const char * short_options = "s:k:L:np:d:m:u:o:e:C:T:hx:U:1:2:S:I:X:";
 
 //Reads from - to ; trim ; phred quals
 enum {
-    ARG_NO_OPT = 255,          //not found
+    ARG_ZERO_OPT = 255,          //not found
     ARG_TRY_HARDER,      //--tryharder
     ARG_SEED_THREADS,    //--seedthreads
     ARG_NOFW,            //--noFw
@@ -138,7 +138,7 @@ static struct option long_options[] = {
     {(char*)"mincoverage",      required_argument, 0,            'C'},
     {(char*)"errors",           required_argument, 0,            'd'},
     {(char*)"tryharder",        no_argument,       0,            ARG_TRY_HARDER},
-    {(char*)"seedthreads",      required_argument, 0,            ARG_SEED_THREADS},
+    //{(char*)"seedthreads",      required_argument, 0,            ARG_SEED_THREADS},
     {(char*)"nofw",             no_argument,       0,            ARG_NOFW},
     {(char*)"norc",             no_argument,       0,            ARG_NORC},
     {(char*)"wildcards",        no_argument,       0,            'N'},
@@ -163,18 +163,34 @@ static struct option long_options[] = {
 };
 
 static void usage(const string prog) {
-  cerr << "Usage: " << prog << " COMMAND [options] -x <reference-file> -1 <m1> -2 <m2> -U <unpaired> [-S ouput-file]" << endl;
+  cerr << "Usage: " << prog << " COMMAND [options]" << endl;
   cerr << "Command should be one of the following: " << endl;
   cerr << "index                      only build the index for given <reference-file>, used for time calculations" << endl;
+  cerr << "                           this command is not necessairy for mapping, as aln first constructs the index too" << endl;
   cerr << "aln                        map the reads to the index build for <reference-file>" << endl;
-  cerr << "the options are ordered by functionality: " << endl;
+  cerr << "check                      contains several commands for summarizing the accuracy of an output SAM file" << endl;
+  cerr << endl;
+  cerr << "call " << prog << " COMMAND --help [or -h] for more detailed information" << endl;
+  exit(1);
+}
+
+static void usageIndex(const string prog) {
+  cerr << "Usage: " << prog << " index -x <reference-file>" << endl;
+  cerr << "Only build the index for given <reference-file>, used for time calculations." << endl;
+  cerr << "This command is not necessairy for mapping, as aln first constructs the index too" << endl;
+  exit(1);
+}
+
+static void usageAln(const string prog) {
+  cerr << "Usage: " << prog << " aln [options]" << endl;
+  cerr << "the options for are ordered by functionality: " << endl;
   cerr << endl;
   cerr << "I/O OPTIONS " << endl;
   cerr << "-x (string)                reference sequence in mult-fasta" << endl;
   cerr << "-1                         query file with first mates (fasta or fastq)" << endl;
   cerr << "-2                         query file with second mates (fasta or fastq)" << endl;
   cerr << "-U                         query file with unpaired reads (fasta or fastq)" << endl;
-  cerr << "-S                         output file name (will be sam)" << endl;
+  cerr << "-S                         output file name (will be sam) [referenceName.sam]" << endl;
   cerr << endl;
   cerr << "PERFORMANCE OPTIONS " << endl;
   cerr << "-s/--sparsityfactor (int)  the sparsity factor of the sparse suffix array index, value needs to be lower than -L parameter [1]" << endl;
@@ -187,7 +203,7 @@ static void usage(const string prog) {
   cerr << "-T/--trials (int)          maximum number of times alignment is attempted before we give up [10]" << endl;
   cerr << "-C/--mincoverage (int)     minimum percent of bases of read the seeds have to cover [25]" << endl;
   cerr << "--tryharder                enable: 'try harder': when no seeds have been found, search using less stringent parameters" << endl;
-  cerr << "--seedthreads (int)        number of threads for calculating the seeds [1]" << endl;
+  //cerr << "--seedthreads (int)        number of threads for calculating the seeds [1]" << endl;
   cerr << "--nofw                     do not compute forward matches" << endl;
   cerr << "--norc                     do not compute reverse complement matches" << endl;
   cerr << "-n/--wildcards             treat Ns as wildcard characters" << endl;
@@ -217,6 +233,7 @@ static void usage(const string prog) {
   exit(1);
 }
 
+//move process Command to main, 
 static void processParameters(int argc, char* argv[], mapOptions_t& opt, const string program){
     if(argc < MINOPTIONCOUNT)
         usage(program);
@@ -231,7 +248,7 @@ static void processParameters(int argc, char* argv[], mapOptions_t& opt, const s
         else if(strcmp(argv[1], "aln") == 0) opt.command = ALN;
         else{
             fprintf(stderr, "[main] unrecognized command '%s'\n", argv[1]);
-            exit(1);
+            usage(program);
         }
         cerr << "COMMAND: " << argv[1] << endl;
         cerr << "parsing options: ..." << endl;
@@ -264,7 +281,7 @@ static void processParameters(int argc, char* argv[], mapOptions_t& opt, const s
                 case 'T': opt.alnOptions.maxTrial = atoi(optarg); break;
                 case 'C': opt.alnOptions.minCoverage = atoi(optarg); break;
                 case ARG_TRY_HARDER: opt.alnOptions.tryHarder = true; break;
-                case 'h': usage(program); break;
+                case 'h': opt.command == INDEX ? usageIndex(program) : usageAln(program); break;
                 case 'I': opt.pairedOpt.minInsert = atoi(optarg); break;
                 case 'X': opt.pairedOpt.maxInsert = atoi(optarg); break;
                 case ARG_FR: opt.pairedOpt.orientation = PAIR_FR; break;
@@ -279,7 +296,7 @@ static void processParameters(int argc, char* argv[], mapOptions_t& opt, const s
                 case -1: /* Done with options. */
                 break;
                 case 0: if (long_options[option_index].flag != 0) break;
-                default: usage(program);
+                default: opt.command == INDEX ? usageIndex(program) : usageAln(program);
                 throw 1;
             }
         }

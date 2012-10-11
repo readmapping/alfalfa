@@ -74,3 +74,10 @@ v0.5.2
 *many bugfixes in paired end mode
 *fixed possible bugs when indexing sequences larger than 2GB
 *decreased memory of DP matrix by splitting dimension of matrix in width and length
+
+v0.5.3
+*fixed bug where ISA index was not freed when using the child table index
+
+v0.5.4
+*added 'check' command to give some statistics on alignment SAM files. Currently the mode is untested and works with sorted SAM files only (SAM files can be sorted with SAMtools)
+
