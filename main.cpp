@@ -251,6 +251,10 @@ void *paired_thread1(void *arg_) {
 
 int main(int argc, char* argv[]){
     cerr << "@PG\tID:" << PROG << "\tVN:" << PROG_VERSION << endl;
+    if(argc < 2 ){
+        usage(PROG);
+        exit(1);
+    }
     if(strcmp(argv[1], "check") == 0){
         samCheckOptions_t opt;
         opt.initOptions();
