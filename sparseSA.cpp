@@ -61,7 +61,7 @@ sparseSA::sparseSA(string &S_, vector<string> &descr_, vector<long> &startpos_, 
   // Adjust to "sampled" size.
   logN = (long)ceil(log(N/K) / log(2.0));
 
-  if(K >= 4){
+  if(K >= 3){
         hasChild = true;
         hasSufLink = false;
     }
