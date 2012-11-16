@@ -81,3 +81,7 @@ v0.5.3
 v0.5.4
 *added 'check' command to give some statistics on alignment SAM files. Currently the mode is untested and works with sorted SAM files only (SAM files can be sorted with SAMtools)
 
+v0.6
+*added persistent index using the 'index' command. The index can now be saved to disk and loaded into memory.
+*changed #threads parameter from -p to -q because -p is now taken by the index command
+*added 'check' to the main class (check was never executed)

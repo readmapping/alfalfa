@@ -1,4 +1,4 @@
-ALFALFA v0.5
+ALFALFA v0.6
 -------------------
   
 Installing: 
@@ -8,24 +8,43 @@ Usage:
 	./alfalfa  COMMAND [options] -x <reference-file> [-U <query-file>] [-1 <upstream mates> -2 <downstream mates>] [-S ouput-file]
   
 Command should be one of the following: 
-  index         only build the index for given <reference-file>, used for time calculations
+  index         build the index for given <reference-file>
   aln           map the reads from <query-file> to the index build for <reference-file>
   		if no output file is specified, output is written to <query-file>.sam
+  check         contains several commands for summarizing the accuracy of an output SAM file (for advanced users only)
 
+index COMMAND
+-------------
+-------------
+./alfalfa  index [options] -x <reference-file>
+
+OPTIONS
+-------
+-s/--sparsityfactor (int)  the sparsity factor of the sparse suffix array index.
+			   Note that the value needs to be lower than -L parameter in the ALN command[1].
+-p/--prefix (string/path)  prefix of the index names [reference-file name]
+--save (0 or 1)            save index to disk or not [1]"
+
+
+aln COMMAND
+-------------
+-------------
 
 I/O OPTIONS
 -----------
 -x (string)                reference sequence in mult-fasta
+-i/--index (string)        prefix or path of the index to load, if not set, index will first be calculated
 -1                         query file with first mates (fasta or fastq)
 -2                         query file with second mates (fasta or fastq)
 -U                         query file with unpaired reads (fasta or fastq)
 -S                         output file name (will be sam)
+--save (0 or 1)            if --index is not set, save index to disk [0]
+-p                         prefix of index that will be saved [reference sequence name]
 
 PERFORMANCE OPTIONS 
 -------------------
--s/--sparsityfactor (int)  the sparsity factor of the sparse suffix array index, 
-			   value should be lower than -L parameter [1]
--p/--threads (int)    	   number of threads [1]
+-s/--sparsityfactor (int)  the sparsity factor of the sparse suffix array index if it is not yet constructed [1].
+-q/--threads (int)    	   number of threads [1]
 
 ALIGNMENT OPTIONS 
 -----------------
@@ -35,7 +54,6 @@ ALIGNMENT OPTIONS
 -T/--trials (int)          maximum number of times alignment is attempted before we give up [10]
 -C/--mincoverage (int)     minimum percent of bases of read the seeds have to cover [25]
 --tryharder                enable: 'try harder': when no seeds have been found, search using less stringent parameters
---seedthreads (int)        number of threads for calculating the seeds [1]
 --nofw                     do not compute forward matches
 --norc                     do not compute reverse complement matches
 -n/--wildcards             treat Ns as wildcard characters

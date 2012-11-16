@@ -47,8 +47,8 @@ using namespace std;
 
 //mapper options
 static const string PROG = "ALFALFA";
-static const string SAM_VERSION = "1.4";
-static const string PROG_VERSION = "0.5.5";
+static const string SAM_VERSION = "1.3";
+static const string PROG_VERSION = "0.6";
 static const string NOT_AVAILABLE = "*";
 
 //output struct
@@ -252,7 +252,16 @@ void *paired_thread1(void *arg_) {
 int main(int argc, char* argv[]){
     cerr << "@PG\tID:" << PROG << "\tVN:" << PROG_VERSION << endl;
     if(strcmp(argv[1], "check") == 0){
-        
+        samCheckOptions_t opt;
+        opt.initOptions();
+        processParameters(argc-1, argv+1, opt, PROG );
+        cerr << "parsing options: done" << endl;
+        if(opt.subcommand == ORACLE)
+            checkOracle(opt);
+        else if(opt.subcommand == SUMMARY)
+            checkSummary(opt);
+        else if(opt.subcommand == COMPARE)
+            checkCompare(opt);
     }
     else{
         mapOptions_t opt;
@@ -267,19 +276,39 @@ int main(int argc, char* argv[]){
 
         cerr << "loading ref sequences: done" << endl;
         cerr << "# ref sequence: " << opt.ref_fasta.data() << endl;
-        if(opt.command >= INDEX){
+        if(opt.command == INDEX){
             //build index
             cerr << "building index with s = " << opt.K  << " ... "<< endl;
             clock_t start = clock();
             sa = new sparseSA(ref, output.refdescr, output.startpos, opt._4column, opt.K);
+            sa->construct();
+            cerr << "building index: done" << endl;
+            if(opt.saveIndex){
+                cerr << "saving index to disk" << " ... "<< endl;
+                sa->save(opt.index_prefix);
+            }
             clock_t end = clock();
             double cpu_time = (double)( end - start ) /CLOCKS_PER_SEC;
-            cerr << "building index: done" << endl;
             cerr << "time for building index structure: " << cpu_time << endl;
 
-            if(opt.command == INDEX) delete sa;
+            delete sa;
         }
-        if(opt.command == ALN){
+        else if(opt.command == ALN){
+            //build or load index
+            sa = new sparseSA(ref, output.refdescr, output.startpos, opt._4column, opt.K);
+            if(opt.indexLocation.empty() || !sa->load(opt.indexLocation)){
+                cerr << "building index with s = " << opt.K  << " ... "<< endl;
+                clock_t start = clock();
+                sa->construct();
+                cerr << "building index: done" << endl;
+                if(opt.saveIndex){  
+                    cerr << "saving index to disk" << " ... "<< endl;
+                    sa->save(opt.index_prefix);
+                }
+                clock_t end = clock();
+                double cpu_time = (double)( end - start ) /CLOCKS_PER_SEC;
+                cerr << "time for building index structure: " << cpu_time << endl;
+            }
             if(opt.outputName.empty()) 
                 opt.outputName = opt.ref_fasta.substr().append(".sam");
             //Print SAM Header, require refdescre, startpos and argc/argv

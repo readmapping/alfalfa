@@ -38,6 +38,7 @@ using namespace std;
 // Simulates a vector<int> LCP;
 struct vec_uchar {
   struct item_t{
+    item_t(){}
     item_t(size_t i, int v) { idx = i; val = v; }
     size_t idx; int val;
     bool operator < (item_t t) const { return idx < t.idx;  }
@@ -209,6 +210,15 @@ struct sparseSA {
 
   // Maximal Unique Match (MUM)
   void MUM(const string &P, vector<match_t> &unique, int min_len, bool print) const;
+  
+  //save index to files
+  void save(const string &prefix);
+  
+  //load index from file
+  bool load(const string &prefix);
+  
+  //construct
+  void construct();
 
 };
 

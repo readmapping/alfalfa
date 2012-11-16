@@ -100,18 +100,18 @@
       </nativedebugger>
       <runprofile version="9">
         <runcommandpicklist>
-          <runcommandpicklistitem>"${OUTPUT_PATH}" aln -s 1 C:/data/reference/drosophila/genome.fasta C:/data/reference/drosophila/reads_454/SRR034673.10k.fastq</runcommandpicklistitem>
-          <runcommandpicklistitem>"${OUTPUT_PATH}" aln -s 1 -x C:/data/reference/drosophila/genome.fasta -U C:/data/reference/drosophila/reads_454/SRR034673.10k.fastq</runcommandpicklistitem>
-          <runcommandpicklistitem>"${OUTPUT_PATH}" aln -s 1 -x C:/data/reference/drosophila/genome.fasta -U C:/data/reference/drosophila/reads_454/SRR034673.10k.fastq -S C:/data/reference/drosophila/reads_454/SRR034673.10k.sam</runcommandpicklistitem>
-          <runcommandpicklistitem>"${OUTPUT_PATH}" aln -s 1 -x C:/data/reference/drosophila/chr22.fa -U C:/data/reference/drosophila/hg_400Roche -S C:/data/reference/drosophila/test.sam</runcommandpicklistitem>
-          <runcommandpicklistitem>"${OUTPUT_PATH}" aln -s 16 -x C:/data/reference/drosophila/chr22.fa -U C:/data/reference/drosophila/hg_400Roche -S C:/data/reference/drosophila/test.sam</runcommandpicklistitem>
           <runcommandpicklistitem>"${OUTPUT_PATH}" aln -s 1 -k 100 -x C:/data/reference/drosophila/chr22.fa -U C:/data/reference/drosophila/hg_400Roche -S C:/data/reference/drosophila/test.sam</runcommandpicklistitem>
           <runcommandpicklistitem>"${OUTPUT_PATH}" aln -s 16 -k 100 -x C:/data/reference/drosophila/chr22.fa -U C:/data/reference/drosophila/hg_400Roche -S C:/data/reference/drosophila/test.sam</runcommandpicklistitem>
           <runcommandpicklistitem>"${OUTPUT_PATH}" aln -x C:/data/reference/drosophila/chr22.fa -U C:/data/reference/drosophila/hg_400Roche -S C:/data/reference/drosophila/test.sam</runcommandpicklistitem>
           <runcommandpicklistitem>"${OUTPUT_PATH}" aln -x C:/data/reference/drosophila/chr22.fa -1 C:/data/reference/drosophila/_1.hr22_800Ill -2 C:/data/reference/drosophila/_2.hr22_800Il -S C:/data/reference/drosophila/test.sam</runcommandpicklistitem>
           <runcommandpicklistitem>"${OUTPUT_PATH}" aln -x C:/data/reference/drosophila/chr22.fa -1 C:/data/reference/drosophila/_1.hr22_800Ill -2 C:/data/reference/drosophila/_2.hr22_800Ill -S C:/data/reference/drosophila/test.sam</runcommandpicklistitem>
+          <runcommandpicklistitem>"${OUTPUT_PATH}" index -x C:/data/reference/spares/dmel.fasta -p -s 4 dmelIndex</runcommandpicklistitem>
+          <runcommandpicklistitem>"${OUTPUT_PATH}" index -x C:/data/reference/sparse/dmel.fasta -p -s 4 dmelIndex</runcommandpicklistitem>
+          <runcommandpicklistitem>"${OUTPUT_PATH}" index -x C:/data/reference/sparse/dmel.fasta -p dmelIndex</runcommandpicklistitem>
+          <runcommandpicklistitem>"${OUTPUT_PATH}" aln -x C:/data/reference/sparse/dmel.fasta -i dmelIndex -U C:/data/reference/sparse/dyak.fasta</runcommandpicklistitem>
+          <runcommandpicklistitem>"${OUTPUT_PATH}" index -x C:/data/reference/sparse/dmel.fasta -s 4 -p dmelIndex</runcommandpicklistitem>
         </runcommandpicklist>
-        <runcommand>"${OUTPUT_PATH}" aln -x C:/data/reference/drosophila/chr22.fa -1 C:/data/reference/drosophila/_1.hr22_800Ill -2 C:/data/reference/drosophila/_2.hr22_800Ill -S C:/data/reference/drosophila/test.sam</runcommand>
+        <runcommand>"${OUTPUT_PATH}" index -x C:/data/reference/sparse/dmel.fasta -s 4 -p dmelIndex</runcommand>
         <rundir></rundir>
         <buildfirst>true</buildfirst>
         <terminal-type>0</terminal-type>

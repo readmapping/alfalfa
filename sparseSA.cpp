@@ -25,6 +25,7 @@
 #include <stdio.h>
 #include <math.h>
 #include <pthread.h>
+#include <fstream>
 
 #include <limits.h>
 #include <stack>
@@ -57,81 +58,12 @@ sparseSA::sparseSA(string &S_, vector<string> &descr_, vector<long> &startpos_, 
   for(long i = 0; i < K; i++) S += '$'; // Append "special" end character. Note: It must be lexicographically less.
   N = S.length();
 
-  if(K > 1) {
-    long bucketNr = 1;
-    int *intSA = new int[N/K+1];  for(int i = 0; i < N/K; i++) intSA[i] = i; // Init SA.
-    int* t_new = new int[N/K+1];
-    long* BucketBegin = new long[256]; // array to save current bucket beginnings
-    radixStep(t_new, intSA, bucketNr, BucketBegin, 0, N/K-1, 0); // start radix sort
-    t_new[N/K] = 0; // Terminate new integer string.
-    delete[] BucketBegin;
-
-    // Suffix sort integer text.
-    cerr << "# suffixsort()" << endl;
-    suffixsort(t_new, intSA, N/K, bucketNr, 0);
-    cerr << "# DONE suffixsort()" << endl;
-
-    delete[] t_new;
-
-    // Translate suffix array.
-    SA.resize(N/K);
-    for (long i=0; i<N/K; i++) SA[i] = (unsigned int)intSA[i+1] * K;
-    delete[] intSA;
-
-    // Build ISA using sparse SA.
-    ISA.resize(N/K);
-    for(long i = 0; i < N/K; i++) { ISA[SA[i]/K] = i; }
-  }
-  else {
-    SA.resize(N);
-    ISA.resize(N);
-    int char2int[UCHAR_MAX+1]; // Map from char to integer alphabet.
-
-    // Zero char2int mapping.
-    for (int i=0; i<=UCHAR_MAX; i++) char2int[i]=0;
-
-    // Determine which characters are used in the string S.
-    for (long i = 0; i < N; i++) char2int[(int)S[i]]=1;
-
-    // Count the size of the alphabet.
-    int alphasz = 0;
-    for(int i=0; i <= UCHAR_MAX; i++) {
-      if (char2int[i]) char2int[i]=alphasz++;
-      else char2int[i] = -1;
-    }
-
-    // Remap the alphabet.
-    for(long i = 0; i < N; i++) ISA[i] = (int)S[i];
-    for (long i = 0; i < N; i++) ISA[i]=char2int[ISA[i]] + 1;
-    // First "character" equals 1 because of above plus one, l=1 in suffixsort().
-    int alphalast = alphasz + 1;
-
-    // Use LS algorithm to construct the suffix array.
-    int *SAint = (int*)(&SA[0]);
-    suffixsort(&ISA[0], SAint , N-1, alphalast, 1);
-  }
-
-  cerr << "N=" << N << endl;
-
   // Adjust to "sampled" size.
   logN = (long)ceil(log(N/K) / log(2.0));
 
-  LCP.resize(N/K);
-  cerr << "N/K=" << N/K << endl;
-  // Use algorithm by Kasai et al to construct LCP array.
-  computeLCP();  // SA + ISA -> LCP
-    LCP.init();
-    if(K >= 4){
+  if(K >= 4){
         hasChild = true;
         hasSufLink = false;
-//        ISA.clear();
-        {
-          vector<int> tmp;
-          ISA.swap(tmp);
-        }
-        CHILD.resize(N/K);
-        //Use algorithm by Abouelhoda et al to construct CHILD array
-        computeChild();
     }
     else{
         hasChild = false;
@@ -204,6 +136,194 @@ void sparseSA::computeChild() {
     }
 }
 
+//TODO: add error handling and messages
+void sparseSA::save(const string &prefix){
+    string basic = prefix;
+    string aux = basic + ".aux";
+    string sa = basic + ".sa";
+    string lcp = basic + ".lcp";
+    ofstream aux_s (aux.c_str(), ios::binary);
+    //print auxiliary information
+    aux_s.write((const char*)&N,sizeof(N));
+    aux_s.write((const char*)&K,sizeof(K));
+    aux_s.write((const char*)&logN,sizeof(logN));
+    aux_s.write((const char*)&NKm1,sizeof(NKm1));
+    aux_s.write((const char*)&hasSufLink,sizeof(hasSufLink));
+    aux_s.write((const char*)&hasChild,sizeof(hasChild));
+    aux_s.close();
+    //print sa
+    ofstream sa_s (sa.c_str(), ios::binary);
+    unsigned int sizeSA = SA.size();
+    sa_s.write((const char*)&sizeSA,sizeof(sizeSA));
+    sa_s.write((const char*)&SA[0],sizeSA*sizeof(unsigned int));
+    sa_s.close();
+    //print LCP
+    ofstream lcp_s (lcp.c_str(), ios::binary);
+    unsigned int sizeLCP = LCP.vec.size();
+    unsigned int sizeM = LCP.M.size();
+    lcp_s.write((const char*)&sizeLCP,sizeof(sizeLCP));
+    lcp_s.write((const char*)&sizeM,sizeof(sizeM));
+    lcp_s.write((const char*)&LCP.vec[0],sizeLCP*sizeof(unsigned char));
+    lcp_s.write((const char*)&LCP.M[0],sizeM*sizeof(vec_uchar::item_t));
+    lcp_s.close();
+    //print ISA if nec
+    if(hasSufLink){
+        string isa = basic + ".isa";
+        ofstream isa_s (isa.c_str(), ios::binary);
+        unsigned int sizeISA = ISA.size();
+        isa_s.write((const char*)&sizeISA,sizeof(sizeISA));
+        isa_s.write((const char*)&ISA[0],sizeISA*sizeof(int));
+        isa_s.close();
+    }
+    //print child if nec
+    if(hasChild){
+        string child = basic + ".child";
+        ofstream child_s (child.c_str(), ios::binary);
+        unsigned int sizeCHILD = CHILD.size();
+        child_s.write((const char*)&sizeCHILD,sizeof(sizeCHILD));
+        child_s.write((const char*)&CHILD[0],sizeCHILD*sizeof(int));
+        child_s.close();
+    }
+}
+
+bool sparseSA::load(const string &prefix){
+    cerr << "atempting to load index " << prefix  << " ... "<< endl;
+    string basic = prefix;
+    string aux = basic + ".aux";
+    string sa = basic + ".sa";
+    string lcp = basic + ".lcp";
+    ifstream aux_s (aux.c_str(), ios::binary);
+    if(!aux_s.good()){
+        cerr << "unable to open " << prefix << endl;
+        return false;
+    }
+    //read auxiliary information
+    long readN;
+    aux_s.read((char*)&readN,sizeof(N));
+    N = readN;
+    aux_s.read((char*)&K,sizeof(K));
+    aux_s.read((char*)&logN,sizeof(logN));
+    aux_s.read((char*)&NKm1,sizeof(NKm1));
+    aux_s.read((char*)&hasSufLink,sizeof(hasSufLink));
+    aux_s.read((char*)&hasChild,sizeof(hasChild));
+    aux_s.close();
+    //read sa
+    ifstream sa_s (sa.c_str(), ios::binary);
+    unsigned int sizeSA;
+    sa_s.read((char*)&sizeSA,sizeof(sizeSA));
+    SA.resize(sizeSA);
+    sa_s.read((char*)&SA[0],sizeSA*sizeof(unsigned int));
+    sa_s.close();
+    //read LCP
+    ifstream lcp_s (lcp.c_str(), ios::binary);
+    unsigned int sizeLCP;
+    unsigned int sizeM;
+    lcp_s.read((char*)&sizeLCP,sizeof(sizeLCP));
+    lcp_s.read((char*)&sizeM,sizeof(sizeM));
+    LCP.vec.resize(sizeLCP);
+    LCP.M.resize(sizeM);
+    lcp_s.read((char*)&LCP.vec[0],sizeLCP*sizeof(unsigned char));
+    lcp_s.read((char*)&LCP.M[0],sizeM*sizeof(vec_uchar::item_t));
+    lcp_s.close();
+    //read ISA if nec
+    if(hasSufLink){
+        string isa = basic + ".isa";
+        ifstream isa_s (isa.c_str(), ios::binary);
+        unsigned int sizeISA;
+        isa_s.read((char*)&sizeISA,sizeof(sizeISA));
+        ISA.resize(sizeISA);
+        isa_s.read((char*)&ISA[0],sizeISA*sizeof(int));
+        isa_s.close();
+    }
+    //read child if nec
+    if(hasChild){
+        string child = basic + ".child";
+        ifstream child_s (child.c_str(), ios::binary);
+        unsigned int sizeCHILD;
+        child_s.read((char*)&sizeCHILD,sizeof(sizeCHILD));
+        CHILD.resize(sizeCHILD);
+        child_s.read((char*)&CHILD[0],sizeCHILD*sizeof(int));
+        child_s.close();
+    }
+    return true;
+}
+
+void sparseSA::construct(){
+    if(K > 1) {
+        long bucketNr = 1;
+        int *intSA = new int[N/K+1];  for(int i = 0; i < N/K; i++) intSA[i] = i; // Init SA.
+        int* t_new = new int[N/K+1];
+        long* BucketBegin = new long[256]; // array to save current bucket beginnings
+        radixStep(t_new, intSA, bucketNr, BucketBegin, 0, N/K-1, 0); // start radix sort
+        t_new[N/K] = 0; // Terminate new integer string.
+        delete[] BucketBegin;
+
+        // Suffix sort integer text.
+        cerr << "# suffixsort()" << endl;
+        suffixsort(t_new, intSA, N/K, bucketNr, 0);
+        cerr << "# DONE suffixsort()" << endl;
+
+        delete[] t_new;
+
+        // Translate suffix array.
+        SA.resize(N/K);
+        for (long i=0; i<N/K; i++) SA[i] = (unsigned int)intSA[i+1] * K;
+        delete[] intSA;
+
+        // Build ISA using sparse SA.
+        ISA.resize(N/K);
+        for(long i = 0; i < N/K; i++) { ISA[SA[i]/K] = i; }
+    }
+    else {
+        SA.resize(N);
+        ISA.resize(N);
+        int char2int[UCHAR_MAX+1]; // Map from char to integer alphabet.
+
+        // Zero char2int mapping.
+        for (int i=0; i<=UCHAR_MAX; i++) char2int[i]=0;
+
+        // Determine which characters are used in the string S.
+        for (long i = 0; i < N; i++) char2int[(int)S[i]]=1;
+
+        // Count the size of the alphabet.
+        int alphasz = 0;
+        for(int i=0; i <= UCHAR_MAX; i++) {
+        if (char2int[i]) char2int[i]=alphasz++;
+        else char2int[i] = -1;
+        }
+
+        // Remap the alphabet.
+        for(long i = 0; i < N; i++) ISA[i] = (int)S[i];
+        for (long i = 0; i < N; i++) ISA[i]=char2int[ISA[i]] + 1;
+        // First "character" equals 1 because of above plus one, l=1 in suffixsort().
+        int alphalast = alphasz + 1;
+
+        // Use LS algorithm to construct the suffix array.
+        int *SAint = (int*)(&SA[0]);
+        suffixsort(&ISA[0], SAint , N-1, alphalast, 1);
+    }
+
+    cerr << "N=" << N << endl;
+
+    LCP.resize(N/K);
+    cerr << "N/K=" << N/K << endl;
+    // Use algorithm by Kasai et al to construct LCP array.
+    computeLCP();  // SA + ISA -> LCP
+    LCP.init();
+    if(!hasSufLink){
+        {
+          vector<int> tmp;
+          ISA.swap(tmp);
+        }
+    }
+    if(hasChild){
+        CHILD.resize(N/K);
+        //Use algorithm by Abouelhoda et al to construct CHILD array
+        computeChild();
+    }
+
+    NKm1 = N/K-1;
+}
 
 // Implements a variant of American flag sort (McIlroy radix sort).
 // Recurse until big-K size prefixes are sorted. Adapted from the C++

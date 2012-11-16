@@ -82,6 +82,8 @@ struct mapOptions_t{//commentary + sort + constructor
         pairedOpt.mode = 1;
         unpairedQ = pair1 = pair2 = ref_fasta = outputName = "";
         command = ALN;
+        saveIndex = false;
+        index_prefix = indexLocation = "";
     }
     //command option
     command_t command;
@@ -93,6 +95,9 @@ struct mapOptions_t{//commentary + sort + constructor
     string pair1;
     string pair2;
     string ref_fasta;
+    string index_prefix;
+    bool saveIndex;
+    string indexLocation;
     string outputName;
     bool _4column;//for MEM output
     bool verbose;
@@ -106,7 +111,7 @@ struct mapOptions_t{//commentary + sort + constructor
     paired_opt pairedOpt;
 };
 
-static const char * short_options = "s:k:L:np:d:m:u:o:e:C:T:hx:U:1:2:S:I:X:";
+static const char * short_options = "i:s:k:L:np:q:d:m:u:o:e:C:T:hx:U:1:2:S:I:X:";
 
 //Reads from - to ; trim ; phred quals
 enum {
@@ -125,12 +130,13 @@ enum {
     ARG_DOVETAIL,        //--dovetail
     ARG_NO_CONTAIN,      //--no-contain
     ARG_NO_OVERLAP,      //--no-overlap
-    ARG_PAIR_MODE        //--paired-mode
+    ARG_PAIR_MODE,       //--paired-mode
+    ARG_SAVE_INDEX       //--save
 };
 
 static struct option long_options[] = {
     {(char*)"sparsityfactor",   required_argument, 0,            's'},
-    {(char*)"threads",          required_argument, 0,            'p'},
+    {(char*)"threads",          required_argument, 0,            'q'},
     {(char*)"verbose",          no_argument,       0,            ARG_VERBOSE},
     {(char*)"seedminlength",    required_argument, 0,            'L'},
     {(char*)"alignments",       required_argument, 0,            'k'},
@@ -159,14 +165,17 @@ static struct option long_options[] = {
     {(char*)"no-contain",       no_argument,       0,            ARG_NO_CONTAIN},
     {(char*)"no-overlap",       no_argument,       0,            ARG_NO_OVERLAP},
     {(char*)"paired-mode",      required_argument, 0,            ARG_PAIR_MODE},
+    {(char*)"index",            required_argument, 0,            'i'},
+    {(char*)"prefix",           required_argument, 0,            'p'},
+    {(char*)"save",             required_argument, 0,            ARG_SAVE_INDEX},
     {(char*)0, 0, 0, 0} // terminator
 };
 
 static void usage(const string prog) {
   cerr << "Usage: " << prog << " COMMAND [options]" << endl;
   cerr << "Command should be one of the following: " << endl;
-  cerr << "index                      only build the index for given <reference-file>, used for time calculations" << endl;
-  cerr << "                           this command is not necessairy for mapping, as aln first constructs the index too" << endl;
+  cerr << "index                      build the index for given <reference-file> and save to disk" << endl;
+  cerr << "                           this command is not necessairy for mapping, as aln can first construct the index" << endl;
   cerr << "aln                        map the reads to the index build for <reference-file>" << endl;
   cerr << "check                      contains several commands for summarizing the accuracy of an output SAM file" << endl;
   cerr << endl;
@@ -175,9 +184,14 @@ static void usage(const string prog) {
 }
 
 static void usageIndex(const string prog) {
-  cerr << "Usage: " << prog << " index -x <reference-file>" << endl;
-  cerr << "Only build the index for given <reference-file>, used for time calculations." << endl;
-  cerr << "This command is not necessairy for mapping, as aln first constructs the index too" << endl;
+  cerr << "Usage: " << prog << " index [options] -x <reference-file>" << endl;
+  cerr << "build the index for given <reference-file> and save to disk" << endl;
+  cerr << endl;
+  cerr << "OPTIONS " << endl;
+  cerr << "-s/--sparsityfactor (int)  the sparsity factor of the sparse suffix array index. "
+          << "Note that the value needs to be lower than -L parameter in the ALN command[1]." << endl;
+  cerr << "-p/--prefix (string/path)  prefix of the index names [reference-file name]" << endl;
+  cerr << "--save (0 or 1)            save index to disk or not [1]" << endl;
   exit(1);
 }
 
@@ -187,13 +201,16 @@ static void usageAln(const string prog) {
   cerr << endl;
   cerr << "I/O OPTIONS " << endl;
   cerr << "-x (string)                reference sequence in mult-fasta" << endl;
+  cerr << "-i/--index (string)        prefix or path of the index to load, if not set, index will first be calculated" << endl;
   cerr << "-1                         query file with first mates (fasta or fastq)" << endl;
   cerr << "-2                         query file with second mates (fasta or fastq)" << endl;
   cerr << "-U                         query file with unpaired reads (fasta or fastq)" << endl;
   cerr << "-S                         output file name (will be sam) [referenceName.sam]" << endl;
+  cerr << "--save (0 or 1)            if --index is not set, save index to disk [0]" << endl;
+  cerr << "-p                         prefix of index that will be saved [reference sequence name]" << endl;
   cerr << endl;
   cerr << "PERFORMANCE OPTIONS " << endl;
-  cerr << "-s/--sparsityfactor (int)  the sparsity factor of the sparse suffix array index, value needs to be lower than -L parameter [1]" << endl;
+  cerr << "-s/--sparsityfactor (int)  the sparsity factor of the sparse suffix array index if it is not yet constructed [1]." << endl;
   cerr << "-p/--threads (int)    number of threads [1]" << endl;
   cerr << endl;
   cerr << "ALIGNMENT OPTIONS " << endl;
@@ -239,7 +256,10 @@ static void processParameters(int argc, char* argv[], mapOptions_t& opt, const s
         usage(program);
     else{
         //parse the command
-        if(strcmp(argv[1], "index") == 0) opt.command = INDEX;
+        if(strcmp(argv[1], "index") == 0){ 
+            opt.command = INDEX;
+            opt.saveIndex = true;
+        }
         else if(strcmp(argv[1], "mem") == 0){
         opt.command = MATCHES;
             printf("This command is not yet supported\n");
@@ -272,7 +292,7 @@ static void processParameters(int argc, char* argv[], mapOptions_t& opt, const s
                 case ARG_VERBOSE: opt.verbose = 1; break;
                 case ARG_CLIP: opt.alnOptions.noClipping = false; break;
                 case 't': opt.alnOptions.numThreads = atoi(optarg); break;
-                case 'p': opt.query_threads = atoi(optarg); break;
+                case 'q': opt.query_threads = atoi(optarg); break;
                 case 'm': opt.alnOptions.scores.match = atoi(optarg); break;
                 case 'u': opt.alnOptions.scores.mismatch = atoi(optarg); break;
                 case 'o': opt.alnOptions.scores.openGap = atoi(optarg); break;
@@ -293,6 +313,9 @@ static void processParameters(int argc, char* argv[], mapOptions_t& opt, const s
                 case ARG_NO_CONTAIN: opt.pairedOpt.contain = false; break;
                 case ARG_NO_OVERLAP: opt.pairedOpt.overlap = false; break;
                 case ARG_PAIR_MODE: opt.pairedOpt.mode = atoi(optarg); break;
+                case 'i': opt.indexLocation = optarg; break;
+                case 'p': opt.index_prefix = optarg; break;
+                case ARG_SAVE_INDEX: opt.saveIndex = atoi(optarg); break;
                 case -1: /* Done with options. */
                 break;
                 case 0: if (long_options[option_index].flag != 0) break;
@@ -309,10 +332,16 @@ static void processParameters(int argc, char* argv[], mapOptions_t& opt, const s
             fprintf(stderr, "ALFALFA requires input reference file \n");
             exit(1);
         }
+        if(opt.command == INDEX){
+            if(opt.saveIndex == false)
+                fprintf(stderr, "Warning, index will not be saved to memory! \n");
+        }
         if(opt.command == ALN && (opt.unpairedQ.empty() && (opt.pair1.empty() || opt.pair2.empty()))){
             fprintf(stderr, "ALFALFA requires query files (1 unpaired and/or 2 mate files \n");
             exit(1);
         }
+        if(opt.saveIndex && opt.index_prefix.empty())
+                opt.index_prefix = opt.ref_fasta;
     }
 }
 
