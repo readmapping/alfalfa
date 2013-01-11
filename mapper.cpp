@@ -145,17 +145,19 @@ alignment_t * extendAlignment(dynProg& dp_, const string& S, const string& P,
         types.freeRefB = true;
         types.freeQueryB = clipping;
         dp_.dpBandStatic( S, P, grenzen, types, ERRORSTRING, output, editDist-curEditDist, false);
-        queryLB = grenzen.queryB;
-        if(output.cigarChars[output.cigarChars[0]] == 'I')
-                queryLB += (long)output.cigarLengths[0];
-        if(clipping && grenzen.queryB> 0){
-            alignment->cigarChars.push_back('S');
-            alignment->cigarLengths.push_back(grenzen.queryB);
+        if(curEditDist + output.editDist < editDist){//required if dp_ returns fail or too high editDist (output may not be initialized
+            queryLB = grenzen.queryB;
+            if(output.cigarChars[output.cigarChars[0]] == 'I')
+                    queryLB += (long)output.cigarLengths[0];
+            if(clipping && grenzen.queryB> 0){
+                alignment->cigarChars.push_back('S');
+                alignment->cigarLengths.push_back(grenzen.queryB);
+            }
+            alignment->cigarChars.insert(alignment->cigarChars.end(),output.cigarChars.begin(),output.cigarChars.end());
+            alignment->cigarLengths.insert(alignment->cigarLengths.end(),output.cigarLengths.begin(),output.cigarLengths.end());
+            alignment->globPos = grenzen.refB+1L;
+            alignment->alignmentScore += output.dpScore;
         }
-        alignment->cigarChars.insert(alignment->cigarChars.end(),output.cigarChars.begin(),output.cigarChars.end());
-        alignment->cigarLengths.insert(alignment->cigarLengths.end(),output.cigarLengths.begin(),output.cigarLengths.end());
-        alignment->globPos = grenzen.refB+1L;
-        alignment->alignmentScore += output.dpScore;
         curEditDist += output.editDist;
         output.clear();
     }//fill in the starting position in the ref sequence
@@ -240,11 +242,13 @@ alignment_t * extendAlignment(dynProg& dp_, const string& S, const string& P,
                 boundaries grenzen(refstrRB + 1L, refstrRB + minRefDist - 1L, queryRB + 1, queryRB + minQDist - 1);
                 dp_type types;
                 dp_.dpBandStatic( S, P, grenzen, types, ERRORSTRING, output, editDist-curEditDist, false);
-                alignment->cigarChars.insert(alignment->cigarChars.end(), output.cigarChars.begin(), output.cigarChars.end());
-                alignment->cigarLengths.insert(alignment->cigarLengths.end(), output.cigarLengths.begin(), output.cigarLengths.end());
-                alignment->cigarChars.push_back('=');
-                alignment->cigarLengths.push_back(match.len);
-                alignment->alignmentScore += dp_.scores.match*match.len + output.dpScore;
+                if(curEditDist + output.editDist < editDist){//required if dp_ returns fail or too high editDist (output may not be initialized
+                    alignment->cigarChars.insert(alignment->cigarChars.end(), output.cigarChars.begin(), output.cigarChars.end());
+                    alignment->cigarLengths.insert(alignment->cigarLengths.end(), output.cigarLengths.begin(), output.cigarLengths.end());
+                    alignment->cigarChars.push_back('=');
+                    alignment->cigarLengths.push_back(match.len);
+                    alignment->alignmentScore += dp_.scores.match*match.len + output.dpScore;
+                }
                 curEditDist += output.editDist;
                 output.clear();
             }
@@ -270,18 +274,20 @@ alignment_t * extendAlignment(dynProg& dp_, const string& S, const string& P,
         types.freeRefE = true;
         types.freeQueryE = clipping;
         dp_.dpBandStatic( S, P, grenzen, types, ERRORSTRING, output, editDist-curEditDist+1, false);
-        if(grenzen.queryE > queryRB){
-            int addToLength = grenzen.queryE-queryRB;
-            if(output.cigarChars[output.cigarChars.size()-1] == 'I')
-                addToLength -= output.cigarLengths[output.cigarLengths.size()-1];
-            alignment->refLength += addToLength;
-        }
-        alignment->cigarChars.insert(alignment->cigarChars.end(), output.cigarChars.begin(), output.cigarChars.end());
-        alignment->cigarLengths.insert(alignment->cigarLengths.end(), output.cigarLengths.begin(), output.cigarLengths.end());
-        alignment->alignmentScore += output.dpScore;
-        if (clipping && grenzen.queryE < P.length() - 1) {
-            alignment->cigarChars.push_back('S');
-            alignment->cigarLengths.push_back(P.length() - 1 - grenzen.queryE);
+        if(curEditDist + output.editDist < editDist){//required if dp_ returns fail or too high editDist (output may not be initialized
+            if(grenzen.queryE > queryRB){
+                int addToLength = grenzen.queryE-queryRB;
+                if(output.cigarChars[output.cigarChars.size()-1] == 'I')
+                    addToLength -= output.cigarLengths[output.cigarLengths.size()-1];
+                alignment->refLength += addToLength;
+            }
+            alignment->cigarChars.insert(alignment->cigarChars.end(), output.cigarChars.begin(), output.cigarChars.end());
+            alignment->cigarLengths.insert(alignment->cigarLengths.end(), output.cigarLengths.begin(), output.cigarLengths.end());
+            alignment->alignmentScore += output.dpScore;
+            if (clipping && grenzen.queryE < P.length() - 1) {
+                alignment->cigarChars.push_back('S');
+                alignment->cigarLengths.push_back(P.length() - 1 - grenzen.queryE);
+            }
         }
         curEditDist += output.editDist;
         output.clear();
