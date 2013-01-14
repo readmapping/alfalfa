@@ -24,16 +24,18 @@
       </nativedebugger>
       <runprofile version="9">
         <runcommandpicklist>
-          <runcommandpicklistitem>"${OUTPUT_PATH}"</runcommandpicklistitem>
-          <runcommandpicklistitem>"${OUTPUT_PATH}" aln C:/data/reference/drosophila/genome.fasta C:/data/reference/drosophila/reads_454/SRR034673.10k.fastq</runcommandpicklistitem>
-          <runcommandpicklistitem>"${OUTPUT_PATH}" aln -s 1 C:/data/reference/drosophila/genome.fasta C:/data/reference/drosophila/reads_454/SRR034673.10k.fastq</runcommandpicklistitem>
           <runcommandpicklistitem>"${OUTPUT_PATH}" aln -s 2 C:/data/reference/drosophila/genome.fasta C:/data/reference/drosophila/reads_454/SRR034673.10k.fastq</runcommandpicklistitem>
           <runcommandpicklistitem>"${OUTPUT_PATH}" aln -s 4 C:/data/reference/drosophila/genome.fasta C:/data/reference/drosophila/reads_454/SRR034673.10k.fastq</runcommandpicklistitem>
           <runcommandpicklistitem>"${OUTPUT_PATH}" aln -s 8 C:/data/reference/drosophila/genome.fasta C:/data/reference/drosophila/reads_454/SRR034673.10k.fastq</runcommandpicklistitem>
           <runcommandpicklistitem>"${OUTPUT_PATH}" aln -s 16 C:/data/reference/drosophila/genome.fasta C:/data/reference/drosophila/reads_454/SRR034673.10k.fastq</runcommandpicklistitem>
           <runcommandpicklistitem>"${OUTPUT_PATH}" aln -x C:/data/reference/drosophila/chr22.fa -1 C:/data/reference/drosophila/_1.hr22_800Ill -2 C:/data/reference/drosophila/_2.hr22_800Ill -S C:/data/reference/drosophila/test.sam</runcommandpicklistitem>
+          <runcommandpicklistitem>"${OUTPUT_PATH}" check summary --num-reads 1376701 -I C:/data/reference/cushaw_real_454_1.sam</runcommandpicklistitem>
+          <runcommandpicklistitem>"${OUTPUT_PATH}" check summary --num-reads 1376701 -I C:/data/reference/cushaw_real_454_1.sam -Q 100</runcommandpicklistitem>
+          <runcommandpicklistitem>"${OUTPUT_PATH}" check summary --num-reads 1376701 -I C:/data/reference/bowtie_real_454_1.sam -Q 100</runcommandpicklistitem>
+          <runcommandpicklistitem>"${OUTPUT_PATH}" check summary --num-reads 1376701 -I C:/data/reference/bwa_real_454_1.sam -Q 100</runcommandpicklistitem>
+          <runcommandpicklistitem>"${OUTPUT_PATH}" check summary --num-reads 1376701 -I C:/data/reference/alfalfa_8_real_454_1.sam -Q 100</runcommandpicklistitem>
         </runcommandpicklist>
-        <runcommand>"${OUTPUT_PATH}" aln -x C:/data/reference/drosophila/chr22.fa -1 C:/data/reference/drosophila/_1.hr22_800Ill -2 C:/data/reference/drosophila/_2.hr22_800Ill -S C:/data/reference/drosophila/test.sam</runcommand>
+        <runcommand>"${OUTPUT_PATH}" check summary --num-reads 1376701 -I C:/data/reference/alfalfa_8_real_454_1.sam -Q 100</runcommand>
         <rundir></rundir>
         <buildfirst>true</buildfirst>
         <console-type>2</console-type>
@@ -100,18 +102,18 @@
       </nativedebugger>
       <runprofile version="9">
         <runcommandpicklist>
-          <runcommandpicklistitem>"${OUTPUT_PATH}" aln -x C:/data/reference/sparse/dmel.fasta -i dmelIndex -U C:/data/reference/sparse/dyak.fasta</runcommandpicklistitem>
-          <runcommandpicklistitem>"${OUTPUT_PATH}" index -x C:/data/reference/sparse/dmel.fasta -s 4 -p dmelIndex</runcommandpicklistitem>
-          <runcommandpicklistitem>"${OUTPUT_PATH}"</runcommandpicklistitem>
-          <runcommandpicklistitem>"${OUTPUT_PATH}" index -s 8 -x C:/data/reference/chr1.fa -p C:/data/reference/chrom1</runcommandpicklistitem>
-          <runcommandpicklistitem>"${OUTPUT_PATH}" aln -x C:/data/reference/chr1.fa -i C:/data/reference/chrom1 -U C:/data/reference/pacbio_01_pbsim.fastq -S C:/data/reference/alfalfa_pbsim.sam -s 8 -d 0.08 -L 20 -k 5 -T 10 -C 25 -m 0 -u -2 -o 0 -e -2 --fr --paired-mode 1</runcommandpicklistitem>
           <runcommandpicklistitem>"${OUTPUT_PATH}" aln -x C:/data/reference/chr1.fa -p C:/data/reference/chrom1 -U C:/data/reference/pacbio_01_pbsim.fastq -S C:/data/reference/alfalfa_pbsim.sam -s 16 -d 0.08 -L 20 -k 5 -T 10 -C 25 -m 0 -u -2 -o 0 -e -2 --fr --paired-mode 1</runcommandpicklistitem>
           <runcommandpicklistitem>"${OUTPUT_PATH}" aln -x C:/data/reference/chr1.fa -p C:/data/reference/chrom1 -U C:/data/reference/pacbio_01_pbsim.fastq -S C:/data/reference/alfalfa_pbsim.sam -s 16 -d 0.08 -L 100 -k 5 -T 10 -C 25 -m 0 -u -2 -o 0 -e -2 --fr --paired-mode 1</runcommandpicklistitem>
           <runcommandpicklistitem>"${OUTPUT_PATH}" aln -x C:/data/reference/chr1.fa -i C:/data/reference/chrom1_16 --save 1 -U C:/data/reference/pacbio_01_pbsim.fastq -S C:/data/reference/alfalfa_pbsim.sam -s 16 -d 0.08 -L 100 -k 5 -T 10 -C 25 -m 0 -u -2 -o 0 -e -2 --fr --paired-mode 1</runcommandpicklistitem>
           <runcommandpicklistitem>"${OUTPUT_PATH}" aln -x C:/data/reference/chr1.fa -i C:/data/reference/chrom1_16 --save 1 -U C:/data/reference/pacbio_01_pbsim.fastq -S C:/data/reference/alfalfa_pbsim.sam -s 16 -d 0.08 -L 50 -k 5 -T 10 -C 25 -m 0 -u -2 -o 0 -e -2 --fr --paired-mode 1</runcommandpicklistitem>
           <runcommandpicklistitem>"${OUTPUT_PATH}" aln -x C:/data/reference/chr1.fa -i C:/data/reference/chrom1_16 -p C:/data/reference/chrom1_16 --save 1 -U C:/data/reference/pacbio_01_pbsim.fastq -S C:/data/reference/alfalfa_pbsim.sam -s 16 -d 0.08 -L 50 -k 5 -T 10 -C 25 -m 0 -u -2 -o 0 -e -2 --fr --paired-mode 1</runcommandpicklistitem>
+          <runcommandpicklistitem>"${OUTPUT_PATH}" </runcommandpicklistitem>
+          <runcommandpicklistitem>"${OUTPUT_PATH}" check</runcommandpicklistitem>
+          <runcommandpicklistitem>"${OUTPUT_PATH}" check --help</runcommandpicklistitem>
+          <runcommandpicklistitem>"${OUTPUT_PATH}" check summary</runcommandpicklistitem>
+          <runcommandpicklistitem>"${OUTPUT_PATH}" check summary --num-reads 1376701 -I C:/data/reference/cushaw_real_454_1.sam</runcommandpicklistitem>
         </runcommandpicklist>
-        <runcommand>"${OUTPUT_PATH}" aln -x C:/data/reference/chr1.fa -i C:/data/reference/chrom1_16 -p C:/data/reference/chrom1_16 --save 1 -U C:/data/reference/pacbio_01_pbsim.fastq -S C:/data/reference/alfalfa_pbsim.sam -s 16 -d 0.08 -L 50 -k 5 -T 10 -C 25 -m 0 -u -2 -o 0 -e -2 --fr --paired-mode 1</runcommand>
+        <runcommand>"${OUTPUT_PATH}" check summary --num-reads 1376701 -I C:/data/reference/cushaw_real_454_1.sam</runcommand>
         <rundir></rundir>
         <buildfirst>true</buildfirst>
         <terminal-type>0</terminal-type>

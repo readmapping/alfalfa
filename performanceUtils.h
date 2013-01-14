@@ -40,7 +40,7 @@ struct samCheckOptions_t {
     samCheckOptions_t(){ initOptions(); }
     void initOptions(){
         subcommand = SUMMARY;
-        outputFile = "result.txt";
+        outputFile = "";
         oracleSam = "";
         paired = false;
         querySam = "";
@@ -151,6 +151,12 @@ static void processCommaSepListInt(string list, vector<int> & options, string na
         beginPos = commaPos+1;
         commaPos = list.find(',',beginPos);
     }
+    int value = atoi(list.substr(beginPos).c_str());
+    if(value >= lowerBound && value <= upperBound)
+        options.push_back(value);
+    else{
+        fprintf(stderr, "Value %d for parameter %s does not fall within logical bounds. This value will be ignored.\n", value, name.c_str());
+    }
 }
 
 static void processCommaSepListString(string list, vector<string> & options){
@@ -171,6 +177,7 @@ static void processParameters(int argc, char* argv[], samCheckOptions_t& opt, co
     else if(strcmp(argv[1], "compare") == 0) opt.subcommand = COMPARE;
     else{
         fprintf(stderr, "[main] unrecognized command '%s'\n", argv[1]);
+        usageCheck(program);
         exit(1);
     }
     cerr << "COMMAND: check " << argv[1] << endl;
@@ -216,10 +223,12 @@ static void processParameters(int argc, char* argv[], samCheckOptions_t& opt, co
             throw 1;
         }
     }
-    if(opt.querySam.empty() && opt.subcommand != COMPARE)
+    if(opt.subcommand != COMPARE && opt.querySam.empty()){
         fprintf(stderr, "The query SAM file has not been specified using the -I parameter: terminate.\n"); exit(1);
-    if(opt.subcommand == COMPARE && (opt.compareFiles.empty() || opt.compareFiles.size() < 2))
+    }
+    if(opt.subcommand == COMPARE && (opt.compareFiles.empty() || opt.compareFiles.size() < 2)){
         fprintf(stderr, "Not enough SAM files specified to compare.\n"); exit(1);
+    }
     if(opt.subcommand == ORACLE && opt.oracleSam.empty()){
         fprintf(stderr, "The oracle SAM file has not been specified for the oracle mode: terminate.\n"); exit(1);
     }
@@ -232,10 +241,11 @@ static void processParameters(int argc, char* argv[], samCheckOptions_t& opt, co
         opt.correctRange.push_back(50);
 }
 
-static string nextField(string & line, char delimeter, int & beginPos){
+static string nextField(string & line, char delimeter, int& beginPos){
     int tabPos = line.find(delimeter,beginPos);
-    return line.substr(beginPos, tabPos-beginPos);
+    string substring = line.substr(beginPos, tabPos-beginPos);
     beginPos = tabPos+1;
+    return substring;
 }
 
 //TODO: temp method copied from fasta.cpp, should be placed elsewhere
@@ -629,7 +639,7 @@ struct summaryLine_t {
         ss << endl;
         ss << "number of reads with x alignments" << endl;
         ss << 0 << "\t " << (readcnt-readMapped) << endl;
-        for(int i = 1; i< upperbound; i++)
+        for(int i = 1; i<= upperbound; i++)
             ss << i << "\t " << alnPerRead[i] << endl;
         return ss.str();
     }
@@ -643,7 +653,6 @@ static void checkSummary(samCheckOptions_t & opt){
     if(!queryFile.eof())
         getlijn2(queryFile,queryLine);//first line
     //fields: output
-    ofstream outfile ( opt.outputFile.c_str() );
     int qualValCount = opt.qualityValues.size();
     summaryLine_t results[qualValCount+2];
     cerr << "summary: summary of alignments found (including pairing info and mapped/mapping quality" << endl;
@@ -658,7 +667,6 @@ static void checkSummary(samCheckOptions_t & opt){
     cerr << "extra lines containing only alignments with minimal quality values of: " << printVector(opt.qualityValues) << endl;    
     cerr << "compiling summary: ..." << endl;
     if(!queryLine.empty() && queryLine[0]!='@'){
-        queryFile.seekg(queryPos);
         string qnamePrev = "";
         int flagPrev = 0;
         string rnextPrev = "";
@@ -668,7 +676,7 @@ static void checkSummary(samCheckOptions_t & opt){
         string rnext = "";
         int tabPos = 0;
         char delimeter = '\t';
-        while(!queryFile.eof()){
+        do{
             //set prev to current
             qnamePrev = qname;
             flagPrev = flag;
@@ -696,46 +704,76 @@ static void checkSummary(samCheckOptions_t & opt){
                 for(int i=0; i < qualValCount; i++)
                     results[2+i].finishRead();
             }
-            else{
+            if(flag!=4){
                 results[0].addAlignment(flag, rnext.compare("*")!=0);
                 for(int i=0; i < qualValCount; i++)
                     if(mapq >= opt.qualityValues[i])
                         results[2+i].addAlignment(flag, rnext.compare("*")!=0);
             }
             getlijn2(queryFile,queryLine);//next line
-        }
+        }while(!queryFile.eof());
     }
     cerr << "compiling summary: done" << endl;
     queryFile.close();
     cerr << endl;
     cerr << "printing results" << endl;
     cerr << "Warning, these results only make sense if the query file is sorted according to query name." << endl;
-    outfile << "##ALFALFA summary of alignment accuracy" << endl;
-    outfile << "##" << endl;
-    outfile << "##Warning: these results only make sense if the query file is sorted according to query name." << endl;
-    outfile << "##" << endl;
-    outfile << "##SAM file containing alignments: " << opt.querySam << endl;
-    outfile << "##Results will be presented for all alignments in the file, unique alignments and for the \
-    fraction of reads for which the mapping quality is at least: " << printVector(opt.qualityValues)  << endl;
-    outfile << "##For every category, the fraction of alignments/reads mapped (and paired correctly) will be shown." << endl;
-    outfile << "##Furthermore, a list is given of number of alignments per read." << endl;
-    outfile << "##" << endl;
-    outfile << "##" << endl;
-    outfile << "##Results" << endl;
-    outfile << "##" << endl;
-    outfile << "##Number of reads: " << opt.numReads << endl;
-    outfile << "##Reads are paired?: " << opt.paired << endl;
-    outfile << "##" << endl;
-    outfile << "##All alignments:" << endl;
-    outfile << results[0].printLine(opt.numReads, opt.paired);
-    outfile << "##" << endl;
-    outfile << "##Unique alignments:" << endl;
-    outfile << results[1].printLine(opt.numReads, opt.paired);
-    for(int j=0; j< qualValCount; j++){
+    if(!opt.outputFile.empty()){
+        ofstream outfile ( opt.outputFile.c_str() );
+        outfile << "##ALFALFA summary of alignment accuracy" << endl;
         outfile << "##" << endl;
-        outfile << results[2+j].printLine(opt.numReads, opt.paired);
+        outfile << "##Warning: these results only make sense if the query file is sorted according to query name." << endl;
+        outfile << "##" << endl;
+        outfile << "##SAM file containing alignments: " << opt.querySam << endl;
+        outfile << "##Results will be presented for all alignments in the file, unique alignments and for the \
+        fraction of reads for which the mapping quality is at least: " << printVector(opt.qualityValues)  << endl;
+        outfile << "##For every category, the fraction of alignments/reads mapped (and paired correctly) will be shown." << endl;
+        outfile << "##Furthermore, a list is given of number of alignments per read." << endl;
+        outfile << "##" << endl;
+        outfile << "##" << endl;
+        outfile << "##Results" << endl;
+        outfile << "##" << endl;
+        outfile << "##Number of reads: " << opt.numReads << endl;
+        outfile << "##Reads are paired?: " << opt.paired << endl;
+        outfile << "##" << endl;
+        outfile << "##All alignments:" << endl;
+        outfile << results[0].printLine(opt.numReads, opt.paired);
+        outfile << "##" << endl;
+        outfile << "##Unique alignments:" << endl;
+        outfile << results[1].printLine(opt.numReads, opt.paired);
+        for(int j=0; j< qualValCount; j++){
+            outfile << "##Alignments with min Q-value " << opt.qualityValues[j] << endl;
+            outfile << results[2+j].printLine(opt.numReads, opt.paired);
+        }
+        outfile.close();
     }
-    outfile.close();
+    else{
+        cout << "##ALFALFA summary of alignment accuracy" << endl;
+        cout << "##" << endl;
+        cout << "##Warning: these results only make sense if the query file is sorted according to query name." << endl;
+        cout << "##" << endl;
+        cout << "##SAM file containing alignments: " << opt.querySam << endl;
+        cout << "##Results will be presented for all alignments in the file, unique alignments and for the \
+        fraction of reads for which the mapping quality is at least: " << printVector(opt.qualityValues)  << endl;
+        cout << "##For every category, the fraction of alignments/reads mapped (and paired correctly) will be shown." << endl;
+        cout << "##Furthermore, a list is given of number of alignments per read." << endl;
+        cout << "##" << endl;
+        cout << "##" << endl;
+        cout << "##Results" << endl;
+        cout << "##" << endl;
+        cout << "##Number of reads: " << opt.numReads << endl;
+        cout << "##Reads are paired?: " << opt.paired << endl;
+        cout << "##" << endl;
+        cout << "##All alignments:" << endl;
+        cout << results[0].printLine(opt.numReads, opt.paired);
+        cout << "##" << endl;
+        cout << "##Unique alignments:" << endl;
+        cout << results[1].printLine(opt.numReads, opt.paired);
+        for(int j=0; j< qualValCount; j++){
+            cout << "##Alignments with min Q-value " << opt.qualityValues[j] << endl;
+            cout << results[2+j].printLine(opt.numReads, opt.paired);
+        }
+    }
 }
 
 long maxRange(samRecord_t & first, samRecord_t & second){

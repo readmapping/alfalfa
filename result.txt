@@ -1,0 +1,25 @@
+##ALFALFA summary of alignment accuracy
+##
+##Warning: these results only make sense if the query file is sorted according to query name.
+##
+##SAM file containing alignments: C:/data/reference/cushaw_real_454_1.sam
+##Results will be presented for all alignments in the file, unique alignments and for the         fraction of reads for which the mapping quality is at least: 
+##For every category, the fraction of alignments/reads mapped (and paired correctly) will be shown.
+##Furthermore, a list is given of number of alignments per read.
+##
+##
+##Results
+##
+##Number of reads: 1376701
+##Reads are paired?: 0
+##
+##All alignments:
+~~~	 num_mapped	 percent_mapped	 num_unmapped	 /percent_unmapped	 num_second_aligned	 count
+alignments	 2	 100	 N.A.	 N.A.	 0	 2
+reads	 0	 0	 1376701	 100	 N.A.	 1376701
+
+number of reads with x alignments
+0	 1376701
+1	 0
+##
+##Unique alignments:
