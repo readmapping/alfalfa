@@ -167,6 +167,7 @@ static void processCommaSepListString(string list, vector<string> & options){
         beginPos = commaPos+1;
         commaPos = list.find(',',beginPos);
     }
+    options.push_back(list.substr(beginPos));
 }
 
 static void processParameters(int argc, char* argv[], samCheckOptions_t& opt, const string program){
@@ -795,17 +796,24 @@ static void checkCompare(samCheckOptions_t & opt){
     ifstream inputFiles[mapperCount];
     string inputLines[mapperCount];
     for(int i=0; i < mapperCount; i++){
-        inputFiles[i].open(opt.querySam.c_str());
+        inputFiles[i].open(opt.compareFiles[i].c_str());
         inputLines[i] = "";
         if(!inputFiles[i].eof())
             getlijn2(inputFiles[i],inputLines[i]);//first line
     }    
     //fields: output
-    ofstream outfile ( opt.outputFile.c_str() );
     int rangeValCount = opt.correctRange.size();
     int combinations = (1<<mapperCount);
     long resultsAln[rangeValCount][mapperCount][mapperCount];
     long resultsRead[combinations];
+    
+    //initialization
+    for(int i=0; i< combinations; i++)
+        resultsRead[i]=0L;
+    for(int i=0; i<rangeValCount; i++)
+        for(int j=0; j<mapperCount; j++)
+            for(int k=0; k<mapperCount; k++)
+                resultsAln[i][j][k] = 0L;
     
     //fields temp
     vector< vector<samRecord_t> > records(mapperCount, vector<samRecord_t>(0) );
@@ -816,7 +824,7 @@ static void checkCompare(samCheckOptions_t & opt){
     //print header of all Files
     cerr << "header of SAM file: PG lines" << endl;
     for(int i = 0; i < mapperCount; i++){
-        cerr << "File " << i << "with name " << opt.compareFiles[i] << endl;
+        cerr << "File " << i << " with name " << opt.compareFiles[i] << endl;
         while(!inputFiles[i].eof() && !inputLines[i].empty() && inputLines[i][0]=='@'){
             if(inputLines[i].substr(0, 3).compare("@PG")==0)
                 cerr << inputLines[i] << endl;
@@ -861,7 +869,8 @@ static void checkCompare(samCheckOptions_t & opt){
             }
         }
     }
-    while(hasRead.any()){
+    long readsCompared = 0;
+    while(hasRead.any() && readsCompared < opt.numReads){
         //reset some parameters
         toCompare.reset();
         //search lexicographical smallest reads.
@@ -871,13 +880,14 @@ static void checkCompare(samCheckOptions_t & opt){
                 smallest = records[i][0].qname;
             }
         }
+        readsCompared++;
         //set the files which need to be checked
         owned.reset();
         for(int i = 0; i < mapperCount; i++){
             if(hasRead.test(i) && smallest.compare(records[i][0].qname) == 0){
                 toCompare.set(i, true);
                 for(int j=0; j < records[i].size(); j++){
-                    if(records[i][j].flag.test(2)){
+                    if(!records[i][j].flag.test(2)){
                         owned.set(i, true);
                         records[i][j].mapq = 0;//VERY DIRTY: SAVE OTHER INFO IN FIELD
                     }
@@ -922,7 +932,7 @@ static void checkCompare(samCheckOptions_t & opt){
                         samRecord_t & first = records[i][k];
                         if(!first.flag.test(2)){
                             for(int n = 0; n < rangeValCount; n++){
-                                if(CHECK_BIT(first.mapq,n)){
+                                if(!CHECK_BIT(first.mapq,n)){
                                     //set unique
                                     resultsAln[n][i][i]++;
                                 }
@@ -967,75 +977,146 @@ static void checkCompare(samCheckOptions_t & opt){
     cerr << endl;
     cerr << "printing results" << endl;
     cerr << "Warning, these results only make sense if the all files are sorted according to read name and contain at least one alignment." << endl;
-    outfile << "##ALFALFA comparison between alignments" << endl;
-    outfile << "##" << endl;
-    outfile << "##Warning: these results only make sense if all files are sorted according to read name and contain at least one alignment." << endl;
-    outfile << "##" << endl;
-    outfile << "##SAM files: " << endl;
-    for(int i=0; i < opt.compareFiles.size(); i++)
-        outfile << "##mapper " << i << " equals file " << opt.compareFiles[i] << endl;
-    outfile << "##Distances to check: " << printVector(opt.correctRange)  << endl;
-    outfile << "##Results show the number of reads that are shared among alignment files and \
-    for every input distance, the number of alignments which are considered equal" << endl;
-    outfile << "##" << endl;
-    outfile << "##" << endl;
-    outfile << "##Results" << endl;
-    outfile << "##" << endl;
-    outfile << "##Number of reads: " << opt.numReads << endl;
-    outfile << "##Reads are paired?: " << opt.paired << endl;
-    outfile << "##" << endl;
-    outfile << "Reads aligned by none: " << resultsRead[0] << endl;
-    outfile << "##Reads uniquely aligned by mappers:" << endl;
-    outfile << "mapper\t number_reads" << endl;
-    for(int i=0; i < mapperCount; i++){
-        outfile << i << "\t" << resultsRead[(1<<i)] << endl;
-    }
-    outfile << "##Reads aligned by multiple mappers:" << endl;
-    outfile << "mappers\t number_reads" << endl;
-    for(int i=3; i< combinations; i++){
-        int currentCombi = i;
-        int mapperIndex=0;
-        while(currentCombi > 0 && (currentCombi & 1)==0){
-            mapperIndex++;
-            currentCombi = currentCombi >> 1;
+    if(!opt.outputFile.empty()){
+        ofstream outfile ( opt.outputFile.c_str() );
+        outfile << "##ALFALFA comparison between alignments" << endl;
+        outfile << "##" << endl;
+        outfile << "##Warning: these results only make sense if all files are sorted according to read name and contain at least one alignment." << endl;
+        outfile << "##" << endl;
+        outfile << "##SAM files: " << endl;
+        for(int i=0; i < opt.compareFiles.size(); i++)
+            outfile << "##mapper " << i << " equals file " << opt.compareFiles[i] << endl;
+        outfile << "##Distances to check: " << printVector(opt.correctRange)  << endl;
+        outfile << "##Results show the number of reads that are shared among alignment files and for every input distance, the number of alignments which are considered equal" << endl;
+        outfile << "##" << endl;
+        outfile << "##" << endl;
+        outfile << "##Results" << endl;
+        outfile << "##" << endl;
+        outfile << "##Number of reads: " << opt.numReads << endl;
+        outfile << "##Reads are paired?: " << opt.paired << endl;
+        outfile << "##" << endl;
+        outfile << "Reads aligned by none: " << resultsRead[0] << endl;
+        outfile << "##Reads uniquely aligned by mappers:" << endl;
+        outfile << "mapper\t number_reads" << endl;
+        for(int i=0; i < mapperCount; i++){
+            outfile << i << "\t" << resultsRead[(1<<i)] << endl;
         }
-        if(currentCombi > 1){//at least 2 mappers, not power of 2
-            outfile << mapperIndex;
-            mapperIndex++;
-            currentCombi = currentCombi >> 1;
-            while(currentCombi > 0){
-                if((currentCombi & 1) == 1)
-                    outfile << "," << mapperIndex;
+        outfile << "##Reads aligned by multiple mappers:" << endl;
+        outfile << "mappers\t number_reads" << endl;
+        for(int i=3; i< combinations; i++){
+            int currentCombi = i;
+            int mapperIndex=0;
+            while(currentCombi > 0 && (currentCombi & 1)==0){
                 mapperIndex++;
                 currentCombi = currentCombi >> 1;
             }
-            outfile << "\t" << resultsRead[i] << endl;
-        }
-    }
-    outfile << "##" << endl;
-    outfile << "##For every distance: the pairwise shared alignments" << endl;
-    outfile << "##" << endl;
-    for(int i=0; i< rangeValCount; i++){
-        outfile << "##Distance: " << opt.correctRange[i] << endl;
-        outfile << "Mapper";
-        for(int j=0; j < mapperCount; j++){
-            outfile << "\t" << j;
-        }
-        outfile << endl;
-        for(int j=0; j < mapperCount; j++){//rows
-            outfile << j;
-            for(int k=0; k < mapperCount; k++){//columns
-                outfile << "\t";
-                if(k >= j){
-                    outfile << resultsAln[i][j][k];
+            if(currentCombi > 1){//at least 2 mappers, not power of 2
+                outfile << mapperIndex;
+                mapperIndex++;
+                currentCombi = currentCombi >> 1;
+                while(currentCombi > 0){
+                    if((currentCombi & 1) == 1)
+                        outfile << "," << mapperIndex;
+                    mapperIndex++;
+                    currentCombi = currentCombi >> 1;
                 }
+                outfile << "\t" << resultsRead[i] << endl;
+            }
+        }
+        outfile << "##" << endl;
+        outfile << "##For every distance: the pairwise shared alignments" << endl;
+        outfile << "##" << endl;
+        for(int i=0; i< rangeValCount; i++){
+            outfile << "##Distance: " << opt.correctRange[i] << endl;
+            outfile << "Mapper";
+            for(int j=0; j < mapperCount; j++){
+                outfile << "\t" << j;
             }
             outfile << endl;
+            for(int j=0; j < mapperCount; j++){//rows
+                outfile << j;
+                for(int k=0; k < mapperCount; k++){//columns
+                    outfile << "\t";
+                    if(k >= j){
+                        outfile << resultsAln[i][j][k];
+                    }
+                }
+                outfile << endl;
+            }
+            outfile << "##" << endl;
+            outfile << "##" << endl;
         }
-        outfile << "##" << endl;
-        outfile << "##" << endl;
+        outfile.close();
     }
-    outfile.close();
+    else{
+        cout << "##ALFALFA comparison between alignments" << endl;
+        cout << "##" << endl;
+        cout << "##Warning: these results only make sense if all files are sorted according to read name and contain at least one alignment." << endl;
+        cout << "##" << endl;
+        cout << "##SAM files: " << endl;
+        for(int i=0; i < opt.compareFiles.size(); i++)
+            cout << "##mapper " << i << " equals file " << opt.compareFiles[i] << endl;
+        cout << "##Distances to check: " << printVector(opt.correctRange)  << endl;
+        cout << "##Results show the number of reads that are shared among alignment files and for every input distance, the number of alignments which are considered equal" << endl;
+        cout << "##" << endl;
+        cout << "##" << endl;
+        cout << "##Results" << endl;
+        cout << "##" << endl;
+        cout << "##Number of reads: " << opt.numReads << endl;
+        cout << "##Reads are paired?: " << opt.paired << endl;
+        cout << "##" << endl;
+        cout << "Reads aligned by none: " << resultsRead[0] << endl;
+        cout << "##Reads uniquely aligned by mappers:" << endl;
+        cout << "mapper\t number_reads" << endl;
+        for(int i=0; i < mapperCount; i++){
+            cout << i << "\t" << resultsRead[(1<<i)] << endl;
+        }
+        cout << "##Reads aligned by multiple mappers:" << endl;
+        cout << "mappers\t number_reads" << endl;
+        for(int i=3; i< combinations; i++){
+            int currentCombi = i;
+            int mapperIndex=0;
+            while(currentCombi > 0 && (currentCombi & 1)==0){
+                mapperIndex++;
+                currentCombi = currentCombi >> 1;
+            }
+            if(currentCombi > 1){//at least 2 mappers, not power of 2
+                cout << mapperIndex;
+                mapperIndex++;
+                currentCombi = currentCombi >> 1;
+                while(currentCombi > 0){
+                    if((currentCombi & 1) == 1)
+                        cout << "," << mapperIndex;
+                    mapperIndex++;
+                    currentCombi = currentCombi >> 1;
+                }
+                cout << "\t" << resultsRead[i] << endl;
+            }
+        }
+        cout << "##" << endl;
+        cout << "##For every distance: the pairwise shared alignments" << endl;
+        cout << "##" << endl;
+        for(int i=0; i< rangeValCount; i++){
+            cout << "##Distance: " << opt.correctRange[i] << endl;
+            cout << "Mapper";
+            for(int j=0; j < mapperCount; j++){
+                cout << "\t" << j;
+            }
+            cout << endl;
+            for(int j=0; j < mapperCount; j++){//rows
+                cout << j;
+                for(int k=0; k < mapperCount; k++){//columns
+                    cout << "\t";
+                    if(k >= j){
+                        cout << resultsAln[i][j][k];
+                    }
+                }
+                cout << endl;
+            }
+            cout << "##" << endl;
+            cout << "##" << endl;
+        }
+    }
 }
 
 #endif	/* PERFORMANCEUTILS_H */
