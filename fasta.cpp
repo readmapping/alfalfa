@@ -166,9 +166,10 @@ bool fastqInputReader::nextReadFastQ(string& meta, string& sequence, string& qua
     while(!data.eof()) {// Load one line at a time: cycle through meta, sequence, '+' and quality
         getlijn(data, line); // new meta
         if(line.length() == 0) continue;
-        long start = 1, end = line.length()-1;
-        trim(line, start , end);
-        meta = line.substr(start,end-start+1);
+        //only up to first space
+        long start = 1, end = line.find(' ');//line.length()-1;
+        //trim(line, start , end);
+        meta = line.substr(start,end-start);
         getlijn(data, sequence); //sequence line
         for(long i = 0; i <= sequence.length(); i++) {
             char c = std::tolower(sequence[i]);
@@ -195,13 +196,12 @@ bool fastqInputReader::nextReadFastA(string& meta, string& sequence){
     while(!data.eof()) {
         getlijn(data, line); // Load one line at a time.
         if(line.length() == 0) continue;
-        long start = 0, end = line.length() - 1;
+        long start = 1, end = line.find(' ');//line.length()-1;
         // Meta tag line and start of a new sequence.
         // Collect meta data.
         assert(line[0] == '>');
-        start = 1;
-        trim(line, start, end);
-        meta = line.substr(start,end-start+1);
+        //trim(line, start, end);
+        meta = line.substr(start,end-start);
         //sequence part
         while(!data.eof() && data.peek() != '>'){
             getlijn(data, line); // Load one line at a time.
