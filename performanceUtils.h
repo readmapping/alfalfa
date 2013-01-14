@@ -305,6 +305,10 @@ struct oracleLine_t {
     long readOk;
     long readBad;
     int tempReadResult;
+    void init(){
+        alignmentCnt=alnGood=alnOk=alnBad=readGood=readOk=readBad=0L;
+        tempReadResult=0;
+    }
     void addAlignment(int score){
         tempReadResult = max(tempReadResult, score);
         alignmentCnt++;
@@ -326,12 +330,12 @@ struct oracleLine_t {
     }
     string printLine(long readcnt){
         stringstream ss;
-        ss << alnGood << "\t " << ((alnGood*100)/alignmentCnt) << "\t ";
-        ss << alnOk << "\t " << ((alnOk*100)/alignmentCnt) << "\t "; 
-        ss << alnBad << "\t " << ((alnBad*100)/alignmentCnt) << "\t ";
-        ss << readGood << "\t " << ((readGood*100)/readcnt) << "\t ";
-        ss << readOk << "\t " << ((readOk*100)/readcnt) << "\t ";
-        ss << readBad << "\t " << ((readBad*100)/readcnt) << endl;
+        ss << alnGood << "\t " << ((alnGood*100)/(alignmentCnt > 0 ? alignmentCnt : 1)) << "\t ";
+        ss << alnOk << "\t " << ((alnOk*100)/(alignmentCnt > 0 ? alignmentCnt : 1)) << "\t "; 
+        ss << alnBad << "\t " << ((alnBad*100)/(alignmentCnt > 0 ? alignmentCnt : 1)) << "\t ";
+        ss << readGood << "\t " << ((readGood*100)/(readcnt > 0 ? readcnt : 1)) << "\t ";
+        ss << readOk << "\t " << ((readOk*100)/(readcnt > 0 ? readcnt : 1)) << "\t ";
+        ss << readBad << "\t " << ((readBad*100)/(readcnt > 0 ? readcnt : 1)) << endl;
         return ss.str();
     }
 };
@@ -393,11 +397,16 @@ static void checkOracle(samCheckOptions_t & opt){
     if(!queryFile.eof())
         getlijn2(queryFile,queryLine);
     //fields: output
-    ofstream outfile ( opt.outputFile.c_str() );
     long readcnt = 0;
     int rangeCount = opt.correctRange.size();
     int qualValCount = opt.qualityValues.size();
     oracleLine_t results[rangeCount][qualValCount+2];
+    
+    //init results
+    for(int i=0; i<rangeCount; i++)
+        for(int j=0; j<qualValCount+2; j++)
+            results[i][j].init();
+    
     //iterate over both SORTED sam files simultaneously
     cerr << "summary: checking accuracy of SAM file, using oracle SAM file containing the original simulated positions" << endl;
     //print header of both files
@@ -517,46 +526,90 @@ static void checkOracle(samCheckOptions_t & opt){
     cerr << "printing results" << endl;
     cerr << "Warning, these results only make sense if both the oracle and query file are sorted according to \
     query name and if the edit distance field is filled correctly." << endl;
-    outfile << "##ALFALFA check alignment accuracy using an oracle file for simulated reads" << endl;
-    outfile << "##" << endl;
-    outfile << "##Warning: these results only make sense if both the oracle and query file are sorted according to \
-    query name and if the edit distance field is filled correctly." << endl;
-    outfile << "##" << endl;
-    outfile << "##SAM file containing alignments: " << opt.querySam << endl;
-    outfile << "##SAM file containing simulated origins: " << opt.oracleSam << endl;
-    outfile << "##" << endl;
-    outfile << "##An alignment is considered correct if it falls within a certain range from the simulated origin" << endl;
-    outfile << "##The ranges that are considered are: " << printVector(opt.correctRange) << endl;
-    outfile << "##" << endl;
-    outfile << "##Results will be presented for all alignments in the file, unique alignments and for the \
-    fraction of reads for which the mapping quality is at least: " << printVector(opt.qualityValues)  << endl;
-    outfile << "##" << endl;
-    outfile << "##The first 6 columns represent number and percentage of alignments that are correct, ok \
-    (not close to origin/not paired correctly, but with a smaller or equal edit distance) and incorrect alignments." << endl;
-    outfile << "##The second 6 columns represent these numbers and percentages for the reads. A read is considered correctly mapped\
-    if at least one correct alignment has been found (and likewise for ok reads)." << endl;
-    outfile << "##" << endl;
-    outfile << "##" << endl;
-    outfile << "##Results" << endl;
-    outfile << "##" << endl;
-    outfile << "##Number of reads: " << readcnt << endl;
-    outfile << "##Reads are paired?: " << paired << endl;
-    outfile << "##" << endl;
-    for(int i=0; i < rangeCount; i++){
-        outfile << "##Results for allowed range of " << opt.correctRange[i] << endl;
-        outfile << "#\t\t\t alignments\t\t\t\t\t\t reads" << endl;
-        outfile << "#resultType\t num_correct\t percent_correct\t num_ok\t percent_ok\t /"
-                "num_incorrect\t percent_incorrect\t num_correct\t percent_correct\t /"
-                "num_ok\t percent_ok\t num_incorrect\t percent_incorrect" << endl;
-        outfile << "all\t " << results[i][0].printLine(readcnt);
-        outfile << "unique aligned\t " << results[i][1].printLine(readcnt);
-        for(int j=0; j< qualValCount; j++){
-            outfile << "min mapq of " << opt.qualityValues[j] << "\t " << results[i][2+j].printLine(readcnt);
+    if(!opt.outputFile.empty()){
+        ofstream outfile ( opt.outputFile.c_str() );
+        outfile << "##ALFALFA check alignment accuracy using an oracle file for simulated reads" << endl;
+        outfile << "##" << endl;
+        outfile << "##Warning: these results only make sense if both the oracle and query file are sorted according to \
+        query name and if the edit distance field is filled correctly." << endl;
+        outfile << "##" << endl;
+        outfile << "##SAM file containing alignments: " << opt.querySam << endl;
+        outfile << "##SAM file containing simulated origins: " << opt.oracleSam << endl;
+        outfile << "##" << endl;
+        outfile << "##An alignment is considered correct if it falls within a certain range from the simulated origin" << endl;
+        outfile << "##The ranges that are considered are: " << printVector(opt.correctRange) << endl;
+        outfile << "##" << endl;
+        outfile << "##Results will be presented for all alignments in the file, unique alignments and for the \
+        fraction of reads for which the mapping quality is at least: " << printVector(opt.qualityValues)  << endl;
+        outfile << "##" << endl;
+        outfile << "##The first 6 columns represent number and percentage of alignments that are correct, ok \
+        (not close to origin/not paired correctly, but with a smaller or equal edit distance) and incorrect alignments." << endl;
+        outfile << "##The second 6 columns represent these numbers and percentages for the reads. A read is considered correctly mapped\
+        if at least one correct alignment has been found (and likewise for ok reads)." << endl;
+        outfile << "##" << endl;
+        outfile << "##" << endl;
+        outfile << "##Results" << endl;
+        outfile << "##" << endl;
+        outfile << "##Number of reads: " << readcnt << endl;
+        outfile << "##Reads are paired?: " << paired << endl;
+        outfile << "##" << endl;
+        for(int i=0; i < rangeCount; i++){
+            outfile << "##Results for allowed range of " << opt.correctRange[i] << endl;
+            outfile << "#\t\t\t alignments\t\t\t\t\t\t reads" << endl;
+            outfile << "#resultType\t num_correct\t percent_correct\t num_ok\t percent_ok\t /"
+                    "num_incorrect\t percent_incorrect\t num_correct\t percent_correct\t /"
+                    "num_ok\t percent_ok\t num_incorrect\t percent_incorrect" << endl;
+            outfile << "all\t " << results[i][0].printLine(readcnt);
+            outfile << "unique aligned\t " << results[i][1].printLine(readcnt);
+            for(int j=0; j< qualValCount; j++){
+                outfile << "min mapq of " << opt.qualityValues[j] << "\t " << results[i][2+j].printLine(readcnt);
+            }
+            outfile << "##" << endl;
+            outfile << "##" << endl;
         }
-        outfile << "##" << endl;
-        outfile << "##" << endl;
+        outfile.close();
     }
-    outfile.close();
+    else{
+        cout << "##ALFALFA check alignment accuracy using an oracle file for simulated reads" << endl;
+        cout << "##" << endl;
+        cout << "##Warning: these results only make sense if both the oracle and query file are sorted according to \
+        query name and if the edit distance field is filled correctly." << endl;
+        cout << "##" << endl;
+        cout << "##SAM file containing alignments: " << opt.querySam << endl;
+        cout << "##SAM file containing simulated origins: " << opt.oracleSam << endl;
+        cout << "##" << endl;
+        cout << "##An alignment is considered correct if it falls within a certain range from the simulated origin" << endl;
+        cout << "##The ranges that are considered are: " << printVector(opt.correctRange) << endl;
+        cout << "##" << endl;
+        cout << "##Results will be presented for all alignments in the file, unique alignments and for the \
+        fraction of reads for which the mapping quality is at least: " << printVector(opt.qualityValues)  << endl;
+        cout << "##" << endl;
+        cout << "##The first 6 columns represent number and percentage of alignments that are correct, ok \
+        (not close to origin/not paired correctly, but with a smaller or equal edit distance) and incorrect alignments." << endl;
+        cout << "##The second 6 columns represent these numbers and percentages for the reads. A read is considered correctly mapped\
+        if at least one correct alignment has been found (and likewise for ok reads)." << endl;
+        cout << "##" << endl;
+        cout << "##" << endl;
+        cout << "##Results" << endl;
+        cout << "##" << endl;
+        cout << "##Number of reads: " << readcnt << endl;
+        cout << "##Reads are paired?: " << paired << endl;
+        cout << "##" << endl;
+        for(int i=0; i < rangeCount; i++){
+            cout << "##Results for allowed range of " << opt.correctRange[i] << endl;
+            cout << "#\t\t\t alignments\t\t\t\t\t\t reads" << endl;
+            cout << "#resultType\t num_correct\t percent_correct\t num_ok\t percent_ok\t /"
+                    "num_incorrect\t percent_incorrect\t num_correct\t percent_correct\t /"
+                    "num_ok\t percent_ok\t num_incorrect\t percent_incorrect" << endl;
+            cout << "all\t " << results[i][0].printLine(readcnt);
+            cout << "unique aligned\t " << results[i][1].printLine(readcnt);
+            for(int j=0; j< qualValCount; j++){
+                cout << "min mapq of " << opt.qualityValues[j] << "\t " << results[i][2+j].printLine(readcnt);
+            }
+            cout << "##" << endl;
+            cout << "##" << endl;
+        }        
+    }
 }
 
 struct summaryLine_t {

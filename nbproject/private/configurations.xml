@@ -24,18 +24,18 @@
       </nativedebugger>
       <runprofile version="9">
         <runcommandpicklist>
-          <runcommandpicklistitem>"${OUTPUT_PATH}" aln -s 8 C:/data/reference/drosophila/genome.fasta C:/data/reference/drosophila/reads_454/SRR034673.10k.fastq</runcommandpicklistitem>
-          <runcommandpicklistitem>"${OUTPUT_PATH}" aln -s 16 C:/data/reference/drosophila/genome.fasta C:/data/reference/drosophila/reads_454/SRR034673.10k.fastq</runcommandpicklistitem>
-          <runcommandpicklistitem>"${OUTPUT_PATH}" aln -x C:/data/reference/drosophila/chr22.fa -1 C:/data/reference/drosophila/_1.hr22_800Ill -2 C:/data/reference/drosophila/_2.hr22_800Ill -S C:/data/reference/drosophila/test.sam</runcommandpicklistitem>
-          <runcommandpicklistitem>"${OUTPUT_PATH}" check summary --num-reads 1376701 -I C:/data/reference/cushaw_real_454_1.sam</runcommandpicklistitem>
-          <runcommandpicklistitem>"${OUTPUT_PATH}" check summary --num-reads 1376701 -I C:/data/reference/cushaw_real_454_1.sam -Q 100</runcommandpicklistitem>
-          <runcommandpicklistitem>"${OUTPUT_PATH}" check summary --num-reads 1376701 -I C:/data/reference/bowtie_real_454_1.sam -Q 100</runcommandpicklistitem>
-          <runcommandpicklistitem>"${OUTPUT_PATH}" check summary --num-reads 1376701 -I C:/data/reference/bwa_real_454_1.sam -Q 100</runcommandpicklistitem>
-          <runcommandpicklistitem>"${OUTPUT_PATH}" check summary --num-reads 1376701 -I C:/data/reference/alfalfa_8_real_454_1.sam -Q 100</runcommandpicklistitem>
-          <runcommandpicklistitem>"${OUTPUT_PATH}" check compare --num-reads 1376701 -C C:/data/reference/alfalfa_8_real_454_1.sam,C:/data/reference/bowtie_real_454_1.sam -r 10</runcommandpicklistitem>
-          <runcommandpicklistitem>"${OUTPUT_PATH}" check compare --num-reads 1376701 -C C:/data/reference/bwa_real_454_1.sam,C:/data/reference/bowtie_real_454_1.sam -r 10</runcommandpicklistitem>
+          <runcommandpicklistitem>"${OUTPUT_PATH}" check oracle -S C:/data/reference/hg19_600cat.sam -I C:/data/reference/bowtie_masonreads_600_1.sam --otag XE</runcommandpicklistitem>
+          <runcommandpicklistitem>"${OUTPUT_PATH}" check oracle -S C:/data/reference/mason_600_1.sam -I C:/data/reference/bowtie_masonreads_600_1.sam --otag XE</runcommandpicklistitem>
+          <runcommandpicklistitem>"${OUTPUT_PATH}" check oracle -S C:/data/reference/mason_600_1.sam -I C:/data/reference/bowtie_masonreads_600_2.sam --otag XE</runcommandpicklistitem>
+          <runcommandpicklistitem>"${OUTPUT_PATH}" check oracle -S C:/data/reference/mason_600_1.sam -I C:/data/reference/bwa_masonreads_600_1.sam --otag XE</runcommandpicklistitem>
+          <runcommandpicklistitem>"${OUTPUT_PATH}" check oracle -S C:/data/reference/mason_600_1.sam -I C:/data/reference/cushaw_masonreads_600_1.sam --otag XE</runcommandpicklistitem>
+          <runcommandpicklistitem>"${OUTPUT_PATH}" check oracle -S C:/data/reference/mason_600_1.sam -I C:/data/reference/cushaw_masonreads_600_2.sam --otag XE</runcommandpicklistitem>
+          <runcommandpicklistitem>"${OUTPUT_PATH}" check oracle -S C:/data/reference/mason_600_1.sam -I C:/data/reference/razers_masonreads_600_1.sam --otag XE</runcommandpicklistitem>
+          <runcommandpicklistitem>"${OUTPUT_PATH}" check oracle -S C:/data/reference/mason_600_1.sam -I C:/data/reference/razers_masonreads_600_2.sam --otag XE</runcommandpicklistitem>
+          <runcommandpicklistitem>"${OUTPUT_PATH}" check oracle -S C:/data/reference/mason_600_1.sam -I C:/data/reference/alfalfa_8_masonreads_600_2.sam --otag XE</runcommandpicklistitem>
+          <runcommandpicklistitem>"${OUTPUT_PATH}" check oracle -S C:/data/reference/mason_600_1.sam -I C:/data/reference/alfalfa_8_masonreads_600_1.sam --otag XE</runcommandpicklistitem>
         </runcommandpicklist>
-        <runcommand>"${OUTPUT_PATH}" check compare --num-reads 1376701 -C C:/data/reference/bwa_real_454_1.sam,C:/data/reference/bowtie_real_454_1.sam -r 10</runcommand>
+        <runcommand>"${OUTPUT_PATH}" check oracle -S C:/data/reference/mason_600_1.sam -I C:/data/reference/alfalfa_8_masonreads_600_1.sam --otag XE</runcommand>
         <rundir></rundir>
         <buildfirst>true</buildfirst>
         <console-type>2</console-type>
