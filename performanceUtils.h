@@ -950,19 +950,19 @@ struct summaryLine_t {
             ss << "alignments\t " << mappedAln << "\t " << (mappedAln*100)/alignmentCnt;
             ss << "\t " << mappedPaired << "\t " << (mappedPaired*100)/alignmentCnt;
             ss << "\t " << mappedPairedCorrect << "\t " << (mappedPairedCorrect*100)/alignmentCnt;
-            ss << "\t " << "N.A." << "\t " << "N.A.";
+            ss << "\t " << (alignmentCnt-mappedAln) << "\t " << ((alignmentCnt-mappedAln)*100)/alignmentCnt;
             ss << "\t " << secondAln << "\t " << alignmentCnt << endl;
             ss << "reads\t " << readMapped << "\t " << (readMapped*100)/readcnt;
             ss << "\t " << readPaired << "\t " << (readPaired*100)/readcnt;
             ss << "\t " << readPairedCorrect << "\t " << (readPairedCorrect*100)/readcnt;
-            ss << "\t " << (readcnt-readMapped) << "\t " << ((readcnt-readMapped)*100)/readcnt;
+            ss << "\t " << (readcnt-readMapped-readPaired-readPairedCorrect) << "\t " << ((readcnt-readMapped-readPaired-readPairedCorrect)*100)/readcnt;
             ss << "\t " << "N.A." << "\t " << readcnt << endl;
         }
         else{
             ss << "~~~\t num_mapped\t percent_mapped\t num_unmapped\t /"
                     "percent_unmapped\t num_second_aligned\t count" << endl;
             ss << "alignments\t " << mappedAln << "\t " << (mappedAln*100)/alignmentCnt;
-            ss << "\t " << "N.A." << "\t " << "N.A.";
+            ss << "\t " << (alignmentCnt-mappedAln) << "\t " << ((alignmentCnt-mappedAln)*100)/alignmentCnt;
             ss << "\t " << secondAln << "\t " << alignmentCnt << endl;
             ss << "reads\t " << readMapped << "\t " << (readMapped*100)/readcnt;
             ss << "\t " << (readcnt-readMapped) << "\t " << ((readcnt-readMapped)*100)/readcnt;
@@ -970,7 +970,7 @@ struct summaryLine_t {
         }
         ss << endl;
         ss << "number of reads with x alignments" << endl;
-        ss << 0 << "\t " << (readcnt-readMapped) << endl;
+        ss << 0 << "\t " << (readcnt-readMapped-readPaired-readPairedCorrect) << endl;
         for(int i = 1; i<= upperbound; i++)
             ss << i << "\t " << alnPerRead[i] << endl;
         return ss.str();
@@ -1044,6 +1044,14 @@ static void checkSummary(samCheckOptions_t & opt){
             }
             getlijn2(queryFile,queryLine);//next line
         }while(!queryFile.eof());
+        if(!qnamePrev.empty()){
+            if(results[0].tempAlnCount==1 || (opt.paired && results[0].tempAlnCount==2))
+                results[1].addAlignment(flagPrev, rnextPrev.compare("*")!=0);
+            results[0].finishRead();
+            results[1].finishRead();
+            for(int i=0; i < qualValCount; i++)
+                results[2+i].finishRead();
+        }
     }
     cerr << "compiling summary: done" << endl;
     queryFile.close();
