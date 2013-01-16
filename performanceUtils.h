@@ -1121,6 +1121,27 @@ long maxRange(samRecord_t & first, samRecord_t & second){
     return result;
 }
 
+//Taken from samtools bam_sort.c
+static int strnum_cmp(const char *a, const char *b)
+{
+        char *pa, *pb;
+        pa = (char*)a; pb = (char*)b;
+        while (*pa && *pb) {
+                if (isdigit(*pa) && isdigit(*pb)) {
+                        long ai, bi;
+                        ai = strtol(pa, &pa, 10);
+                        bi = strtol(pb, &pb, 10);
+                        if (ai != bi) return ai<bi? -1 : ai>bi? 1 : 0;
+                } else {
+                        if (*pa != *pb) break;
+                        ++pa; ++pb;
+                }
+        }
+        if (*pa == *pb)
+                return (pa-a) < (pb-b)? -1 : (pa-a) > (pb-b)? 1 : 0;
+        return *pa<*pb? -1 : *pa>*pb? 1 : 0;
+}
+
 static void checkCompare(samCheckOptions_t & opt){
     //fields: input
     int mapperCount = opt.compareFiles.size();
@@ -1207,7 +1228,7 @@ static void checkCompare(samCheckOptions_t & opt){
         //search lexicographical smallest reads.
         string smallest="~";//Find a constant string that will be largest!!!
         for(int i = 0; i < mapperCount; i++){
-            if(hasRead.test(i) && smallest.compare(records[i][0].qname) > 0){
+            if(hasRead.test(i) && strnum_cmp(records[i][0].qname.c_str(),smallest.c_str()) < 0){
                 smallest = records[i][0].qname;
             }
         }
@@ -1318,7 +1339,7 @@ static void checkCompare(samCheckOptions_t & opt){
         for(int i=0; i < opt.compareFiles.size(); i++)
             outfile << "##mapper " << i << " equals file " << opt.compareFiles[i] << endl;
         outfile << "##Distances to check: " << printVector(opt.correctRange)  << endl;
-        outfile << "##Results show the number of reads that are shared among alignment files and for every input distance, the number of alignments which are considered equal" << endl;
+        outfile << "##Results show the number of reads that are shared among alignment files (only required to be 'mapped') and for every input distance, the number of alignments which are considered equal" << endl;
         outfile << "##" << endl;
         outfile << "##" << endl;
         outfile << "##Results" << endl;
@@ -1388,7 +1409,7 @@ static void checkCompare(samCheckOptions_t & opt){
         for(int i=0; i < opt.compareFiles.size(); i++)
             cout << "##mapper " << i << " equals file " << opt.compareFiles[i] << endl;
         cout << "##Distances to check: " << printVector(opt.correctRange)  << endl;
-        cout << "##Results show the number of reads that are shared among alignment files and for every input distance, the number of alignments which are considered equal" << endl;
+        cout << "##Results show the number of reads that are shared among alignment files (only required to be 'mapped') and for every input distance, the number of alignments which are considered equal" << endl;
         cout << "##" << endl;
         cout << "##" << endl;
         cout << "##Results" << endl;
