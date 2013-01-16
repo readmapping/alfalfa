@@ -259,6 +259,13 @@ static string nextField(string & line, char delimeter, int& beginPos){
     return substring;
 }
 
+static string previousField(string & line, char delimeter, int& endPos){
+    int tabPos = line.rfind(delimeter,endPos);
+    string substring = line.substr(tabPos+1, endPos-tabPos);
+    endPos = tabPos-1;
+    return substring;
+}
+
 //TODO: temp method copied from fasta.cpp, should be placed elsewhere
 void getlijn2(ifstream & input, string & lijn){
     //write windows version of getline
@@ -661,16 +668,17 @@ static void checkWgsim(samCheckOptions_t & opt){
         int tabPos = 0;
         //qname
         string qname = nextField(queryLine, delimeter, tabPos);
-        int namePos=0;
-        string realchrom = nextField(qname, '_', namePos);
-        long fwdPos = atoi(nextField(qname, '_', namePos).c_str());
-        long revPos = atoi(nextField(qname, '_', namePos).c_str());
-        int fwdEdit = atoi(nextField(qname, ':', namePos).c_str());
-        fwdEdit += atoi(nextField(qname, ':', namePos).c_str());
-        fwdEdit += atoi(nextField(qname, '_', namePos).c_str());
-        int revEdit = atoi(nextField(qname, ':', namePos).c_str());
-        revEdit += atoi(nextField(qname, ':', namePos).c_str());
-        revEdit += atoi(nextField(qname, '_', namePos).c_str());
+        int namePos=qname.size()-1;
+        previousField(qname, '_', namePos);//counter
+        int revEdit = atoi(previousField(qname, ':', namePos).c_str());
+        revEdit += atoi(previousField(qname, ':', namePos).c_str());
+        revEdit += atoi(previousField(qname, '_', namePos).c_str());
+        int fwdEdit = atoi(previousField(qname, ':', namePos).c_str());
+        fwdEdit += atoi(previousField(qname, ':', namePos).c_str());
+        fwdEdit += atoi(previousField(qname, '_', namePos).c_str());
+        long revPos = atoi(previousField(qname, '_', namePos).c_str());
+        long fwdPos = atoi(previousField(qname, '_', namePos).c_str());
+        string realchrom = qname.substr(0, namePos+1);
         //flag
         bitset<11> flag = bitset<11>((ulong) atoi(nextField(queryLine, delimeter, tabPos).c_str()));
         //rname

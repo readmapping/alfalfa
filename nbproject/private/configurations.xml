@@ -24,18 +24,18 @@
       </nativedebugger>
       <runprofile version="9">
         <runcommandpicklist>
-          <runcommandpicklistitem>"${OUTPUT_PATH}" check oracle </runcommandpicklistitem>
-          <runcommandpicklistitem>"${OUTPUT_PATH}" check oracle -S C:/data/reference/pacbio_01_pbsim.sam -I C:/data/reference/bowtie_pbsim_01_1.sam</runcommandpicklistitem>
-          <runcommandpicklistitem>"${OUTPUT_PATH}" check oracle -S C:/data/reference/pacbio_01_pbsim.sam -I C:/data/reference/cushaw_pbsim_01_1.sam</runcommandpicklistitem>
-          <runcommandpicklistitem>"${OUTPUT_PATH}" check oracle -S C:/data/reference/pacbio_01_pbsim.sam -I C:/data/reference/bwa_pbsim_01_1.sam</runcommandpicklistitem>
+          <runcommandpicklistitem>"${OUTPUT_PATH}" check wgsim -I C:/data/reference/razers_wg_1k_02_1_1.sam</runcommandpicklistitem>
+          <runcommandpicklistitem>"${OUTPUT_PATH}" checkcompare -I C:/data/reference/razers_wg_1k_02_1_2.sam</runcommandpicklistitem>
+          <runcommandpicklistitem>"${OUTPUT_PATH}" checkcompare --num-reads 99990 --paired -C C:/data/reference/razers_wg_1k_02_1_2.sam,C:/data/reference/alfalfa_8_wg_1k_02_1_2.sam</runcommandpicklistitem>
+          <runcommandpicklistitem>"${OUTPUT_PATH}" check compare --num-reads 99990 --paired -C C:/data/reference/razers_wg_1k_02_1_2.sam,C:/data/reference/alfalfa_8_wg_1k_02_1_2.sam</runcommandpicklistitem>
+          <runcommandpicklistitem>"${OUTPUT_PATH}" check compare --num-reads 99990 --paired -C C:/data/reference/razers_wg_1k_02_1_2.sam,C:/data/reference/alfalfa_8_wg_1k_02_1_1.sam</runcommandpicklistitem>
+          <runcommandpicklistitem>"${OUTPUT_PATH}" check wgsim -I C:/data/reference/razers_wg_1k_02_1_2.sam</runcommandpicklistitem>
+          <runcommandpicklistitem>"${OUTPUT_PATH}" check wgsim -I C:/data/reference/cushaw_wg_1k_02_1_1.sam</runcommandpicklistitem>
           <runcommandpicklistitem>"${OUTPUT_PATH}" check wgsim -I C:/data/reference/bwa_wg_1k_02_1_1.sam</runcommandpicklistitem>
           <runcommandpicklistitem>"${OUTPUT_PATH}" check wgsim -I C:/data/reference/bowtie_wg_1k_02_1_1.sam</runcommandpicklistitem>
           <runcommandpicklistitem>"${OUTPUT_PATH}" check wgsim -I C:/data/reference/alfalfa_8_wg_1k_02_1_1.sam</runcommandpicklistitem>
-          <runcommandpicklistitem>"${OUTPUT_PATH}" check wgsim -I C:/data/reference/cushaw_wg_1k_02_1_1.sam</runcommandpicklistitem>
-          <runcommandpicklistitem>"${OUTPUT_PATH}" check wgsim -I C:/data/reference/razers_wg_1k_02_1_1.sam</runcommandpicklistitem>
-          <runcommandpicklistitem>"${OUTPUT_PATH}" check wgsim -I C:/data/reference/razers_wg_1k_02_1_2.sam</runcommandpicklistitem>
         </runcommandpicklist>
-        <runcommand>"${OUTPUT_PATH}" check wgsim -I C:/data/reference/razers_wg_1k_02_1_2.sam</runcommand>
+        <runcommand>"${OUTPUT_PATH}" check wgsim -I C:/data/reference/alfalfa_8_wg_1k_02_1_1.sam</runcommand>
         <rundir></rundir>
         <buildfirst>true</buildfirst>
         <console-type>2</console-type>
