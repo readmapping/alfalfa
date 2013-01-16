@@ -16,6 +16,7 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
+#include <cmath>
 
 using namespace std;
 
@@ -34,7 +35,7 @@ string printVector(vector<T> vec){
     return ss.str();
 }
 
-enum checkCommand_t {ORACLE, SUMMARY, COMPARE};
+enum checkCommand_t {ORACLE, SUMMARY, COMPARE, WGSIM};
 
 struct samCheckOptions_t {
     samCheckOptions_t(){ initOptions(); }
@@ -107,6 +108,7 @@ static void usageCheck(const string prog) {
   cerr << "Usage: " << prog << " check SUBCOMMAND [options]" << endl;
   cerr << "SUBCOMMAND should be one of the following: " << endl;
   cerr << "oracle                      compare the output SAM with an oracle file containing original simulated mapping positions" << endl;
+  cerr << "wgsim                       check correctness for reads simulated by wgsim program" << endl;
   cerr << "summary                     give a summary of number of mapped reads and alignments according to mapping quality" << endl;
   cerr << "compare                     compare the result of up to 32 SAM results, showing the number of alignments/reads mapped that are found by a combination of the SAM files" << endl;
   cerr << endl;
@@ -122,6 +124,13 @@ static void usageCheck(const string prog) {
   cerr << "                           for example: range 50 means that an alignment found within 50bp of the simulated origin is considered correct." << endl;
   cerr << "--qtag (string)            the tag that stores the edit distance in the --input-sam file [NM]" << endl;
   cerr << "--otag (string)            the tag that stores the edit distance in the --oracle file [NM]" << endl;
+  cerr << endl;
+  cerr << "WGSIM OPTIONS" << endl;
+  cerr << "-I/--input-sam (string)    the SAM file to check" << endl;
+  cerr << "-Q/--quality-values        comma separated list of quality values, for which the statistics will be displayed. [0 included always]" << endl;
+  cerr << "-r/--ranges                comma separated list of ranges to the simulated origin, for which the statistics will be displayed. [50]" << endl;
+  cerr << "                           for example: range 50 means that an alignment found within 50bp of the simulated origin is considered correct." << endl;
+  cerr << "--qtag (string)            the tag that stores the edit distance in the --input-sam file [NM]" << endl;
   cerr << endl;
   cerr << "SUMMARY OPTIONS " << endl;
   cerr << "-I/--input-sam             the SAM file to check" << endl;
@@ -176,6 +185,7 @@ static void processParameters(int argc, char* argv[], samCheckOptions_t& opt, co
     if(strcmp(argv[1], "oracle") == 0) opt.subcommand = ORACLE;
     else if(strcmp(argv[1], "summary") == 0) opt.subcommand = SUMMARY;
     else if(strcmp(argv[1], "compare") == 0) opt.subcommand = COMPARE;
+    else if(strcmp(argv[1], "wgsim") == 0) opt.subcommand = WGSIM;
     else{
         fprintf(stderr, "[main] unrecognized command '%s'\n", argv[1]);
         usageCheck(program);
@@ -192,10 +202,10 @@ static void processParameters(int argc, char* argv[], samCheckOptions_t& opt, co
             case 'S': if(opt.subcommand == ORACLE) opt.oracleSam = optarg;
             else fprintf(stderr, "oracle SAM file not needed for '%s' mode. This parameter will be ignored.\n", subcommand.c_str()); 
             break;
-            case ARG_PAIRED: if(opt.subcommand != ORACLE) opt.paired = true;
+            case ARG_PAIRED: if(opt.subcommand == COMPARE || opt.subcommand == SUMMARY) opt.paired = true;
             else fprintf(stderr, "paired/ not paired not necessairy for '%s' mode. This parameter will be ignored.\n", subcommand.c_str()); 
             break;
-            case ARG_NUM_READS: if(opt.subcommand != ORACLE) opt.numReads = atoi(optarg);
+            case ARG_NUM_READS: if(opt.subcommand == COMPARE || opt.subcommand == SUMMARY) opt.numReads = atoi(optarg);
             else fprintf(stderr, "number of reads not needed for '%s' mode. This parameter will be ignored.\n", subcommand.c_str()); 
             break;
             case 'I': if(opt.subcommand != COMPARE) opt.querySam = optarg;
@@ -211,7 +221,7 @@ static void processParameters(int argc, char* argv[], samCheckOptions_t& opt, co
             case 'r': if(opt.subcommand != SUMMARY) processCommaSepListInt(optarg, opt.correctRange, "ranges", 0, 1000000);
             else fprintf(stderr, "quality value cut-offs not needed for '%s' mode. This parameter will be ignored.\n", subcommand.c_str()); 
             break;
-            case ARG_QTAG: if(opt.subcommand == ORACLE) opt.qtag = optarg;
+            case ARG_QTAG: if(opt.subcommand == ORACLE || opt.subcommand == WGSIM) opt.qtag = optarg;
             else fprintf(stderr, "tag for edit distance not needed for '%s' mode. This parameter will be ignored.\n", subcommand.c_str());
             break;
             case ARG_OTAG: if(opt.subcommand == ORACLE) opt.otag = optarg;
@@ -234,7 +244,7 @@ static void processParameters(int argc, char* argv[], samCheckOptions_t& opt, co
         fprintf(stderr, "The oracle SAM file has not been specified for the oracle mode: terminate.\n"); exit(1);
     }
     else{
-        if(opt.subcommand != ORACLE && opt.numReads==0){
+        if((opt.subcommand == COMPARE || opt.subcommand == SUMMARY ) && opt.numReads==0){
             fprintf(stderr, "Number of reads was not specified.\n"); exit(1);
         }
     }
@@ -462,7 +472,7 @@ static void checkOracle(samCheckOptions_t & opt){
                         //all
                         results[j][0].addAlignment(match);
                         //unique
-                        if(mapped.size()==1) results[j][1].addAlignment(match);
+                        if(mapped.size()==2) results[j][1].addAlignment(match);
                         //quality values
                         for(int k=0; k < qualValCount; k++)
                             if(query.mapq >= opt.qualityValues[k])
@@ -594,6 +604,266 @@ static void checkOracle(samCheckOptions_t & opt){
         cout << "##" << endl;
         cout << "##Number of reads: " << readcnt << endl;
         cout << "##Reads are paired?: " << paired << endl;
+        cout << "##" << endl;
+        for(int i=0; i < rangeCount; i++){
+            cout << "##Results for allowed range of " << opt.correctRange[i] << endl;
+            cout << "#\t\t\t alignments\t\t\t\t\t\t reads" << endl;
+            cout << "#resultType\t num_correct\t percent_correct\t num_ok\t percent_ok\t /"
+                    "num_incorrect\t percent_incorrect\t num_correct\t percent_correct\t /"
+                    "num_ok\t percent_ok\t num_incorrect\t percent_incorrect" << endl;
+            cout << "all\t " << results[i][0].printLine(readcnt);
+            cout << "unique aligned\t " << results[i][1].printLine(readcnt);
+            for(int j=0; j< qualValCount; j++){
+                cout << "min mapq of " << opt.qualityValues[j] << "\t " << results[i][2+j].printLine(readcnt);
+            }
+            cout << "##" << endl;
+            cout << "##" << endl;
+        }        
+    }
+}
+
+static void checkWgsim(samCheckOptions_t & opt){
+    //fields: input
+    vector<samRecord_t> mapped;
+    ifstream queryFile(opt.querySam.c_str());
+    string queryLine = "";
+    if(!queryFile.eof())
+        getlijn2(queryFile,queryLine);
+    //fields: output
+    long readcnt = 0;
+    int rangeCount = opt.correctRange.size();
+    int qualValCount = opt.qualityValues.size();
+    oracleLine_t results[rangeCount][qualValCount+2];
+    
+    //init results
+    for(int i=0; i<rangeCount; i++)
+        for(int j=0; j<qualValCount+2; j++)
+            results[i][j].init();
+    
+    //iterate over both SORTED sam files simultaneously
+    cerr << "summary: checking accuracy of SAM file for reads produced by wgsim" << endl;
+    //print header of SAM file
+    cerr << "header of SAM file: " << endl;
+    while(!queryFile.eof() && !queryLine.empty() && queryLine[0]=='@'){
+        cerr << queryLine << endl;
+        getlijn2(queryFile,queryLine);
+    }
+    cerr << endl;
+    cerr << "the ranges for which an alignment is considered valid are: " << printVector(opt.correctRange) << endl;
+    cerr << "extra lines containing only alignments with minimal quality values of: " << printVector(opt.qualityValues) << endl;    
+    cerr << "checking accuracy of alignments: ..." << endl;
+    //if at least one record can be found
+    string prevQname = "";
+    int curAln=0;
+    char delimeter = '\t';
+    do{
+        //read in all fields for this line
+        int tabPos = 0;
+        //qname
+        string qname = nextField(queryLine, delimeter, tabPos);
+        int namePos=0;
+        string realchrom = nextField(qname, '_', namePos);
+        long fwdPos = atoi(nextField(qname, '_', namePos).c_str());
+        long revPos = atoi(nextField(qname, '_', namePos).c_str());
+        int fwdEdit = atoi(nextField(qname, ':', namePos).c_str());
+        fwdEdit += atoi(nextField(qname, ':', namePos).c_str());
+        fwdEdit += atoi(nextField(qname, '_', namePos).c_str());
+        int revEdit = atoi(nextField(qname, ':', namePos).c_str());
+        revEdit += atoi(nextField(qname, ':', namePos).c_str());
+        revEdit += atoi(nextField(qname, '_', namePos).c_str());
+        //flag
+        bitset<11> flag = bitset<11>((ulong) atoi(nextField(queryLine, delimeter, tabPos).c_str()));
+        //rname
+        string chrom = nextField(queryLine, delimeter, tabPos);
+        //pos
+        long leftpos = atoi(nextField(queryLine, delimeter, tabPos).c_str());
+        long rightpos = leftpos;
+        //mapq
+        int mapq = atoi(nextField(queryLine, delimeter, tabPos).c_str());
+        //skip CIGAR
+        string cigar = nextField(queryLine, delimeter, tabPos);
+        //determine left and right pos using cigar
+        int cigarPos = 0;
+        while(cigarPos < cigar.size()){
+            int beginPos = cigarPos;
+            while(cigar[cigarPos] >= 48 && cigar[cigarPos] <= 57)//integer
+                cigarPos++;
+            //now cigar[cigarPos] is character
+            if(cigar[cigarPos] == 'M' || cigar[cigarPos] == 'N' || cigar[cigarPos] == 'D')
+                rightpos += atoi(cigar.substr(beginPos,cigarPos-beginPos).c_str());
+            cigarPos++;
+        }
+        rightpos--;
+        //correct left and right pos for clipping
+        long leftpos0 = leftpos;
+        long rightpos0 = rightpos;
+        cigarPos = 0;
+        while(cigar[cigarPos] >= 48 && cigar[cigarPos] <= 57)//integer
+            cigarPos++;
+            //now cigar[cigarPos] is character
+        if(cigar[cigarPos] == 'S' || cigar[cigarPos] == 'H'){
+            leftpos -= atoi(cigar.substr(0,cigarPos).c_str());
+            rightpos0 += atoi(cigar.substr(0,cigarPos).c_str());
+        }
+        if(cigar[cigar.size()-1] == 'S' || cigar[cigar.size()-1] == 'H'){
+            cigarPos = cigar.size()-2;
+            while(cigarPos >= 0 && cigar[cigarPos] >= 48 && cigar[cigarPos] <= 57)//integer
+                cigarPos--;
+            rightpos += atoi(cigar.substr(cigarPos+1,cigar.size()-1-cigarPos).c_str());
+            leftpos0 -= atoi(cigar.substr(cigarPos+1,cigar.size()-1-cigarPos).c_str());
+        }
+        //rnext
+        nextField(queryLine, delimeter, tabPos);
+        //pnext
+        nextField(queryLine, delimeter, tabPos);
+        //edit distance NM tag
+        int edit = 0;
+        //skip fields to make sure 
+        tabPos = queryLine.find(delimeter,tabPos)+1;
+        tabPos = queryLine.find(delimeter,tabPos)+1;
+        tabPos = queryLine.find(delimeter,tabPos)+1;
+        //now passed qual
+        string editTag = opt.qtag+":i:";
+        int NMpos = queryLine.find(editTag,tabPos);
+        if(NMpos == -1 && !flag.test(2))
+            edit = 1000000;//very high number
+        else if(NMpos>=tabPos){
+            tabPos = queryLine.find(delimeter,NMpos);
+            if(tabPos == -1)
+                tabPos = queryLine.length();
+            edit = atoi(queryLine.substr(NMpos+5,tabPos-NMpos-5).c_str());
+        }
+        //if new query, finish previous
+        if(prevQname != "" && prevQname.compare(qname) != 0){
+            //sumarize for read
+            for(int j=0; j < rangeCount; j++){
+                if(curAln <= 2)
+                    results[j][1].addAlignment(results[j][0].tempReadResult);
+                results[j][0].finishRead();
+                results[j][1].finishRead();
+                for(int k=0; k < qualValCount; k++)
+                    results[j][2+k].finishRead();
+            }
+            curAln=0;
+            readcnt++;//update readcnt
+        }
+        prevQname = qname;
+        //add alignment
+        if(!flag.test(2)){
+            curAln++;
+            for(int j=0; j < rangeCount; j++){
+                //decide if current alignment is a match
+                int match = 0;
+                if(!flag.test(4)){//fwd read
+                    if(realchrom.compare(chrom)==0 && 
+                                (abs(fwdPos-leftpos) <= opt.correctRange[j] || abs(fwdPos-leftpos0) <= opt.correctRange[j])){
+                        match = 2;
+                    }
+                    else if(edit <= fwdEdit)
+                        match = 1;
+                }
+                else{//reverse read
+                    if(realchrom.compare(chrom)==0 && 
+                                (abs(revPos-rightpos) <= opt.correctRange[j] || abs(revPos-rightpos0) <= opt.correctRange[j])){
+                        match = 2;
+                    }
+                    else if(edit <= revEdit)
+                        match = 1;
+                }
+                //all
+                results[j][0].addAlignment(match);
+                //quality values
+                for(int k=0; k < qualValCount; k++)
+                    if(mapq >= opt.qualityValues[k])
+                        results[j][2+k].addAlignment(match);
+            }
+        }
+        //read next line
+        getlijn2(queryFile, queryLine);
+    } while(!queryFile.eof() && !queryLine.empty());
+    //if new query, finish previous
+    if(prevQname != ""){
+        //sumarize for read
+        for(int j=0; j < rangeCount; j++){
+            results[j][0].finishRead();
+            results[j][1].finishRead();
+            for(int k=0; k < qualValCount; k++)
+                results[j][2+k].finishRead();
+        }
+        readcnt++;//update readcnt
+    }
+    cerr << "checking accuracy of alignments: done" << endl;
+    queryFile.close();
+    cerr << endl;
+    cerr << "printing results" << endl;
+    cerr << "Warning, these results only make sense if the SAM file is sorted according to \
+    query name and if the edit distance field is filled correctly." << endl;
+    if(!opt.outputFile.empty()){
+        ofstream outfile ( opt.outputFile.c_str() );
+        outfile << "##ALFALFA check alignment accuracy using an oracle file for simulated reads" << endl;
+        outfile << "##" << endl;
+        outfile << "##Warning, these results only make sense if the SAM file is sorted according to \
+        query name and if the edit distance field is filled correctly." << endl;
+        outfile << "##" << endl;
+        outfile << "##SAM file containing alignments: " << opt.querySam << endl;
+        outfile << "##" << endl;
+        outfile << "##An alignment is considered correct if it falls within a certain range from the simulated origin" << endl;
+        outfile << "##The ranges that are considered are: " << printVector(opt.correctRange) << endl;
+        outfile << "##" << endl;
+        outfile << "##Results will be presented for all alignments in the file, unique alignments and for the \
+        fraction of reads for which the mapping quality is at least: " << printVector(opt.qualityValues)  << endl;
+        outfile << "##" << endl;
+        outfile << "##The first 6 columns represent number and percentage of alignments that are correct, ok \
+        (not close to origin/not paired correctly, but with a smaller or equal edit distance) and incorrect alignments." << endl;
+        outfile << "##The second 6 columns represent these numbers and percentages for the reads. A read is considered correctly mapped\
+        if at least one correct alignment has been found (and likewise for ok reads)." << endl;
+        outfile << "##" << endl;
+        outfile << "##" << endl;
+        outfile << "##Results" << endl;
+        outfile << "##" << endl;
+        outfile << "##Number of reads: " << readcnt << endl;
+        outfile << "##Reads are paired?: " << "true" << endl;
+        outfile << "##" << endl;
+        for(int i=0; i < rangeCount; i++){
+            outfile << "##Results for allowed range of " << opt.correctRange[i] << endl;
+            outfile << "#\t\t\t alignments\t\t\t\t\t\t reads" << endl;
+            outfile << "#resultType\t num_correct\t percent_correct\t num_ok\t percent_ok\t /"
+                    "num_incorrect\t percent_incorrect\t num_correct\t percent_correct\t /"
+                    "num_ok\t percent_ok\t num_incorrect\t percent_incorrect" << endl;
+            outfile << "all\t " << results[i][0].printLine(readcnt);
+            outfile << "unique aligned\t " << results[i][1].printLine(readcnt);
+            for(int j=0; j< qualValCount; j++){
+                outfile << "min mapq of " << opt.qualityValues[j] << "\t " << results[i][2+j].printLine(readcnt);
+            }
+            outfile << "##" << endl;
+            outfile << "##" << endl;
+        }
+        outfile.close();
+    }
+    else{
+        cout << "##ALFALFA check alignment accuracy using an oracle file for simulated reads" << endl;
+        cout << "##" << endl;
+        cout << "##Warning, these results only make sense if the SAM file is sorted according to \
+        query name and if the edit distance field is filled correctly." << endl;
+        cout << "##" << endl;
+        cout << "##SAM file containing alignments: " << opt.querySam << endl;
+        cout << "##" << endl;
+        cout << "##An alignment is considered correct if it falls within a certain range from the simulated origin" << endl;
+        cout << "##The ranges that are considered are: " << printVector(opt.correctRange) << endl;
+        cout << "##" << endl;
+        cout << "##Results will be presented for all alignments in the file, unique alignments and for the \
+        fraction of reads for which the mapping quality is at least: " << printVector(opt.qualityValues)  << endl;
+        cout << "##" << endl;
+        cout << "##The first 6 columns represent number and percentage of alignments that are correct, ok \
+        (not close to origin/not paired correctly, but with a smaller or equal edit distance) and incorrect alignments." << endl;
+        cout << "##The second 6 columns represent these numbers and percentages for the reads. A read is considered correctly mapped\
+        if at least one correct alignment has been found (and likewise for ok reads)." << endl;
+        cout << "##" << endl;
+        cout << "##" << endl;
+        cout << "##Results" << endl;
+        cout << "##" << endl;
+        cout << "##Number of reads: " << readcnt << endl;
+        cout << "##Reads are paired?: " << "true" << endl;
         cout << "##" << endl;
         for(int i=0; i < rangeCount; i++){
             cout << "##Results for allowed range of " << opt.correctRange[i] << endl;
@@ -751,7 +1021,7 @@ static void checkSummary(samCheckOptions_t & opt){
             rnext = nextField(queryLine, delimeter, tabPos);
             //fill in the fields
             if(qname.compare(qnamePrev)!=0 && !qnamePrev.empty()){
-                if(results[0].tempAlnCount==1)
+                if(results[0].tempAlnCount==1 || (opt.paired && results[0].tempAlnCount==2))
                     results[1].addAlignment(flagPrev, rnextPrev.compare("*")!=0);
                 results[0].finishRead();
                 results[1].finishRead();

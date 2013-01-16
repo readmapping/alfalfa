@@ -266,6 +266,8 @@ int main(int argc, char* argv[]){
             checkSummary(opt);
         else if(opt.subcommand == COMPARE)
             checkCompare(opt);
+        else if(opt.subcommand == WGSIM)
+            checkWgsim(opt);
     }
     else{
         mapOptions_t opt;

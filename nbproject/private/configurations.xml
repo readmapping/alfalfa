@@ -24,18 +24,18 @@
       </nativedebugger>
       <runprofile version="9">
         <runcommandpicklist>
-          <runcommandpicklistitem>"${OUTPUT_PATH}" check oracle -S C:/data/reference/hg19_600cat.sam -I C:/data/reference/bowtie_masonreads_600_1.sam --otag XE</runcommandpicklistitem>
-          <runcommandpicklistitem>"${OUTPUT_PATH}" check oracle -S C:/data/reference/mason_600_1.sam -I C:/data/reference/bowtie_masonreads_600_1.sam --otag XE</runcommandpicklistitem>
-          <runcommandpicklistitem>"${OUTPUT_PATH}" check oracle -S C:/data/reference/mason_600_1.sam -I C:/data/reference/bowtie_masonreads_600_2.sam --otag XE</runcommandpicklistitem>
-          <runcommandpicklistitem>"${OUTPUT_PATH}" check oracle -S C:/data/reference/mason_600_1.sam -I C:/data/reference/bwa_masonreads_600_1.sam --otag XE</runcommandpicklistitem>
-          <runcommandpicklistitem>"${OUTPUT_PATH}" check oracle -S C:/data/reference/mason_600_1.sam -I C:/data/reference/cushaw_masonreads_600_1.sam --otag XE</runcommandpicklistitem>
-          <runcommandpicklistitem>"${OUTPUT_PATH}" check oracle -S C:/data/reference/mason_600_1.sam -I C:/data/reference/cushaw_masonreads_600_2.sam --otag XE</runcommandpicklistitem>
-          <runcommandpicklistitem>"${OUTPUT_PATH}" check oracle -S C:/data/reference/mason_600_1.sam -I C:/data/reference/razers_masonreads_600_1.sam --otag XE</runcommandpicklistitem>
-          <runcommandpicklistitem>"${OUTPUT_PATH}" check oracle -S C:/data/reference/mason_600_1.sam -I C:/data/reference/razers_masonreads_600_2.sam --otag XE</runcommandpicklistitem>
-          <runcommandpicklistitem>"${OUTPUT_PATH}" check oracle -S C:/data/reference/mason_600_1.sam -I C:/data/reference/alfalfa_8_masonreads_600_2.sam --otag XE</runcommandpicklistitem>
-          <runcommandpicklistitem>"${OUTPUT_PATH}" check oracle -S C:/data/reference/mason_600_1.sam -I C:/data/reference/alfalfa_8_masonreads_600_1.sam --otag XE</runcommandpicklistitem>
+          <runcommandpicklistitem>"${OUTPUT_PATH}" check oracle </runcommandpicklistitem>
+          <runcommandpicklistitem>"${OUTPUT_PATH}" check oracle -S C:/data/reference/pacbio_01_pbsim.sam -I C:/data/reference/bowtie_pbsim_01_1.sam</runcommandpicklistitem>
+          <runcommandpicklistitem>"${OUTPUT_PATH}" check oracle -S C:/data/reference/pacbio_01_pbsim.sam -I C:/data/reference/cushaw_pbsim_01_1.sam</runcommandpicklistitem>
+          <runcommandpicklistitem>"${OUTPUT_PATH}" check oracle -S C:/data/reference/pacbio_01_pbsim.sam -I C:/data/reference/bwa_pbsim_01_1.sam</runcommandpicklistitem>
+          <runcommandpicklistitem>"${OUTPUT_PATH}" check wgsim -I C:/data/reference/bwa_wg_1k_02_1_1.sam</runcommandpicklistitem>
+          <runcommandpicklistitem>"${OUTPUT_PATH}" check wgsim -I C:/data/reference/bowtie_wg_1k_02_1_1.sam</runcommandpicklistitem>
+          <runcommandpicklistitem>"${OUTPUT_PATH}" check wgsim -I C:/data/reference/alfalfa_8_wg_1k_02_1_1.sam</runcommandpicklistitem>
+          <runcommandpicklistitem>"${OUTPUT_PATH}" check wgsim -I C:/data/reference/cushaw_wg_1k_02_1_1.sam</runcommandpicklistitem>
+          <runcommandpicklistitem>"${OUTPUT_PATH}" check wgsim -I C:/data/reference/razers_wg_1k_02_1_1.sam</runcommandpicklistitem>
+          <runcommandpicklistitem>"${OUTPUT_PATH}" check wgsim -I C:/data/reference/razers_wg_1k_02_1_2.sam</runcommandpicklistitem>
         </runcommandpicklist>
-        <runcommand>"${OUTPUT_PATH}" check oracle -S C:/data/reference/mason_600_1.sam -I C:/data/reference/alfalfa_8_masonreads_600_1.sam --otag XE</runcommand>
+        <runcommand>"${OUTPUT_PATH}" check wgsim -I C:/data/reference/razers_wg_1k_02_1_2.sam</runcommand>
         <rundir></rundir>
         <buildfirst>true</buildfirst>
         <console-type>2</console-type>
