@@ -474,16 +474,18 @@ static void checkOracle(samCheckOptions_t & opt){
                 //process this read's alignments (paired and unpaired)
                 for(int i=0; i < mapped.size(); i++){
                     samRecord_t& query = mapped[i];
-                    for(int j=0; j < rangeCount; j++){
-                        int match = pairedCompareSam(query, query.flag.test(6) ? oracleUp : oracleDown, opt.correctRange[j]);
-                        //all
-                        results[j][0].addAlignment(match);
-                        //unique
-                        if(mapped.size()==2) results[j][1].addAlignment(match);
-                        //quality values
-                        for(int k=0; k < qualValCount; k++)
-                            if(query.mapq >= opt.qualityValues[k])
-                                results[j][2+k].addAlignment(match);
+                    if(!query.flag.test(2)){
+                        for(int j=0; j < rangeCount; j++){
+                            int match = pairedCompareSam(query, query.flag.test(6) ? oracleUp : oracleDown, opt.correctRange[j]);
+                            //all
+                            results[j][0].addAlignment(match);
+                            //unique
+                            if(mapped.size()==2) results[j][1].addAlignment(match);
+                            //quality values
+                            for(int k=0; k < qualValCount; k++)
+                                if(query.mapq >= opt.qualityValues[k])
+                                    results[j][2+k].addAlignment(match);
+                        }
                     }
                 }
                 //sumarize for read
@@ -513,16 +515,18 @@ static void checkOracle(samCheckOptions_t & opt){
                 }
                 //process this read's alignments
                 for(int i=0; i < mapped.size(); i++){
-                    for(int j=0; j < rangeCount; j++){
-                        int match = unpairedCompareSam(mapped[i], oracleUp, opt.correctRange[j]);
-                        //all
-                        results[j][0].addAlignment(match);
-                        //unique
-                        if(mapped.size()==1) results[j][1].addAlignment(match);
-                        //quality values
-                        for(int k=0; k < qualValCount; k++)
-                            if(mapped[i].mapq >= opt.qualityValues[k])
-                                results[j][2+k].addAlignment(match);
+                    if(!mapped[i].flag.test(2)){
+                        for(int j=0; j < rangeCount; j++){
+                            int match = unpairedCompareSam(mapped[i], oracleUp, opt.correctRange[j]);
+                            //all
+                            results[j][0].addAlignment(match);
+                            //unique
+                            if(mapped.size()==1) results[j][1].addAlignment(match);
+                            //quality values
+                            for(int k=0; k < qualValCount; k++)
+                                if(mapped[i].mapq >= opt.qualityValues[k])
+                                    results[j][2+k].addAlignment(match);
+                        }
                     }
                 }
                 //sumarize for read
@@ -631,7 +635,6 @@ static void checkOracle(samCheckOptions_t & opt){
 
 static void checkWgsim(samCheckOptions_t & opt){
     //fields: input
-    vector<samRecord_t> mapped;
     ifstream queryFile(opt.querySam.c_str());
     string queryLine = "";
     if(!queryFile.eof())
