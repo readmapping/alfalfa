@@ -147,7 +147,7 @@ alignment_t * extendAlignment(dynProg& dp_, const string& S, const string& P,
         dp_.dpBandStatic( S, P, grenzen, types, ERRORSTRING, output, editDist-curEditDist, false);
         if(curEditDist + output.editDist < editDist){//required if dp_ returns fail or too high editDist (output may not be initialized
             queryLB = grenzen.queryB;
-            if(output.cigarChars[output.cigarChars[0]] == 'I')
+            if(output.cigarChars[0] == 'I')
                     queryLB += (long)output.cigarLengths[0];
             if(clipping && grenzen.queryB> 0){
                 alignment->cigarChars.push_back('S');
