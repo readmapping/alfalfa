@@ -691,7 +691,7 @@ static void checkWgsim(samCheckOptions_t & opt){
         long rightpos = leftpos;
         //mapq
         int mapq = atoi(nextField(queryLine, delimeter, tabPos).c_str());
-        //skip CIGAR
+        //CIGAR
         string cigar = nextField(queryLine, delimeter, tabPos);
         //determine left and right pos using cigar
         int cigarPos = 0;

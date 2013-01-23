@@ -145,7 +145,7 @@ alignment_t * extendAlignment(dynProg& dp_, const string& S, const string& P,
         types.freeRefB = true;
         types.freeQueryB = clipping;
         dp_.dpBandStatic( S, P, grenzen, types, ERRORSTRING, output, editDist-curEditDist, false);
-        if(curEditDist + output.editDist < editDist){//required if dp_ returns fail or too high editDist (output may not be initialized
+        if(curEditDist + output.editDist <= editDist){//required if dp_ returns fail or too high editDist (output may not be initialized
             queryLB = grenzen.queryB;
             if(output.cigarChars[0] == 'I')
                     queryLB += (long)output.cigarLengths[0];
@@ -242,7 +242,7 @@ alignment_t * extendAlignment(dynProg& dp_, const string& S, const string& P,
                 boundaries grenzen(refstrRB + 1L, refstrRB + minRefDist - 1L, queryRB + 1, queryRB + minQDist - 1);
                 dp_type types;
                 dp_.dpBandStatic( S, P, grenzen, types, ERRORSTRING, output, editDist-curEditDist, false);
-                if(curEditDist + output.editDist < editDist){//required if dp_ returns fail or too high editDist (output may not be initialized
+                if(curEditDist + output.editDist <= editDist){//required if dp_ returns fail or too high editDist (output may not be initialized
                     alignment->cigarChars.insert(alignment->cigarChars.end(), output.cigarChars.begin(), output.cigarChars.end());
                     alignment->cigarLengths.insert(alignment->cigarLengths.end(), output.cigarLengths.begin(), output.cigarLengths.end());
                     alignment->cigarChars.push_back('=');
@@ -274,7 +274,7 @@ alignment_t * extendAlignment(dynProg& dp_, const string& S, const string& P,
         types.freeRefE = true;
         types.freeQueryE = clipping;
         dp_.dpBandStatic( S, P, grenzen, types, ERRORSTRING, output, editDist-curEditDist+1, false);
-        if(curEditDist + output.editDist < editDist){//required if dp_ returns fail or too high editDist (output may not be initialized
+        if(curEditDist + output.editDist <= editDist){//required if dp_ returns fail or too high editDist (output may not be initialized
             if(grenzen.queryE > queryRB){
                 int addToLength = grenzen.queryE-queryRB;
                 if(output.cigarChars[output.cigarChars.size()-1] == 'I')
