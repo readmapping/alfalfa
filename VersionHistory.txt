@@ -85,3 +85,11 @@ v0.6
 *added persistent index using the 'index' command. The index can now be saved to disk and loaded into memory.
 *changed #threads parameter from -p to -q because -p is now taken by the index command
 *added 'check' to the main class (check was never executed)
+
+v0.6.2
+*changed threshold for constructing sparse child array of sparse suffix array from k>=4 to k>=3
+*fixed crash if executed with no parameters
+*fixed many bugs in 'check' command. This command is for advanced users only
+*queryname is now only word up to first space, instead of full header line
+*fixed bug that caused a crash when a DP was not executed due to filtering on edit distance in dp.cpp
+*fixed bug in calculating insert size

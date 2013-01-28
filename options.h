@@ -211,7 +211,7 @@ static void usageAln(const string prog) {
   cerr << endl;
   cerr << "PERFORMANCE OPTIONS " << endl;
   cerr << "-s/--sparsityfactor (int)  the sparsity factor of the sparse suffix array index if it is not yet constructed [1]." << endl;
-  cerr << "-p/--threads (int)    number of threads [1]" << endl;
+  cerr << "-q/--threads (int)    number of threads [1]" << endl;
   cerr << endl;
   cerr << "ALIGNMENT OPTIONS " << endl;
   cerr << "-d/--errors (double)       percentage of errors allowed according to the edit distance [0.08]" << endl;

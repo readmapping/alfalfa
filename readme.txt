@@ -1,4 +1,4 @@
-ALFALFA v0.6
+ALFALFA v0.6.2
 -------------------
   
 Installing: 
@@ -7,11 +7,12 @@ Installing:
 Usage:  
 	./alfalfa  COMMAND [options] -x <reference-file> [-U <query-file>] [-1 <upstream mates> -2 <downstream mates>] [-S ouput-file]
   
-Command should be one of the following: 
-  index         build the index for given <reference-file>
-  aln           map the reads from <query-file> to the index build for <reference-file>
-  		if no output file is specified, output is written to <query-file>.sam
-  check         contains several commands for summarizing the accuracy of an output SAM file (for advanced users only)
+Command should be one of the following: " << endl;
+    index                       build the index for given <reference-file> and save to disk
+                                this command is not necessairy for mapping, as aln can first construct the index
+    aln                         map the reads to the index build for <reference-file>
+
+call alfalfa COMMAND --help [or -h] for more detailed information
 
 index COMMAND
 -------------
@@ -37,7 +38,7 @@ I/O OPTIONS
 -1                         query file with first mates (fasta or fastq)
 -2                         query file with second mates (fasta or fastq)
 -U                         query file with unpaired reads (fasta or fastq)
--S                         output file name (will be sam)
+-S                         output file name (will be sam) [referenceName.sam]
 --save (0 or 1)            if --index is not set, save index to disk [0]
 -p                         prefix of index that will be saved [reference sequence name]
 
