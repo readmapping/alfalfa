@@ -29,7 +29,7 @@ string printVector(vector<T> vec){
     stringstream ss;
     if(!vec.empty()){
         ss << vec[0];
-        for(int i=1; i < vec.size(); i++)
+        for(size_t i=1; i < vec.size(); i++)
             ss << "," << vec[i];
     }
     return ss.str();
@@ -65,8 +65,8 @@ struct samCheckOptions_t {
 
 struct samRecord_t {
     samRecord_t(): qname(""), flag(0), rname(""), pos(0), mapq(0), rnext(""), pnext(0), edit(0){}
-    samRecord_t(const samRecord_t& o): qname(o.qname), rname(o.rname), pos(o.pos), 
-    mapq(o.mapq), rnext(o.rnext), pnext(o.pnext), edit(o.edit), flag(o.flag.to_ulong()) {}
+    samRecord_t(const samRecord_t& o): qname(o.qname), flag(o.flag.to_ulong()), rname(o.rname), 
+    pos(o.pos), mapq(o.mapq), rnext(o.rnext), pnext(o.pnext), edit(o.edit) {}
     string qname;
     bitset<11> flag;
     string rname;
@@ -179,7 +179,7 @@ static void processCommaSepListString(string list, vector<string> & options){
     options.push_back(list.substr(beginPos));
 }
 
-static void processParameters(int argc, char* argv[], samCheckOptions_t& opt, const string program){
+static void processCheckParameters(int argc, char* argv[], samCheckOptions_t& opt, const string program){
     //parse the subcommand
     string subcommand = argv[1];
     if(strcmp(argv[1], "oracle") == 0) opt.subcommand = ORACLE;
@@ -415,13 +415,13 @@ static void checkOracle(samCheckOptions_t & opt){
         getlijn2(queryFile,queryLine);
     //fields: output
     long readcnt = 0;
-    int rangeCount = opt.correctRange.size();
-    int qualValCount = opt.qualityValues.size();
+    size_t rangeCount = opt.correctRange.size();
+    size_t qualValCount = opt.qualityValues.size();
     oracleLine_t results[rangeCount][qualValCount+2];
     
     //init results
-    for(int i=0; i<rangeCount; i++)
-        for(int j=0; j<qualValCount+2; j++)
+    for(size_t i=0; i<rangeCount; i++)
+        for(size_t j=0; j<qualValCount+2; j++)
             results[i][j].init();
     
     //iterate over both SORTED sam files simultaneously
@@ -472,27 +472,27 @@ static void checkOracle(samCheckOptions_t & opt){
                     mapped.push_back(tempQuery);
                 }
                 //process this read's alignments (paired and unpaired)
-                for(int i=0; i < mapped.size(); i++){
+                for(size_t i=0; i < mapped.size(); i++){
                     samRecord_t& query = mapped[i];
                     if(!query.flag.test(2)){
-                        for(int j=0; j < rangeCount; j++){
+                        for(size_t j=0; j < rangeCount; j++){
                             int match = pairedCompareSam(query, query.flag.test(6) ? oracleUp : oracleDown, opt.correctRange[j]);
                             //all
                             results[j][0].addAlignment(match);
                             //unique
                             if(mapped.size()==2) results[j][1].addAlignment(match);
                             //quality values
-                            for(int k=0; k < qualValCount; k++)
+                            for(size_t k=0; k < qualValCount; k++)
                                 if(query.mapq >= opt.qualityValues[k])
                                     results[j][2+k].addAlignment(match);
                         }
                     }
                 }
                 //sumarize for read
-                for(int j=0; j < rangeCount; j++){
+                for(size_t j=0; j < rangeCount; j++){
                     results[j][0].finishRead();
                     results[j][1].finishRead();
-                    for(int k=0; k < qualValCount; k++)
+                    for(size_t k=0; k < qualValCount; k++)
                         results[j][2+k].finishRead();
                 }
                 readcnt++;//update readcnt
@@ -514,26 +514,26 @@ static void checkOracle(samCheckOptions_t & opt){
                     mapped.push_back(tempQuery);
                 }
                 //process this read's alignments
-                for(int i=0; i < mapped.size(); i++){
+                for(size_t i=0; i < mapped.size(); i++){
                     if(!mapped[i].flag.test(2)){
-                        for(int j=0; j < rangeCount; j++){
+                        for(size_t j=0; j < rangeCount; j++){
                             int match = unpairedCompareSam(mapped[i], oracleUp, opt.correctRange[j]);
                             //all
                             results[j][0].addAlignment(match);
                             //unique
                             if(mapped.size()==1) results[j][1].addAlignment(match);
                             //quality values
-                            for(int k=0; k < qualValCount; k++)
+                            for(size_t k=0; k < qualValCount; k++)
                                 if(mapped[i].mapq >= opt.qualityValues[k])
                                     results[j][2+k].addAlignment(match);
                         }
                     }
                 }
                 //sumarize for read
-                for(int j=0; j < rangeCount; j++){
+                for(size_t j=0; j < rangeCount; j++){
                     results[j][0].finishRead();
                     results[j][1].finishRead();
-                    for(int k=0; k < qualValCount; k++)
+                    for(size_t k=0; k < qualValCount; k++)
                         results[j][2+k].finishRead();
                 }
                 readcnt++;//update readcnt
@@ -574,7 +574,7 @@ static void checkOracle(samCheckOptions_t & opt){
         outfile << "##Number of reads: " << readcnt << endl;
         outfile << "##Reads are paired?: " << paired << endl;
         outfile << "##" << endl;
-        for(int i=0; i < rangeCount; i++){
+        for(size_t i=0; i < rangeCount; i++){
             outfile << "##Results for allowed range of " << opt.correctRange[i] << endl;
             outfile << "#\t\t\t alignments\t\t\t\t\t\t reads" << endl;
             outfile << "#resultType\t num_correct\t percent_correct\t num_ok\t percent_ok\t /"
@@ -582,7 +582,7 @@ static void checkOracle(samCheckOptions_t & opt){
                     "num_ok\t percent_ok\t num_incorrect\t percent_incorrect" << endl;
             outfile << "all\t " << results[i][0].printLine(readcnt);
             outfile << "unique aligned\t " << results[i][1].printLine(readcnt);
-            for(int j=0; j< qualValCount; j++){
+            for(size_t j=0; j< qualValCount; j++){
                 outfile << "min mapq of " << opt.qualityValues[j] << "\t " << results[i][2+j].printLine(readcnt);
             }
             outfile << "##" << endl;
@@ -616,7 +616,7 @@ static void checkOracle(samCheckOptions_t & opt){
         cout << "##Number of reads: " << readcnt << endl;
         cout << "##Reads are paired?: " << paired << endl;
         cout << "##" << endl;
-        for(int i=0; i < rangeCount; i++){
+        for(size_t i=0; i < rangeCount; i++){
             cout << "##Results for allowed range of " << opt.correctRange[i] << endl;
             cout << "#\t\t\t alignments\t\t\t\t\t\t reads" << endl;
             cout << "#resultType\t num_correct\t percent_correct\t num_ok\t percent_ok\t /"
@@ -624,7 +624,7 @@ static void checkOracle(samCheckOptions_t & opt){
                     "num_ok\t percent_ok\t num_incorrect\t percent_incorrect" << endl;
             cout << "all\t " << results[i][0].printLine(readcnt);
             cout << "unique aligned\t " << results[i][1].printLine(readcnt);
-            for(int j=0; j< qualValCount; j++){
+            for(size_t j=0; j< qualValCount; j++){
                 cout << "min mapq of " << opt.qualityValues[j] << "\t " << results[i][2+j].printLine(readcnt);
             }
             cout << "##" << endl;
@@ -641,13 +641,13 @@ static void checkWgsim(samCheckOptions_t & opt){
         getlijn2(queryFile,queryLine);
     //fields: output
     long readcnt = 0;
-    int rangeCount = opt.correctRange.size();
-    int qualValCount = opt.qualityValues.size();
+    size_t rangeCount = opt.correctRange.size();
+    size_t qualValCount = opt.qualityValues.size();
     oracleLine_t results[rangeCount][qualValCount+2];
     
     //init results
-    for(int i=0; i<rangeCount; i++)
-        for(int j=0; j<qualValCount+2; j++)
+    for(size_t i=0; i<rangeCount; i++)
+        for(size_t j=0; j<qualValCount+2; j++)
             results[i][j].init();
     
     //iterate over both SORTED sam files simultaneously
@@ -695,7 +695,8 @@ static void checkWgsim(samCheckOptions_t & opt){
         string cigar = nextField(queryLine, delimeter, tabPos);
         //determine left and right pos using cigar
         int cigarPos = 0;
-        while(cigarPos < cigar.size()){
+        int cigarlength = cigar.size();
+        while(cigarPos < cigarlength){
             int beginPos = cigarPos;
             while(cigar[cigarPos] >= 48 && cigar[cigarPos] <= 57)//integer
                 cigarPos++;
@@ -747,12 +748,12 @@ static void checkWgsim(samCheckOptions_t & opt){
         //if new query, finish previous
         if(prevQname != "" && prevQname.compare(qname) != 0){
             //sumarize for read
-            for(int j=0; j < rangeCount; j++){
+            for(size_t j=0; j < rangeCount; j++){
                 if(curAln <= 2)
                     results[j][1].addAlignment(results[j][0].tempReadResult);
                 results[j][0].finishRead();
                 results[j][1].finishRead();
-                for(int k=0; k < qualValCount; k++)
+                for(size_t k=0; k < qualValCount; k++)
                     results[j][2+k].finishRead();
             }
             curAln=0;
@@ -762,7 +763,7 @@ static void checkWgsim(samCheckOptions_t & opt){
         //add alignment
         if(!flag.test(2)){
             curAln++;
-            for(int j=0; j < rangeCount; j++){
+            for(size_t j=0; j < rangeCount; j++){
                 //decide if current alignment is a match
                 int match = 0;
                 if(!flag.test(4)){//fwd read
@@ -784,7 +785,7 @@ static void checkWgsim(samCheckOptions_t & opt){
                 //all
                 results[j][0].addAlignment(match);
                 //quality values
-                for(int k=0; k < qualValCount; k++)
+                for(size_t k=0; k < qualValCount; k++)
                     if(mapq >= opt.qualityValues[k])
                         results[j][2+k].addAlignment(match);
             }
@@ -795,10 +796,10 @@ static void checkWgsim(samCheckOptions_t & opt){
     //if new query, finish previous
     if(prevQname != ""){
         //sumarize for read
-        for(int j=0; j < rangeCount; j++){
+        for(size_t j=0; j < rangeCount; j++){
             results[j][0].finishRead();
             results[j][1].finishRead();
-            for(int k=0; k < qualValCount; k++)
+            for(size_t k=0; k < qualValCount; k++)
                 results[j][2+k].finishRead();
         }
         readcnt++;//update readcnt
@@ -835,7 +836,7 @@ static void checkWgsim(samCheckOptions_t & opt){
         outfile << "##Number of reads: " << readcnt << endl;
         outfile << "##Reads are paired?: " << "true" << endl;
         outfile << "##" << endl;
-        for(int i=0; i < rangeCount; i++){
+        for(size_t i=0; i < rangeCount; i++){
             outfile << "##Results for allowed range of " << opt.correctRange[i] << endl;
             outfile << "#\t\t\t alignments\t\t\t\t\t\t reads" << endl;
             outfile << "#resultType\t num_correct\t percent_correct\t num_ok\t percent_ok\t /"
@@ -843,7 +844,7 @@ static void checkWgsim(samCheckOptions_t & opt){
                     "num_ok\t percent_ok\t num_incorrect\t percent_incorrect" << endl;
             outfile << "all\t " << results[i][0].printLine(readcnt);
             outfile << "unique aligned\t " << results[i][1].printLine(readcnt);
-            for(int j=0; j< qualValCount; j++){
+            for(size_t j=0; j< qualValCount; j++){
                 outfile << "min mapq of " << opt.qualityValues[j] << "\t " << results[i][2+j].printLine(readcnt);
             }
             outfile << "##" << endl;
@@ -876,7 +877,7 @@ static void checkWgsim(samCheckOptions_t & opt){
         cout << "##Number of reads: " << readcnt << endl;
         cout << "##Reads are paired?: " << "true" << endl;
         cout << "##" << endl;
-        for(int i=0; i < rangeCount; i++){
+        for(size_t i=0; i < rangeCount; i++){
             cout << "##Results for allowed range of " << opt.correctRange[i] << endl;
             cout << "#\t\t\t alignments\t\t\t\t\t\t reads" << endl;
             cout << "#resultType\t num_correct\t percent_correct\t num_ok\t percent_ok\t /"
@@ -884,7 +885,7 @@ static void checkWgsim(samCheckOptions_t & opt){
                     "num_ok\t percent_ok\t num_incorrect\t percent_incorrect" << endl;
             cout << "all\t " << results[i][0].printLine(readcnt);
             cout << "unique aligned\t " << results[i][1].printLine(readcnt);
-            for(int j=0; j< qualValCount; j++){
+            for(size_t j=0; j< qualValCount; j++){
                 cout << "min mapq of " << opt.qualityValues[j] << "\t " << results[i][2+j].printLine(readcnt);
             }
             cout << "##" << endl;
@@ -894,9 +895,9 @@ static void checkWgsim(samCheckOptions_t & opt){
 }
 
 struct summaryLine_t {
-    summaryLine_t(): alignmentCnt(0),readMapped(0),readPaired(0),readPairedCorrect(0),
-    secondAln(0),mappedPairedCorrect(0), mappedPaired(0),mappedAln(0), tempReadResult(0), 
-    tempAlnCount(0) {for(int i=0; i < 102; i++){alnPerRead[i]=0;}}
+    summaryLine_t(): readMapped(0),readPaired(0),readPairedCorrect(0),
+    secondAln(0),mappedPairedCorrect(0), mappedPaired(0),mappedAln(0), alignmentCnt(0), 
+    tempReadResult(0), tempAlnCount(0) {for(int i=0; i < 102; i++){alnPerRead[i]=0;}}
     long readMapped;
     long readPaired;
     long readPairedCorrect;
@@ -1249,7 +1250,7 @@ static void checkCompare(samCheckOptions_t & opt){
         for(int i = 0; i < mapperCount; i++){
             if(hasRead.test(i) && smallest.compare(records[i][0].qname) == 0){
                 toCompare.set(i, true);
-                for(int j=0; j < records[i].size(); j++){
+                for(size_t j=0; j < records[i].size(); j++){
                     if(!records[i][j].flag.test(2)){
                         owned.set(i, true);
                         records[i][j].mapq = 0;//VERY DIRTY: SAVE OTHER INFO IN FIELD
@@ -1266,10 +1267,10 @@ static void checkCompare(samCheckOptions_t & opt){
                 if(toCompare.test(i)){
                     for(int j=i+1; j < mapperCount; j++){
                         if(toCompare.test(j)){
-                            for(int k = 0; k < records[i].size(); k++){
+                            for(size_t k = 0; k < records[i].size(); k++){
                                 samRecord_t & first = records[i][k];
                                 if(!first.flag.test(2)){
-                                    for(int m = 0; m < records[j].size(); m++){
+                                    for(size_t m = 0; m < records[j].size(); m++){
                                         samRecord_t & second = records[j][m];
                                         if(!second.flag.test(2)){
                                             long maxDist = maxRange(first, second);
@@ -1291,7 +1292,7 @@ static void checkCompare(samCheckOptions_t & opt){
                         }
                     }
                     //Fill in the alignments unique to this output, for all ranges and all alignments
-                    for(int k = 0; k < records[i].size(); k++){
+                    for(size_t k = 0; k < records[i].size(); k++){
                         samRecord_t & first = records[i][k];
                         if(!first.flag.test(2)){
                             for(int n = 0; n < rangeValCount; n++){
@@ -1347,7 +1348,7 @@ static void checkCompare(samCheckOptions_t & opt){
         outfile << "##Warning: these results only make sense if all files are sorted according to read name and contain at least one alignment." << endl;
         outfile << "##" << endl;
         outfile << "##SAM files: " << endl;
-        for(int i=0; i < opt.compareFiles.size(); i++)
+        for(size_t i=0; i < opt.compareFiles.size(); i++)
             outfile << "##mapper " << i << " equals file " << opt.compareFiles[i] << endl;
         outfile << "##Distances to check: " << printVector(opt.correctRange)  << endl;
         outfile << "##Results show the number of reads that are shared among alignment files (only required to be 'mapped') and for every input distance, the number of alignments which are considered equal" << endl;
@@ -1417,7 +1418,7 @@ static void checkCompare(samCheckOptions_t & opt){
         cout << "##Warning: these results only make sense if all files are sorted according to read name and contain at least one alignment." << endl;
         cout << "##" << endl;
         cout << "##SAM files: " << endl;
-        for(int i=0; i < opt.compareFiles.size(); i++)
+        for(size_t i=0; i < opt.compareFiles.size(); i++)
             cout << "##mapper " << i << " equals file " << opt.compareFiles[i] << endl;
         cout << "##Distances to check: " << printVector(opt.correctRange)  << endl;
         cout << "##Results show the number of reads that are shared among alignment files (only required to be 'mapped') and for every input distance, the number of alignments which are considered equal" << endl;

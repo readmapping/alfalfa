@@ -32,7 +32,7 @@
 using namespace std;
 
 dynProg::dynProg(int dimension, bool affine, dp_scores& scoreFunction): 
-    L1(0), L2(0), DP_L2(0), DP_L1(0), bandSize(0), bandLeft(0), bandRight(0), banded(false), scores(scoreFunction) {
+    DP_L2(0), DP_L1(0), L1(0), L2(0), bandSize(0), bandLeft(0), bandRight(0), banded(false), scores(scoreFunction) {
     scores.updateScoreMatrixDna();
     initDPMatrix(dimension, dimension, affine);
 }
@@ -159,6 +159,7 @@ int dynProg::updateMatrix(const dp_type& type){
             LEFT[i][0] = M[i][0] + scores.openGap;
         }
     }
+    return 0;//return is not really used, maybe for future use
 }
 
 //only called for affine gap penalties
@@ -425,7 +426,7 @@ int dynProg::dpFillStatic(const string& ref,const string& query, bool forward,
         long idx2 = forward ? i-bandL : L1 - L2 + i - bandL;
         long colRB = forward ? i+bandR : L1 - L2 + i + bandR;
         if(idx2>0){//left value undefined
-            d = scores.scoreMatrix[ref[offset.refB+idx2-1]][query[offset.queryB+i-1]];
+            d = scores.scoreMatrix[size_t (ref[offset.refB+idx2-1])][size_t (query[offset.queryB+i-1])];
             M[ i ][ idx2 ] = M[ i-1 ][ idx2-1 ] + d;
             UP[i][idx2] = max(M[ i-1 ][ idx2 ] + scores.extendGap + scores.openGap, UP[i-1][idx2]+scores.extendGap);
             M[ i ][ idx2 ] = max(M[ i ][ idx2 ] , UP[i][idx2]);
@@ -436,7 +437,7 @@ int dynProg::dpFillStatic(const string& ref,const string& query, bool forward,
         }
         for(long j = max( 1L, idx2); j <= min((long)L1, colRB-1); j++ ){
             //here insert substitution matrix!
-            d = scores.scoreMatrix[ref[offset.refB+j-1]][query[offset.queryB+i-1]];
+            d = scores.scoreMatrix[size_t(ref[offset.refB+j-1])][size_t(query[offset.queryB+i-1])];
             UP[i][j] = max(M[ i-1 ][ j ] + scores.extendGap + scores.openGap, UP[i-1][j]+scores.extendGap);
             M[i][j] = M[ i-1 ][ j-1 ] + d;
             LEFT[i][j] = max(M[ i ][ j-1 ] + scores.extendGap + scores.openGap, LEFT[i][j-1]+scores.extendGap);
@@ -446,7 +447,7 @@ int dynProg::dpFillStatic(const string& ref,const string& query, bool forward,
         }
         if(colRB <= L1){
             idx2 = colRB;
-            d = scores.scoreMatrix[ref[offset.refB+idx2-1]][query[offset.queryB+i-1]];
+            d = scores.scoreMatrix[size_t(ref[offset.refB+idx2-1])][size_t(query[offset.queryB+i-1])];
             M[ i ][ idx2 ] = M[ i-1 ][ idx2-1 ] + d;
             LEFT[i][idx2] = max(M[ i ][ idx2-1 ] + scores.extendGap + scores.openGap, LEFT[i][idx2-1]+scores.extendGap);
             M[ i ][ idx2 ] = max(M[ i ][ idx2 ], LEFT[i][idx2]);
@@ -527,20 +528,20 @@ int dynProg::dpFillOptStatic(const string& ref,const string& query, bool forward
         long idx2 = forward ? i-bandL : L1 - L2 + i - bandL;
         long colRB = forward ? i+bandR : L1 - L2 + i + bandR;
         if(idx2>0){
-            d = scores.scoreMatrix[ref[offset.refB+idx2-1]][query[offset.queryB+i-1]];
+            d = scores.scoreMatrix[size_t(ref[offset.refB+idx2-1])][size_t(query[offset.queryB+i-1])];
             M[ i ][ idx2 ] = max(M[ i-1 ][ idx2-1 ] + d, M[ i-1 ][ idx2 ] + scores.extendGap);
             M[ i ][ idx2 ] = max(M[ i ][ idx2 ], 0 + local*M[ i ][ idx2 ]);
             idx2++;
         }
         for(long j = max( 1L, idx2); j <= min((long)L1, colRB-1); j++ ){
-            d = scores.scoreMatrix[ref[offset.refB+j-1]][query[offset.queryB+i-1]];
+            d = scores.scoreMatrix[size_t(ref[offset.refB+j-1])][size_t(query[offset.queryB+i-1])];
             M[ i ][ j ] = max(M[ i-1 ][ j-1 ] + d, M[ i ][ j-1 ] + scores.extendGap);
             M[ i ][ j ] = max(M[ i ][ j ], M[ i-1 ][ j ] + scores.extendGap);
             M[ i ][ j ] = max(M[ i ][ j ], 0 + local*M[ i ][ j ]);
         }
         if(colRB <= L1){
             idx2 = colRB;
-            d = scores.scoreMatrix[ref[offset.refB+idx2-1]][query[offset.queryB+i-1]];
+            d = scores.scoreMatrix[size_t(ref[offset.refB+idx2-1])][size_t(query[offset.queryB+i-1])];
             M[ i ][ idx2 ] = max(M[ i-1 ][ idx2-1 ] + d, M[ i ][ idx2-1 ] + scores.extendGap);
             M[ i ][ idx2 ] = max(M[ i ][ idx2 ], 0 + local*M[ i ][ idx2 ]);
         }
@@ -1137,9 +1138,10 @@ int dynProg::dpBandStatic( const string&     ref,
             //create output: errorString
             int iter = 0;
             int temp;
-            while(iter < errorString.length()){
+            int errorStringLength = errorString.length();
+            while(iter < errorStringLength){
                 temp = iter;
-                while(iter+1 < errorString.length() && errorString[iter+1]==errorString[temp])
+                while(iter+1 < errorStringLength && errorString[iter+1]==errorString[temp])
                     iter++;
                 iter++;
                 output.cigarChars.push_back(errorString[temp]);
@@ -1214,9 +1216,10 @@ int dynProg::dpBandFull( const string& ref,
             //create output: errorString
             int iter = 0;
             int temp;
-            while(iter < errorString.length()){
+            int errorStringLength = errorString.length();
+            while(iter < errorStringLength){
                 temp = iter;
-                while(iter+1 < errorString.length() && errorString[iter+1]==errorString[temp])
+                while(iter+1 < errorStringLength && errorString[iter+1]==errorString[temp])
                     iter++;
                 iter++;
                 output.cigarChars.push_back(errorString[temp]);
@@ -1232,3 +1235,4 @@ int dynProg::dpBandFull( const string& ref,
 
     return 0;
 }
+

@@ -100,7 +100,7 @@ struct alignment_t {
       stringstream sCig;
       assert(cigarChars.size()==cigarLengths.size());
       assert(cigarChars.size()>0);
-      int i = 0;
+      size_t i = 0;
       while(i < cigarChars.size()){
           if(cigarChars[i]=='=' || cigarChars[i]=='X'){
                 int tempLength = cigarLengths[i];
@@ -154,14 +154,14 @@ struct alignment_t {
 // interval in match results + bases covering the result
 struct lis_t {
   lis_t(): begin(0), end(0), len(0), fw(1), alignment(NULL), extended(0) {}
-  lis_t(vector<match_t> * matches, int b, int e, int l, bool fw_): matches(matches), begin(b), end(e), len(l), fw(fw_), alignment(NULL), extended(0) {}
+  lis_t(vector<match_t> * matches, int b, int e, int l, bool fw_): begin(b), end(e), len(l), fw(fw_), alignment(NULL), extended(0), matches(matches) {}
   int begin; // position in reference sequence
   int end; // position in query
   int len; // length of match
   bool fw;
+  alignment_t * alignment;
   bool extended;
   vector<match_t> * matches;
-  alignment_t * alignment;
 };
 
 struct read_t {
@@ -174,7 +174,7 @@ struct read_t {
         reverse(rQual.begin(),rQual.end());
     }
     ~read_t() {
-        for(int i=0; i < alignments.size(); i++){
+        for(size_t i=0; i < alignments.size(); i++){
             delete alignments[i];
         }
     }
@@ -188,7 +188,7 @@ struct read_t {
         int maxScore = scores.mismatch*sequence.length();
         assert(maxScore < 0);//works only for score<0 for now (to do: add sign switch to allow positive min scores)
         int secBestScore = scores.mismatch*sequence.length();
-        for(int j = 0; j < alignments.size(); j++){
+        for(size_t j = 0; j < alignments.size(); j++){
              alignments[j]->setFieldsFromCigar(scores);
              if(alignments[j]->alignmentScore > maxScore){
                  secBestScore = maxScore;
@@ -198,9 +198,9 @@ struct read_t {
                  secBestScore = alignments[j]->alignmentScore;
         }
         int mapq = (secBestScore == scores.mismatch*sequence.length()) ? 255 :
-            250*(maxScore-secBestScore)/(maxScore-scores.mismatch*sequence.length()) ;
+            250*(maxScore-secBestScore)/(maxScore-scores.mismatch*sequence.length()) ;//signed-unsigned comparison: fix?
         assert(mapq <= 255 && mapq >= 0);
-        for(int j = 0; j < alignments.size(); j++){
+        for(size_t j = 0; j < alignments.size(); j++){
             alignments[j]->setLocalPos(sa);
              if(alignments[j]->alignmentScore == maxScore)
                  alignments[j]->mapq = mapq;
@@ -260,11 +260,11 @@ struct read_t {
         }
     }
     string qname;//TODO should be reference
-    vector<alignment_t *> alignments;
     string sequence;//TODO should be reference
-    string rcSequence;
     string qual;//TODO should be reference
+    string rcSequence;
     string rQual;
+    vector<alignment_t *> alignments;
     int pairedAlignmentCount;
 };
 

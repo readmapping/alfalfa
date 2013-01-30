@@ -105,12 +105,12 @@ void getlijn(ifstream & input, string & lijn){
         lijn.erase(--lijn.end());
 }
 
-fastqInputReader::fastqInputReader(): filename(""), fileType(UNKNOWN), data(), nucleotidesOnly(false){
+fastqInputReader::fastqInputReader(): nucleotidesOnly(false), data(), fileType(UNKNOWN), filename("") {
     pthread_mutex_init(&readLock_, NULL);
 }
 
 fastqInputReader::fastqInputReader(const string& fName, bool nucOnly, filetype_t fileT): 
-        filename(fName), fileType(fileT), data(fName.c_str()), nucleotidesOnly(nucOnly) {
+        nucleotidesOnly(nucOnly), data(fName.c_str()), fileType(fileT), filename(fName) {
     pthread_mutex_init(&readLock_, NULL);
     if(!data.is_open()) { cerr << "unable to open " << fName << endl; exit(1); }
     determineType();
@@ -171,7 +171,7 @@ bool fastqInputReader::nextReadFastQ(string& meta, string& sequence, string& qua
         //trim(line, start , end);
         meta = line.substr(start,end-start);
         getlijn(data, sequence); //sequence line
-        for(long i = 0; i <= sequence.length(); i++) {
+        for(size_t i = 0; i <= sequence.length(); i++) {
             char c = std::tolower(sequence[i]);
             if(nucleotidesOnly) {
                 switch(c) {
@@ -206,7 +206,7 @@ bool fastqInputReader::nextReadFastA(string& meta, string& sequence){
         while(!data.eof() && data.peek() != '>'){
             getlijn(data, line); // Load one line at a time.
             if(line.empty()) continue;
-            for(long i = 0; i < line.length(); i++) {
+            for(size_t i = 0; i < line.length(); i++) {
                 char c = std::tolower(line[i]);
                 if(nucleotidesOnly) {
                         switch(c) {

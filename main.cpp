@@ -59,7 +59,7 @@ struct samOutput{//construct
     void createHeader(int argc, char* argv[], long refLength){
         stringstream ss;
         ss << "@HD\tVN:" << SAM_VERSION << endl;
-        for(int i=0; i < refdescr.size()-1; i++){
+        for(size_t i=0; i < refdescr.size()-1; i++){
             long length = startpos[i+1]-startpos[i]-1;
             ss << "@SQ\tSN:" << refdescr[i] << "\tLN:" << length << endl;//startpos contains refSequences with '`' in between.
         }
@@ -258,7 +258,7 @@ int main(int argc, char* argv[]){
     if(strcmp(argv[1], "check") == 0){
         samCheckOptions_t opt;
         opt.initOptions();
-        processParameters(argc-1, argv+1, opt, PROG );
+        processCheckParameters(argc-1, argv+1, opt, PROG );
         cerr << "parsing options: done" << endl;
         if(opt.subcommand == ORACLE)
             checkOracle(opt);
