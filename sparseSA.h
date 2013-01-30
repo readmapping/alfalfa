@@ -81,7 +81,7 @@ struct interval_t {
   interval_t(): start(1), end(0), depth(-1) {}
   interval_t(long s, long e, long d): start(s), end(e), depth(d) {}
   void reset(long e) { start = 0; end = e; depth = 0; }
-  long depth, start, end;
+  long start, end, depth;
   long size() { return end - start + 1; }
 };
 

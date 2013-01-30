@@ -31,7 +31,7 @@
 using namespace std;
 
 struct boundaries{
-    boundaries(): refB(0), queryB(0), refE(0), queryE(0) {}
+    boundaries(): refB(0), refE(0), queryB(0), queryE(0) {}
     boundaries(long refBegin, long refEnd, long queryBegin, long queryEnd): refB(refBegin), refE(refEnd), queryB(queryBegin), queryE(queryEnd){}
     long refB;
     long refE;
@@ -40,7 +40,7 @@ struct boundaries{
 };
 
 struct dp_scores{
-    dp_scores(): match(0), mismatch(-1), extendGap(-1), openGap(0) {}
+    dp_scores(): match(0), mismatch(-1), openGap(0), extendGap(-1) {}
     dp_scores(int m, int mm, int oG, int eG): match(m),mismatch(mm), openGap(oG), extendGap(eG) {}
     int match;
     int mismatch;

@@ -21,10 +21,9 @@
 using namespace std;
 
 struct mate_t {
-    mate_t(): pnextGlob(0), concordant(false), flag(0), tLength(0), rnext("*"), 
-    pnext(0) {}
-    mate_t(const mate_t & o): pnextGlob(o.pnextGlob), concordant(o.concordant), 
-    flag(o.flag.to_ulong()), tLength(o.tLength), rnext(o.rnext), pnext(o.pnext) {}
+    mate_t(): flag(0), rnext("*"), pnext(0), pnextGlob(0), tLength(0), concordant(false) {}
+    mate_t(const mate_t & o): flag(o.flag.to_ulong()), rnext(o.rnext), pnext(o.pnext), 
+    pnextGlob(o.pnextGlob), tLength(o.tLength), concordant(o.concordant) {}
     bitset<11> flag;
     string rnext;
     long pnext;
@@ -40,17 +39,17 @@ struct alignment_t {
   rname(o.rname), mapq(o.mapq), editDist(o.editDist), alignmentScore(o.alignmentScore), 
   cigarChars(o.cigarChars), cigarLengths(o.cigarLengths), NMtag(o.NMtag), 
   refLength(o.refLength), mateInfo(o.mateInfo) {}
-  string cigar;//TODO: remove this fields, only used when printed
-  string NMtag;//TODO: remove this fields, only used when printed
-  vector<char> cigarChars;//Change these to fixed-length values
-  vector<int> cigarLengths;//Change these to fixed-length values (make sure to increase them when necessary): make own string and vector classes
-  string rname;//leave out, only for printing
   long globPos; // position in index (concat of all reference sequences)
   long pos; // position in reference sequence
+  string cigar;//TODO: remove this fields, only used when printed
   bitset<11> flag;
+  string rname;//leave out, only for printing
   int mapq;
   int editDist;
   int alignmentScore;
+  vector<char> cigarChars;//Change these to fixed-length values
+  vector<int> cigarLengths;//Change these to fixed-length values (make sure to increase them when necessary): make own string and vector classes
+  string NMtag;//TODO: remove this fields, only used when printed
   int refLength;//length in reference sequence spanned by this alignment
   //paired-end fields
   vector<mate_t> mateInfo;
@@ -75,10 +74,10 @@ struct alignment_t {
       stringstream ss;
       assert(cigarChars.size()==cigarLengths.size());
       if(newVersion)
-          for(int i = 0; i < cigarChars.size(); i++)
+          for(size_t i = 0; i < cigarChars.size(); i++)
               ss << cigarLengths[i] << cigarChars[i];
       else{
-          int i = 0;
+          size_t i = 0;
           while(i < cigarChars.size()){
               if(cigarChars[i]=='=' || cigarChars[i]=='X'){
                     int tempLength = cigarLengths[i];
