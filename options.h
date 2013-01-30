@@ -251,7 +251,7 @@ static void usageAln(const string prog) {
 }
 
 //move process Command to main, 
-static void processParameters(int argc, char* argv[], mapOptions_t& opt, const string program){
+inline void processParameters(int argc, char* argv[], mapOptions_t& opt, const string program){
     if(argc < MINOPTIONCOUNT)
         usage(program);
     else{
