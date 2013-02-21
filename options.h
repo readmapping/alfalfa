@@ -28,6 +28,7 @@ struct align_opt {
     bool unique;
     bool noFW; 
     bool noRC;
+    int print;
 };
 
 enum orientation_t { PAIR_FR, PAIR_RF, PAIR_FF};
@@ -58,7 +59,7 @@ struct mapOptions_t{//commentary + sort + constructor
         memType = SMAM;
         alnOptions.noFW = alnOptions.noRC = false;
         alnOptions.errorPercent = 0.08;
-        verbose = false;
+        alnOptions.print = 0;
         alnOptions.scores.match = 0;//(2,-1,-2,-1);
         alnOptions.scores.mismatch = -2;
         alnOptions.scores.openGap = 0;
@@ -85,6 +86,54 @@ struct mapOptions_t{//commentary + sort + constructor
         saveIndex = false;
         index_prefix = indexLocation = "";
     }
+    void printOptions(){
+        cerr << "ALFALFA was executed with following options: " << endl;
+        cerr << "reference sequence\t\t" << ref_fasta << endl;
+        if(!outputName.empty())
+            cerr << "output file\t\t" << outputName << endl;
+        if(!indexLocation.empty())
+            cerr << "index location\t\t\t" << indexLocation << endl;
+        if(!index_prefix.empty())
+            cerr << "index prefix\t\t\t" << index_prefix << endl;
+        cerr << "save index \t\t\t" << (saveIndex ? "yes" : "no") << endl;
+        if(!unpairedQ.empty())
+            cerr << "unpaired reads\t\t\t" << unpairedQ << endl;
+        if(!pair1.empty() && !pair2.empty()){
+            cerr << "mate 1   \t\t\t" << pair1 << endl;
+            cerr << "mate 2   \t\t\t" << pair2 << endl;
+        }
+        cerr << "sparseness \t\t\t" << K << endl;
+        cerr << "threads  \t\t\t" << query_threads << endl;
+        cerr << "errors   \t\t\t" << alnOptions.errorPercent << endl;
+        cerr << "min seed length\t\t\t" << alnOptions.minMemLength << endl;
+        cerr << "fixed seed length\t\t\t" << (alnOptions.fixedMinLength ? "yes" : "no") << endl;
+        cerr << "type of seeds\t\t\t" << memType << endl;
+        cerr << "save seed finding\t\t\t" << (alnOptions.tryHarder ? "yes" : "no") << endl;
+        cerr << "use other characters too\t\t" << (nucleotidesOnly ? "no" : "yes") << endl;
+        cerr << "#alignments\t\t\t" << alnOptions.alignmentCount << endl;
+        cerr << "#try and error\t\t\t" << alnOptions.maxTrial << endl;
+        cerr << "min query coverage\t\t" << alnOptions.minCoverage << endl;
+        cerr << "use clipping\t\t\t" << (alnOptions.noClipping ? "no" : "yes") << endl;
+        cerr << "verbosity level\t\t\t" << alnOptions.print << endl;
+        cerr << "calculate forward\t\t\t" << (alnOptions.noFW ? "no" : "yes") << endl;
+        cerr << "calculate reverse\t\t\t" << (alnOptions.noRC ? "no" : "yes") << endl;
+        cerr << "match score\t\t\t" << alnOptions.scores.match << endl;
+        cerr << "mismatch score\t\t\t" << alnOptions.scores.mismatch << endl;
+        cerr << "gap open score\t\t\t" << alnOptions.scores.openGap << endl;
+        cerr << "gap extend score\t\t\t" << alnOptions.scores.extendGap << endl;
+        if(!pair1.empty() && !pair2.empty()){
+            cerr << "paired options: " << endl;
+            cerr << "paired mode\t\t\t" << pairedOpt.mode << endl;
+            cerr << "type pairing\t\t\t" << pairedOpt.orientation << endl;
+            cerr << "min insert size\t\t\t" << pairedOpt.minInsert << endl;
+            cerr << "max insert size\t\t\t" << pairedOpt.maxInsert << endl;
+            cerr << "allow overlap\t\t\t" << (pairedOpt.overlap ? "yes" : "no") << endl;
+            cerr << "allow contained\t\t\t" << (pairedOpt.contain ? "yes" : "no") << endl;
+            cerr << "allow discordant\t\t\t" << (pairedOpt.discordant ? "yes" : "no") << endl;
+            cerr << "allow dovetail\t\t\t" << (pairedOpt.dovetail ? "yes" : "no") << endl;
+            cerr << "allow mixed\t\t\t" << (pairedOpt.mixed ? "yes" : "no") << endl;
+        }
+    }
     //command option
     command_t command;
     //performance options
@@ -100,7 +149,6 @@ struct mapOptions_t{//commentary + sort + constructor
     string indexLocation;
     string outputName;
     bool _4column;//for MEM output
-    bool verbose;
     //Sequence options
     bool nucleotidesOnly;
     //MAM options
@@ -131,13 +179,15 @@ enum {
     ARG_NO_CONTAIN,      //--no-contain
     ARG_NO_OVERLAP,      //--no-overlap
     ARG_PAIR_MODE,       //--paired-mode
-    ARG_SAVE_INDEX       //--save
+    ARG_SAVE_INDEX,      //--save
+    ARG_VVERBOSE         //--vverbose
 };
 
 static struct option long_options[] = {
     {(char*)"sparsityfactor",   required_argument, 0,            's'},
     {(char*)"threads",          required_argument, 0,            'q'},
     {(char*)"verbose",          no_argument,       0,            ARG_VERBOSE},
+    {(char*)"vverbose",         no_argument,       0,            ARG_VVERBOSE},
     {(char*)"seedminlength",    required_argument, 0,            'L'},
     {(char*)"alignments",       required_argument, 0,            'k'},
     {(char*)"trials",           required_argument, 0,            'T'},
@@ -245,7 +295,8 @@ static void usageAln(const string prog) {
   cerr << "--paired-mode (int)        choose algorithm to calculate paired-end reads" << endl;
   cerr << endl;
   cerr << "MISC OPTIONS " << endl;
-  cerr << "--verbose               enable verbose mode (not by default)" << endl;
+  cerr << "--verbose                  enable verbose mode (not by default)" << endl;
+  cerr << "--vverbose                 enable very verbose mode (not by default)" << endl;
   cerr << "-h/--help                  print this statement" << endl;
   exit(1);
 }
@@ -289,7 +340,8 @@ inline void processParameters(int argc, char* argv[], mapOptions_t& opt, const s
                 case ARG_NOFW: opt.alnOptions.noFW = 1; break;
                 case ARG_NORC: opt.alnOptions.noRC = 1; break;
                 case 'n': opt.nucleotidesOnly = 1; break;
-                case ARG_VERBOSE: opt.verbose = 1; break;
+                case ARG_VERBOSE: opt.alnOptions.print = 1; break;
+                case ARG_VVERBOSE: opt.alnOptions.print = 2; break;
                 case ARG_CLIP: opt.alnOptions.noClipping = false; break;
                 case 't': opt.alnOptions.numThreads = atoi(optarg); break;
                 case 'q': opt.query_threads = atoi(optarg); break;
@@ -342,6 +394,8 @@ inline void processParameters(int argc, char* argv[], mapOptions_t& opt, const s
         }
         if(opt.saveIndex && opt.index_prefix.empty())
                 opt.index_prefix = opt.ref_fasta;
+        if(opt.alnOptions.print > 0)
+            opt.printOptions();
     }
 }
 

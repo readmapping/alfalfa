@@ -48,11 +48,13 @@ struct samCheckOptions_t {
         qtag = "NM";
         otag = "NM";
         numReads=0;
+        print = false;
     }
     checkCommand_t subcommand;
     string outputFile;
     string oracleSam;
     bool paired;
+    bool print;
     string querySam;
     vector<string> compareFiles;
     vector<int> qualityValues;
@@ -78,7 +80,7 @@ struct samRecord_t {
 };
 
 //o: output filename
-static const char * short_optionsC = "o:S:I:2:3:4:Q:r:hC:";
+static const char * short_optionsC = "o:S:I:2:3:4:Q:r:hC:p";
 
 //Numbers for options without short option
 enum checkOptionNumber {
@@ -97,6 +99,7 @@ static struct option long_optionsC[] = {
     {(char*)"quality-values",   required_argument, 0,            'Q'},
     {(char*)"ranges",           required_argument, 0,            'r'},
     {(char*)"help",             no_argument, 0,                  'h'},
+    {(char*)"printfalse",       no_argument, 0,                  'p'},
     {(char*)"qtag",             required_argument, 0,            ARG_QTAG},
     {(char*)"otag",             required_argument, 0,            ARG_OTAG},
     {(char*)"paired",           no_argument, 0,                  ARG_PAIRED},
@@ -115,6 +118,7 @@ static void usageCheck(const string prog) {
   cerr << "COMMON OPTIONS" << endl;
   cerr << "-h/--help                  print this statement" << endl;
   cerr << "-o/--output                the filename to write the output to [std-out]" << endl;
+  cerr << "-p/--printfalse            print the alignments that were not correctly aligned and/or reads that were not aligned" << endl;
   cerr << endl;
   cerr << "ORACLE OPTIONS" << endl;
   cerr << "-S/--oracle (string)       reference SAM containing the simulated read coordinates" << endl;
@@ -199,6 +203,7 @@ static void processCheckParameters(int argc, char* argv[], samCheckOptions_t& op
     short_optionsC, long_optionsC, &option_index)) != -1) {//memType cannot be chosen
         switch (c) {//"o:S:U:D:1:2:3:4:Q:r:h"//report parameters that will be ignored, or failed
             case 'o': opt.outputFile = optarg; break;
+            case 'p': opt.print = true; break;
             case 'S': if(opt.subcommand == ORACLE) opt.oracleSam = optarg;
             else fprintf(stderr, "oracle SAM file not needed for '%s' mode. This parameter will be ignored.\n", subcommand.c_str()); 
             break;
@@ -444,6 +449,8 @@ static void checkOracle(samCheckOptions_t & opt){
     cerr << "checking accuracy of alignments: ..." << endl;
     //if at least one record can be found
     bool paired = false;
+    if(opt.print)
+        cerr << "reads that failed to align correctly: " << endl;
     if(!oracleLine.empty() && oracleLine[0]!='@' && !queryLine.empty() && queryLine[0]!='@'){
         //check if it are paired reads
         samRecord_t tempQuery;
@@ -490,6 +497,8 @@ static void checkOracle(samCheckOptions_t & opt){
                 }
                 //sumarize for read
                 for(size_t j=0; j < rangeCount; j++){
+                    if(opt.print && results[j][0].tempReadResult==0)
+                        cerr << oracleUp.qname << endl;                    
                     results[j][0].finishRead();
                     results[j][1].finishRead();
                     for(size_t k=0; k < qualValCount; k++)
@@ -531,6 +540,8 @@ static void checkOracle(samCheckOptions_t & opt){
                 }
                 //sumarize for read
                 for(size_t j=0; j < rangeCount; j++){
+                    if(opt.print && results[j][0].tempReadResult==0)
+                        cerr << oracleUp.qname << endl;                    
                     results[j][0].finishRead();
                     results[j][1].finishRead();
                     for(size_t k=0; k < qualValCount; k++)
@@ -634,6 +645,9 @@ static void checkOracle(samCheckOptions_t & opt){
 }
 
 static void checkWgsim(samCheckOptions_t & opt){
+    //should provide sorted query file to count query and check missing queries
+    if(opt.print)
+        cerr << "Warning current version does not take into account unmapped reads." << endl;
     //fields: input
     ifstream queryFile(opt.querySam.c_str());
     string queryLine = "";
@@ -644,7 +658,7 @@ static void checkWgsim(samCheckOptions_t & opt){
     size_t rangeCount = opt.correctRange.size();
     size_t qualValCount = opt.qualityValues.size();
     oracleLine_t results[rangeCount][qualValCount+2];
-    
+
     //init results
     for(size_t i=0; i<rangeCount; i++)
         for(size_t j=0; j<qualValCount+2; j++)
@@ -666,6 +680,8 @@ static void checkWgsim(samCheckOptions_t & opt){
     string prevQname = "";
     int curAln=0;
     char delimeter = '\t';
+    if(opt.print)
+        cerr << "reads that failed to align correctly: " << endl;
     do{
         //read in all fields for this line
         int tabPos = 0;
@@ -751,6 +767,8 @@ static void checkWgsim(samCheckOptions_t & opt){
             for(size_t j=0; j < rangeCount; j++){
                 if(curAln <= 2)
                     results[j][1].addAlignment(results[j][0].tempReadResult);
+                if(opt.print && results[j][0].tempReadResult==0)
+                    cerr << prevQname << endl;
                 results[j][0].finishRead();
                 results[j][1].finishRead();
                 for(size_t k=0; k < qualValCount; k++)
@@ -797,6 +815,8 @@ static void checkWgsim(samCheckOptions_t & opt){
     if(prevQname != ""){
         //sumarize for read
         for(size_t j=0; j < rangeCount; j++){
+            if(opt.print && results[j][0].tempReadResult==0)
+                cerr << prevQname << endl;
             results[j][0].finishRead();
             results[j][1].finishRead();
             for(size_t k=0; k < qualValCount; k++)

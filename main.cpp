@@ -48,8 +48,9 @@ using namespace std;
 //mapper options
 static const string PROG = "ALFALFA";
 static const string SAM_VERSION = "1.3";
-static const string PROG_VERSION = "0.6.3";
+static const string PROG_VERSION = "0.6.3.1";
 static const string NOT_AVAILABLE = "*";
+static const long INIT_DP_DIMENSION = 2048;
 
 //output struct
 struct samOutput{//construct
@@ -95,10 +96,10 @@ struct query_arg {
   pthread_mutex_t *writeLock;
 };
 
+//currently not used
 void *unpaired_thread(void *arg_) {
 
   query_arg *arg = (query_arg *)arg_;
-  bool print = arg->opt->verbose;
   long seq_cnt = 0;
   long seq_mapped = 0;
   long alignments_printed = 0;
@@ -113,7 +114,7 @@ void *unpaired_thread(void *arg_) {
           if(seq_cnt%10000==0)
               cerr << ".";
           read.init(arg->opt->nucleotidesOnly);
-          unpairedMatch(*sa, *arg->dp, read, arg->opt->alnOptions, print);
+          unpairedMatch(*sa, *arg->dp, read, arg->opt->alnOptions);
           read.postprocess(arg->opt->alnOptions.scores, *sa);
           //Ouput
           pthread_mutex_lock(arg->writeLock);
@@ -141,7 +142,6 @@ void *unpaired_thread(void *arg_) {
 void *query_thread(void *arg_) {
 
   query_arg *arg = (query_arg *)arg_;
-  bool print = arg->opt->verbose;
   long seq_cnt = 0;
   long seq_mapped = 0;
   long alignments_printed = 0;
@@ -156,13 +156,19 @@ void *query_thread(void *arg_) {
           if(seq_cnt%10000==0)
               cerr << ".";
           if(!arg->opt->alnOptions.noFW){//to inner funtion
-              inexactMatch(*sa, *arg->dp, read, arg->opt->alnOptions, true, print);
+              if(arg->opt->alnOptions.print>0)
+                cerr << "match " << read.qname << " forward" << endl;
+              inexactMatch(*sa, *arg->dp, read, arg->opt->alnOptions, true);
           }
           if(!arg->opt->alnOptions.noRC){
               read.init(arg->opt->nucleotidesOnly);
-              inexactMatch(*sa, *arg->dp, read, arg->opt->alnOptions, false, print);
+              if(arg->opt->alnOptions.print>0)
+                cerr << "match " << read.qname << " backward" << endl;
+              inexactMatch(*sa, *arg->dp, read, arg->opt->alnOptions, false);
           }
+          if(arg->opt->alnOptions.print>0) cerr << "post process read alignments" << endl;
           read.postprocess(arg->opt->alnOptions.scores, *sa);
+          if(arg->opt->alnOptions.print>0) cerr << "read " << read.qname << " has " << read.alignmentCount() << " alignments" << endl;
           //Ouput
           pthread_mutex_lock(arg->writeLock);
           stringstream * ss = new stringstream;
@@ -188,7 +194,6 @@ void *query_thread(void *arg_) {
 void *paired_thread1(void *arg_) {
 
   query_arg *arg = (query_arg *)arg_;
-  bool print = arg->opt->verbose;
   long seq_cnt = 0;
   long seq_mapped1 = 0;
   long alignments_printed1 = 0;
@@ -212,9 +217,13 @@ void *paired_thread1(void *arg_) {
               cerr << ".";
           mate1.init(arg->opt->nucleotidesOnly);
           mate2.init(arg->opt->nucleotidesOnly);
-          pairedMatch(*sa, *arg->dp, mate1, mate2, arg->opt->alnOptions, arg->opt->pairedOpt, print);
+          if(arg->opt->alnOptions.print>0) cerr << "match " << mate1.qname << endl;
+          pairedMatch(*sa, *arg->dp, mate1, mate2, arg->opt->alnOptions, arg->opt->pairedOpt);
+          if(arg->opt->alnOptions.print>0) cerr << "postprocess both mates of " << mate1.qname << endl;
           mate1.postprocess(arg->opt->alnOptions.scores, *sa);
           mate2.postprocess(arg->opt->alnOptions.scores, *sa);
+          if(arg->opt->alnOptions.print>0) cerr << mate1.qname << " has " << mate1.alignmentCount() << " alignments" << endl;
+          if(arg->opt->alnOptions.print>0) cerr << mate2.qname << " has " << mate2.alignmentCount() << " alignments" << endl;
           //Ouput
           pthread_mutex_lock(arg->writeLock);
           stringstream * ss = new stringstream;
@@ -292,6 +301,7 @@ int main(int argc, char* argv[]){
             if(opt.saveIndex){
                 cerr << "saving index to disk" << " ... "<< endl;
                 sa->save(opt.index_prefix);
+                cerr << "saving index to disk: done" << endl;
             }
             clock_t end = clock();
             double cpu_time = (double)( end - start ) /CLOCKS_PER_SEC;
@@ -310,17 +320,29 @@ int main(int argc, char* argv[]){
                 if(opt.saveIndex){  
                     cerr << "saving index to disk" << " ... "<< endl;
                     sa->save(opt.index_prefix);
+                    cerr << "saving index to disk: done" << endl;
                 }
                 clock_t end = clock();
                 double cpu_time = (double)( end - start ) /CLOCKS_PER_SEC;
                 cerr << "time for building index structure: " << cpu_time << endl;
             }
-            if(opt.outputName.empty()) 
+            if(opt.alnOptions.print>0){
+                cerr << "index has sparseness " << opt.K << endl;
+                cerr << "index uses suffix links? " << (sa->hasSufLink ? "yes" : "no") << endl;
+                cerr << "index uses child array? " << (sa->hasChild ? "yes" : "no") << endl;
+                cerr << "INDEX SIZE IN BYTES: " << sa->index_size_in_bytes() << endl;
+            }
+            if(opt.outputName.empty()){
                 opt.outputName = opt.ref_fasta.substr().append(".sam");
+                if(opt.alnOptions.print>0)
+                    cerr << "output name changed to " << opt.outputName << endl;
+            }
             //Print SAM Header, require refdescre, startpos and argc/argv
             output.createHeader(argc, argv, ref.length());
             outfile = fopen( opt.outputName.c_str(), "w" );
             fprintf(outfile,"%s",output.header.c_str());
+            if(opt.alnOptions.print>0) cerr << "header printed to output" << endl;
+            if(opt.alnOptions.print>0) cerr << "dp matrices will be created for every thread with initial " << INIT_DP_DIMENSION << "x" << INIT_DP_DIMENSION << " dimension" << endl;
             //FIRST: Unpaired reads
             if(!opt.unpairedQ.empty()){
                 queryReader = new fastqInputReader(opt.unpairedQ, opt.nucleotidesOnly);
@@ -339,7 +361,7 @@ int main(int argc, char* argv[]){
                     args[i].opt = & opt;
                     args[i].readLock = &queryReader->readLock_;
                     args[i].writeLock = &writeLock_;
-                    args[i].dp = new dynProg(2048, opt.alnOptions.scores.openGap!=0, opt.alnOptions.scores);
+                    args[i].dp = new dynProg(INIT_DP_DIMENSION, opt.alnOptions.scores.openGap!=0, opt.alnOptions.scores);
                 }
                 // Create joinable threads to find MEMs.
                 for(int i = 0; i < opt.query_threads; i++)
@@ -372,7 +394,7 @@ int main(int argc, char* argv[]){
                     args[i].opt = & opt;
                     args[i].readLock = &mate1Reader->readLock_;
                     args[i].writeLock = &writeLock_;
-                    args[i].dp = new dynProg(2048, opt.alnOptions.scores.openGap!=0, opt.alnOptions.scores);
+                    args[i].dp = new dynProg(INIT_DP_DIMENSION, opt.alnOptions.scores.openGap!=0, opt.alnOptions.scores);
                 }
                 // Create joinable threads to find MEMs.
                 for(int i = 0; i < opt.query_threads; i++)

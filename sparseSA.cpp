@@ -57,6 +57,7 @@ sparseSA::sparseSA(string &S_, vector<string> &descr_, vector<long> &startpos_, 
   // Make sure last K-sampled characeter is this special character as well!!
   for(long i = 0; i < K; i++) S += '$'; // Append "special" end character. Note: It must be lexicographically less.
   N = S.length();
+  std::string(S.data(), S.size()).swap(S);
 
   // Adjust to "sampled" size.
   logN = (long)ceil(log(N/K) / log(2.0));
@@ -245,6 +246,7 @@ bool sparseSA::load(const string &prefix){
         child_s.read((char*)&CHILD[0],sizeCHILD*sizeof(int));
         child_s.close();
     }
+    cerr << "index loaded succesful" << endl;
     return true;
 }
 
@@ -830,6 +832,7 @@ void *MEMthread(void *arg) {
   for(long k = 0; k < (long)K.size(); k++) {  sa->findMEM(K[k], *(data->P), matches, data->min_len, true); }
 
   pthread_exit(NULL);
+  return 0;
 }
 
 void sparseSA::MEM(const string &P, vector<match_t> &matches, int min_len, bool print, int num_threads) const {

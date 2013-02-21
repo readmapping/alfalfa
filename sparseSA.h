@@ -64,7 +64,14 @@ struct vec_uchar {
   }
   // Once all the values are set, call init. This will assure the
   // values >= 255 are sorted by index for fast retrieval.
-  void init() { sort(M.begin(), M.end()); cerr << "M.size()=" << M.size() << endl; }
+  void init() { sort(M.begin(), M.end()); cerr << "M.size()=" << M.size() << endl; std::vector<item_t>(M).swap(M);}
+  
+  long index_size_in_bytes(){
+      long indexSize = 0L;
+      indexSize += sizeof(vec) + vec.capacity()*sizeof(unsigned char);
+      indexSize += sizeof(M) + M.capacity()*(sizeof(size_t)+sizeof(int));
+      return indexSize;
+  }
 };
 
 // Match find by findMEM.
@@ -103,6 +110,29 @@ struct sparseSA {
   long K; // suffix sampling, K = 1 every suffix, K = 2 every other suffix, K = 3, every 3rd sffix
   bool hasChild;
   bool hasSufLink;
+  
+  long index_size_in_bytes(){
+      long indexSize = 0L;
+      indexSize += sizeof(hasSufLink);
+      indexSize += sizeof(hasChild);
+      indexSize += sizeof(K);
+      indexSize += sizeof(NKm1);
+      indexSize += sizeof(logN);
+      indexSize += sizeof(N);
+      indexSize += sizeof(_4column);
+      indexSize += sizeof(maxdescrlen);
+      indexSize += sizeof(descr);
+      for(int i = 0; i < descr.size(); i++){
+          indexSize += descr[i].capacity();
+      }
+      indexSize += sizeof(startpos) + startpos.capacity()*sizeof(long);
+      indexSize += S.capacity();
+      indexSize += sizeof(SA) + SA.capacity()*sizeof(unsigned int);
+      indexSize += sizeof(ISA) + ISA.capacity()*sizeof(int);
+      indexSize += sizeof(CHILD) + CHILD.capacity()*sizeof(int);
+      indexSize += LCP.index_size_in_bytes();
+      return indexSize;
+  }
 
   // Maps a hit in the concatenated sequence set to a position in that sequence.
   void from_set(long hit, long &seq, long &seqpos) const {

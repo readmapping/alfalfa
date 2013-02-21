@@ -103,7 +103,7 @@ void initDPMatrix(int dimensionL2, int dimensionL1, bool affine);
 void resizeDPMatrix(int dimensionL2, int dimensionL1, bool affine);
 void deleteDPMatrix(bool affine);
 
-int updateMatrix(const dp_type& type);
+int updateMatrix(const dp_type& type, bool print);
 int dpFillOptStatic(const string& ref,const string& query, bool forward, 
         const boundaries& offset, const dp_type& type);
 int dpFillStatic(const string& ref,const string& query, bool forward,

@@ -121,7 +121,7 @@ void dp_scores::updateScoreMatrixDna(){//presumes match/mismatch has been added 
 //            matrices.M[0][i] = scores.openGap + i*scores.extendGap;
 //}
 
-int dynProg::updateMatrix(const dp_type& type){
+int dynProg::updateMatrix(const dp_type& type, bool print){
     //TODO: change this to mallocs and initialize once per thread + realloc if nec.
     assert(L1 >=0 && L2 >= 0);
     int newDimL2 = DP_L2;
@@ -132,8 +132,11 @@ int dynProg::updateMatrix(const dp_type& type){
     while(L1 > newDimL1){
         newDimL1 = 2*newDimL1;
     }
-    if(newDimL2 > DP_L2 || newDimL1 > DP_L1)
+    if(newDimL2 > DP_L2 || newDimL1 > DP_L1){
+        if(print) cerr << "resize DP matrix from " << DP_L2 << "x" << DP_L1 << " to " << newDimL2 << "x" << newDimL1 << endl;
         resizeDPMatrix(newDimL2, newDimL1, scores.openGap != 0);
+        if(print) cerr << "resize succesful" << endl;
+    }
     //assert(!banded || (!type.freeQueryB && !type.freeRefB));
     M[0][0] = 0;
     if(type.freeQueryB)//no need for reinitialization if same values
@@ -1092,12 +1095,13 @@ int dynProg::dpBandStatic( const string&     ref,
             (type.freeRefB && !type.freeQueryB && L2 - bandSize > L1) ||
             (!(type.freeQueryB || type.freeRefB) && !type.freeRefE && L2 + bandSize < L1) ||
             (!(type.freeQueryB || type.freeRefB) && !type.freeQueryE && L2 - bandSize > L1)){
+        if(print) cerr << "possible end of alignment would lay beyond the dimensions of the matrix" << endl;
         output.dpScore = scores.mismatch*query.length();
         output.editDist = query.length();
         return 1;
     }
     //build matrices
-    updateMatrix(type);
+    updateMatrix(type, print);
     bool affine = scores.openGap != 0;
     //dp
     if(affine)
@@ -1175,7 +1179,7 @@ int dynProg::dpBandFull( const string& ref,
     bandRight = bandR;
     assert(L1 >=0 && L2 >= 0 && bandLeft >0 && bandRight > 0);
     //build matrices
-    updateMatrix(type);
+    updateMatrix(type, print);
     bool affine = scores.openGap != 0;
     //dp
     if(affine)
