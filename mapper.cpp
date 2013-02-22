@@ -75,19 +75,19 @@ void postProcess(vector<match_t> &matches){
 void calculateSeeds(const sparseSA& sa, const string& P, int min_len, int alignmentCount, vector<match_t>& matches, bool tryHarder, mum_t memType){
     int maxBranchWidth = max(alignmentCount,20);
     if(memType == SMAM)
-        sa.SMAM(P, matches, min_len, maxBranchWidth, false);
+        sa.SMAM(P, matches, min_len, maxBranchWidth);
     else if(memType == MEM)
-        sa.MEM(P, matches, min_len, false);
+        sa.MEM(P, matches, min_len);
     else if(memType == MAM)
-        sa.MAM(P, matches, min_len, false);
+        sa.MAM(P, matches, min_len);
     else if(memType == MUM)
-        sa.MUM(P, matches, min_len, false);
+        sa.MUM(P, matches, min_len);
     if(tryHarder){//TODO: change try-harder to recalculate only after forward + reverse has been tried
         //easy solution: try reverse and if found: skip
         if(matches.empty())
-            sa.SMAM(P, matches, min_len, 1000, false);
+            sa.SMAM(P, matches, min_len, 1000);
         if(matches.empty())
-            sa.SMAM(P, matches, 20, 1000, false);
+            sa.SMAM(P, matches, 20, 1000);
     }
     postProcess(matches);
 }

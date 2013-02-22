@@ -24,7 +24,6 @@ struct align_opt {
     bool noClipping;
     double errorPercent;
     int minMemLength;
-    int numThreads;
     int alignmentCount;
     int maxTrial;
     int minCoverage;
@@ -54,7 +53,6 @@ struct mapOptions_t{//commentary + sort + constructor
     mapOptions_t(){ initOptions(); }
     void initOptions(){
         K = 1; query_threads = 1;
-        _4column = false;
         nucleotidesOnly = false;
         alnOptions.minMemLength = 20;
         alnOptions.memType = SMAM;
@@ -67,7 +65,6 @@ struct mapOptions_t{//commentary + sort + constructor
         alnOptions.scores.openGap = 0;
         alnOptions.scores.extendGap = -2;
         alnOptions.noClipping = true;
-        alnOptions.numThreads = 1;
         alnOptions.alignmentCount = 100;
         alnOptions.maxTrial = 10;
         alnOptions.minCoverage = 25;
@@ -154,7 +151,6 @@ struct mapOptions_t{//commentary + sort + constructor
     bool hasSuflink;
     string indexLocation;
     string outputName;
-    bool _4column;//for MEM output
     //Sequence options
     bool nucleotidesOnly;
     //alignment options
@@ -169,7 +165,6 @@ static const char * short_options = "i:s:k:L:np:q:d:m:u:o:e:C:T:hx:U:1:2:S:I:X:"
 enum {
     ARG_ZERO_OPT = 255,          //not found
     ARG_TRY_HARDER,      //--tryharder
-    ARG_SEED_THREADS,    //--seedthreads
     ARG_NOFW,            //--noFw
     ARG_NORC,            //--noRc
     ARG_CLIP,            //--softclipping
@@ -201,7 +196,6 @@ static struct option long_options[] = {
     {(char*)"mincoverage",      required_argument, 0,            'C'},
     {(char*)"errors",           required_argument, 0,            'd'},
     {(char*)"tryharder",        no_argument,       0,            ARG_TRY_HARDER},
-    //{(char*)"seedthreads",      required_argument, 0,            ARG_SEED_THREADS},
     {(char*)"nofw",             no_argument,       0,            ARG_NOFW},
     {(char*)"norc",             no_argument,       0,            ARG_NORC},
     {(char*)"wildcards",        no_argument,       0,            'N'},
@@ -368,7 +362,6 @@ inline void processParameters(int argc, char* argv[], mapOptions_t& opt, const s
                 case ARG_VERBOSE: opt.alnOptions.print = 1; break;
                 case ARG_VVERBOSE: opt.alnOptions.print = 2; break;
                 case ARG_CLIP: opt.alnOptions.noClipping = false; break;
-                case 't': opt.alnOptions.numThreads = atoi(optarg); break;
                 case 'q': opt.query_threads = atoi(optarg); break;
                 case 'm': opt.alnOptions.scores.match = atoi(optarg); break;
                 case 'u': opt.alnOptions.scores.mismatch = atoi(optarg); break;

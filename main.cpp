@@ -48,7 +48,7 @@ using namespace std;
 //mapper options
 static const string PROG = "ALFALFA";
 static const string SAM_VERSION = "1.3";
-static const string PROG_VERSION = "0.6.3.1";
+static const string PROG_VERSION = "0.6.3.2";
 static const string NOT_AVAILABLE = "*";
 static const long INIT_DP_DIMENSION = 2048;
 
@@ -295,7 +295,7 @@ int main(int argc, char* argv[]){
             //build index
             cerr << "building index with s = " << opt.K  << " ... "<< endl;
             clock_t start = clock();
-            sa = new sparseSA(ref, output.refdescr, output.startpos, opt._4column, opt.K, opt.hasSuflink, opt.hasChild);
+            sa = new sparseSA(ref, output.refdescr, output.startpos, opt.K, opt.hasSuflink, opt.hasChild);
             sa->construct();
             cerr << "building index: done" << endl;
             if(opt.saveIndex){
@@ -311,7 +311,7 @@ int main(int argc, char* argv[]){
         }
         else if(opt.command == ALN){
             //build or load index
-            sa = new sparseSA(ref, output.refdescr, output.startpos, opt._4column, opt.K, opt.hasSuflink, opt.hasChild);
+            sa = new sparseSA(ref, output.refdescr, output.startpos, opt.K, opt.hasSuflink, opt.hasChild);
             if(opt.indexLocation.empty() || !sa->load(opt.indexLocation)){
                 cerr << "building index with s = " << opt.K  << " ... "<< endl;
                 //adjust data structure to seed choice and sparseness

@@ -96,7 +96,6 @@ struct sparseSA {
   vector<string> &descr; // Descriptions of concatenated sequences.
   vector<long> &startpos; // Lengths of concatenated sequences.
   long maxdescrlen; // Maximum length of the sequence description, used for formatting.
-  bool _4column; // Use 4 column output format.
 
   long N; //!< Length of the sequence.
   long logN; // ceil(log(N))
@@ -121,7 +120,6 @@ struct sparseSA {
       indexSize += sizeof(NKm1);
       indexSize += sizeof(logN);
       indexSize += sizeof(N);
-      indexSize += sizeof(_4column);
       indexSize += sizeof(maxdescrlen);
       indexSize += sizeof(descr);
       for(int i = 0; i < descr.size(); i++){
@@ -147,7 +145,7 @@ struct sparseSA {
   }
 
   // Constructor builds sparse suffix array.
-  sparseSA(string &S_, vector<string> &descr_, vector<long> &startpos_, bool __4column, long K_, 
+  sparseSA(string &S_, vector<string> &descr_, vector<long> &startpos_, long K_, 
   bool suflink_, bool child_);
 
   // Modified Kasai et all for LCP computation.
@@ -205,24 +203,24 @@ struct sparseSA {
 
   // Given a position i in S, finds a left maximal match of minimum
   // length within K steps.
-  inline void find_Lmaximal(const string &P, long prefix, long i, long len, vector<match_t> &matches, int min_len, bool print) const;
+  inline void find_Lmaximal(const string &P, long prefix, long i, long len, vector<match_t> &matches, int min_len) const;
 
   // Given an interval where the given prefix is matched up to a
   // mismatch, find all MEMs up to a minimum match depth.
   void collectMEMs(const string &P, long prefix, const interval_t mli, 
-  interval_t xmi, vector<match_t> &matches, int min_len, bool print) const;
+  interval_t xmi, vector<match_t> &matches, int min_len) const;
 
   void collectSMAMs(const string &P, long prefix, const interval_t mli, 
-  interval_t xmi, vector<match_t> &matches, int min_len, int maxCount, bool print) const;
+  interval_t xmi, vector<match_t> &matches, int min_len, int maxCount) const;
 
   // Find all MEMs given a prefix pattern offset k.
-  void findMEM(long k, const string &P, vector<match_t> &matches, int min_len, bool print) const;
+  void findMEM(long k, const string &P, vector<match_t> &matches, int min_len) const;
 
   // Find all MEMs given a prefix pattern offset k.
-  void findSMAM(long k, const string &P, vector<match_t> &matches, int min_len, int maxCount, bool print) const;
+  void findSMAM(long k, const string &P, vector<match_t> &matches, int min_len, int maxCount) const;
 
   // NOTE: min_len must be > 1
-  void findMAM(const string &P, vector<match_t> &matches, int min_len, bool print) const;
+  void findMAM(const string &P, vector<match_t> &matches, int min_len) const;
   inline bool is_leftmaximal(const string &P, long p1, long p2) const;
 
   // Maximal Almost-Unique Match (MAM). Match is unique in the indexed
@@ -230,19 +228,19 @@ struct sparseSA {
   // et. al. Note this is a "one-sided" query. It "streams" the query
   // P throught he index.  Consequently, repeats can occur in the
   // pattern P.
-  void MAM(const string &P, vector<match_t> &matches, int min_len, bool print) const{
+  void MAM(const string &P, vector<match_t> &matches, int min_len) const{
     if(K != 1) return;  // Only valid for full suffix array.
-    findMAM(P, matches, min_len, print);
+    findMAM(P, matches, min_len);
   }
 
   // Find Maximal Exact Matches (MEMs)
-  void MEM(const string &P, vector<match_t> &matches, int min_len, bool print, int num_threads = 1) const;
+  void MEM(const string &P, vector<match_t> &matches, int min_len) const;
 
   // Find Maximal Exact Matches (MEMs)
-  void SMAM(const string &P, vector<match_t> &matches, int min_len, int maxCount, bool print, int num_threads = 1) const;
+  void SMAM(const string &P, vector<match_t> &matches, int min_len, int maxCount) const;
 
   // Maximal Unique Match (MUM)
-  void MUM(const string &P, vector<match_t> &unique, int min_len, bool print) const;
+  void MUM(const string &P, vector<match_t> &unique, int min_len) const;
   
   //save index to files
   void save(const string &prefix);
