@@ -41,6 +41,7 @@ sparseSA::sparseSA(string &S_, vector<string> &descr_, vector<long> &startpos_, 
   descr(descr_), startpos(startpos_), S(S_) {
   hasSufLink = _hasSufLink;
   hasChild = _hasChild;
+  sparseMult = 1;
   // Get maximum query sequence description length.
   maxdescrlen = 0;
   for(long i = 0; i < (long)descr.size(); i++) {

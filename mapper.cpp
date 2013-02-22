@@ -281,7 +281,7 @@ alignment_t * extendAlignment(dynProg& dp_, const string& S, const string& P,
                 if(print) cerr << "DP returned with edit distance " << output.editDist << endl;
                 output.clear();
             }
-            cerr << "new seed number " << (minDistMem-begin) << " was " << match.query << "," << match.ref << "," << match.len << endl;
+            if(print) cerr << "new seed number " << (minDistMem-begin) << " was " << match.query << "," << match.ref << "," << match.len << endl;
             //set new positions
             memsIndex = minDistMem + 1;
             //add matches
