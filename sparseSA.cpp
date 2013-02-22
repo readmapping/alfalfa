@@ -662,11 +662,11 @@ void sparseSA::findMEM(long k, const string &P, vector<match_t> &matches, int mi
 void sparseSA::collectMEMs(const string &P, long prefix, const interval_t mli,
         interval_t xmi, vector<match_t> &matches, int min_len, int maxCount) const {
   // All of the suffixes in xmi's interval are right maximal.
-  long xmiEnd = min(xmi.end,xmi.start+maxCount-1);
+  long xmiEnd = min(xmi.end,xmi.start+sparseMult*maxCount-1);
   for(long i = xmi.start; i <= xmiEnd; i++) find_Lmaximal(P, prefix, SA[i], xmi.depth, matches, min_len);
 
   if(mli.start == xmi.start && mli.end == xmi.end) return;
-  long allowedCount = maxCount - (xmi.end-xmi.start+1);
+  long allowedCount = sparseMult*maxCount - (xmi.end-xmi.start+1);
   while(xmi.depth >= mli.depth && allowedCount>0) {
     // Attempt to "unmatch" xmi using LCP information.
     if(xmi.end+1 < N/K) xmi.depth = max(LCP[xmi.start], LCP[xmi.end+1]);
@@ -727,7 +727,7 @@ void sparseSA::findMAM(const string &P, vector<match_t> &matches, int min_len, i
         traverse(P, prefix, cur, P.length());
     if(cur.depth <= 1) { cur.depth = 0; cur.start = 0; cur.end = N-1; prefix++; continue; }
     if(cur.depth >= min_len) {//cur.size() == 1 &&
-        for(int i = 0; i < min(cur.size(),(long) maxCount); i++){
+        for(int i = 0; i < min(cur.size(),(long) sparseMult*maxCount); i++){
           if(is_leftmaximal(P, prefix, SA[cur.start+i])) {
             // Yes, it's a MAM.
             match_t m; m.ref = SA[cur.start+i]; m.query = prefix; m.len = cur.depth;
@@ -803,7 +803,7 @@ void sparseSA::collectSMAMs(const string &P, long prefix,
         const interval_t mli, interval_t xmi, vector<match_t> &matches, int min_len, int maxCount) const {
   // All of the suffixes in xmi's interval are right maximal.
   //if(xmi.size() > maxCount ) return;// --> many long matches is ok, do not have to be unique!!!
-  long upperLimit = xmi.size() < (long) maxCount ? xmi.end : xmi.start + (long) maxCount-1;
+  long upperLimit = xmi.size() < (long) sparseMult*maxCount ? xmi.end : xmi.start + (long) sparseMult*maxCount-1;
   for(long i = xmi.start; i <= upperLimit; i++) find_Lmaximal(P, prefix, SA[i], xmi.depth, matches, min_len);
 }
 
