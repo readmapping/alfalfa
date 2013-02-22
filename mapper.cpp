@@ -77,11 +77,11 @@ void calculateSeeds(const sparseSA& sa, const string& P, int min_len, int alignm
     if(memType == SMAM)
         sa.SMAM(P, matches, min_len, maxBranchWidth);
     else if(memType == MEM)
-        sa.MEM(P, matches, min_len);
+        sa.MEM(P, matches, min_len, maxBranchWidth);
     else if(memType == MAM)
-        sa.MAM(P, matches, min_len);
+        sa.MAM(P, matches, min_len, maxBranchWidth);
     else if(memType == MUM)
-        sa.MUM(P, matches, min_len);
+        sa.MUM(P, matches, min_len, maxBranchWidth);
     if(tryHarder){//TODO: change try-harder to recalculate only after forward + reverse has been tried
         //easy solution: try reverse and if found: skip
         if(matches.empty())

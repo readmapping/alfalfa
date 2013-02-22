@@ -587,7 +587,7 @@ bool sparseSA::suffixlink(interval_t &m) const {
 }
 
 // For a given offset in the prefix k, find all MEMs.
-void sparseSA::findMEM(long k, const string &P, vector<match_t> &matches, int min_len) const {
+void sparseSA::findMEM(long k, const string &P, vector<match_t> &matches, int min_len, int maxCount) const {
   if(k < 0 || k >= K) { cerr << "Invalid k." << endl; return; }
   // Offset all intervals at different start points.
   long prefix = k;
@@ -610,7 +610,7 @@ void sparseSA::findMEM(long k, const string &P, vector<match_t> &matches, int mi
           traverse_faster(P, prefix, xmi, P.length()); // Traverse until mismatch.
       else
           traverse(P, prefix, xmi, P.length()); // Traverse until mismatch.
-      collectMEMs(P, prefix, mli, xmi, matches, min_len); // Using LCP info to find MEM length.
+      collectMEMs(P, prefix, mli, xmi, matches, min_len, maxCount); // Using LCP info to find MEM length.
       // When using ISA/LCP trick, depth = depth - K. prefix += K.
       prefix += sparseMult*K;
       if (!hasSufLink) {
@@ -660,13 +660,14 @@ void sparseSA::findMEM(long k, const string &P, vector<match_t> &matches, int mi
 // Use LCP information to locate right maximal matches. Test each for
 // left maximality.
 void sparseSA::collectMEMs(const string &P, long prefix, const interval_t mli,
-        interval_t xmi, vector<match_t> &matches, int min_len) const {
+        interval_t xmi, vector<match_t> &matches, int min_len, int maxCount) const {
   // All of the suffixes in xmi's interval are right maximal.
-  for(long i = xmi.start; i <= xmi.end; i++) find_Lmaximal(P, prefix, SA[i], xmi.depth, matches, min_len);
+  long xmiEnd = min(xmi.end,xmi.start+maxCount-1);
+  for(long i = xmi.start; i <= xmiEnd; i++) find_Lmaximal(P, prefix, SA[i], xmi.depth, matches, min_len);
 
   if(mli.start == xmi.start && mli.end == xmi.end) return;
-
-  while(xmi.depth >= mli.depth) {
+  long allowedCount = maxCount - (xmi.end-xmi.start+1);
+  while(xmi.depth >= mli.depth && allowedCount>0) {
     // Attempt to "unmatch" xmi using LCP information.
     if(xmi.end+1 < N/K) xmi.depth = max(LCP[xmi.start], LCP[xmi.end+1]);
     else xmi.depth = LCP[xmi.start];
@@ -674,13 +675,15 @@ void sparseSA::collectMEMs(const string &P, long prefix, const interval_t mli,
     // If unmatched XMI is > matched depth from mli, then examine rmems.
     if(xmi.depth >= mli.depth) {
       // Scan RMEMs to the left, check their left maximality..
-      while(LCP[xmi.start] >= xmi.depth) {
+      while(LCP[xmi.start] >= xmi.depth && allowedCount>0) {
 	xmi.start--;
+        allowedCount--;
 	find_Lmaximal(P, prefix, SA[xmi.start], xmi.depth, matches, min_len);
       }
       // Find RMEMs to the right, check their left maximality.
-      while(xmi.end+1 < N/K && LCP[xmi.end+1] >= xmi.depth) {
+      while(xmi.end+1 < N/K && LCP[xmi.end+1] >= xmi.depth && allowedCount>0) {
 	xmi.end++;
+        allowedCount--;
 	find_Lmaximal(P, prefix, SA[xmi.end], xmi.depth, matches, min_len);
       }
     }
@@ -713,7 +716,7 @@ void sparseSA::find_Lmaximal(const string &P, long prefix, long i,
 
 // Finds maximal almost-unique matches (MAMs) These can repeat in the
 // given query pattern P, but occur uniquely in the indexed reference S.
-void sparseSA::findMAM(const string &P, vector<match_t> &matches, int min_len) const {
+void sparseSA::findMAM(const string &P, vector<match_t> &matches, int min_len, int maxCount) const {
   interval_t cur(0, N-1, 0);
   long prefix = 0;
   while(prefix < (long)P.length()) {
@@ -724,7 +727,7 @@ void sparseSA::findMAM(const string &P, vector<match_t> &matches, int min_len) c
         traverse(P, prefix, cur, P.length());
     if(cur.depth <= 1) { cur.depth = 0; cur.start = 0; cur.end = N-1; prefix++; continue; }
     if(cur.depth >= min_len) {//cur.size() == 1 &&
-        for(int i = 0; i < cur.size(); i++){
+        for(int i = 0; i < min(cur.size(),(long) maxCount); i++){
           if(is_leftmaximal(P, prefix, SA[cur.start+i])) {
             // Yes, it's a MAM.
             match_t m; m.ref = SA[cur.start+i]; m.query = prefix; m.len = cur.depth;
@@ -753,10 +756,10 @@ bool sparseSA::is_leftmaximal(const string &P, long p1, long p2) const {
 struct by_ref { bool operator() (const match_t &a, const match_t &b) const { if(a.ref == b.ref) return a.len > b.len; else return a.ref < b.ref; }  };
 
 // Maximal Unique Match (MUM)
-void sparseSA::MUM(const string &P, vector<match_t> &unique, int min_len) const {
+void sparseSA::MUM(const string &P, vector<match_t> &unique, int min_len, int maxCount) const {
   // Find unique MEMs.
   vector<match_t> matches;
-  MAM(P, matches, min_len);
+  MAM(P, matches, min_len, maxCount);
 
   // Adapted from Stephan Kurtz's code in cleanMUMcand.c in MUMMer v3.20.
   long currentright, dbright = 0;
@@ -790,9 +793,9 @@ void sparseSA::MUM(const string &P, vector<match_t> &unique, int min_len) const 
 
 }
 
-void sparseSA::MEM(const string &P, vector<match_t> &matches, int min_len) const {
+void sparseSA::MEM(const string &P, vector<match_t> &matches, int min_len, int maxCount) const {
   if(min_len < K) return;
-  for(int k = 0; k < K; k++) { findMEM(k, P, matches, min_len); }
+  for(int k = 0; k < K; k++) { findMEM(k, P, matches, min_len, maxCount); }
 }
 // Use LCP information to locate right maximal matches. Test each for
 // left maximality.

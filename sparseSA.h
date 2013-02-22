@@ -208,19 +208,19 @@ struct sparseSA {
   // Given an interval where the given prefix is matched up to a
   // mismatch, find all MEMs up to a minimum match depth.
   void collectMEMs(const string &P, long prefix, const interval_t mli, 
-  interval_t xmi, vector<match_t> &matches, int min_len) const;
+  interval_t xmi, vector<match_t> &matches, int min_len, int maxCount) const;
 
   void collectSMAMs(const string &P, long prefix, const interval_t mli, 
   interval_t xmi, vector<match_t> &matches, int min_len, int maxCount) const;
 
   // Find all MEMs given a prefix pattern offset k.
-  void findMEM(long k, const string &P, vector<match_t> &matches, int min_len) const;
+  void findMEM(long k, const string &P, vector<match_t> &matches, int min_len, int maxCount) const;
 
   // Find all MEMs given a prefix pattern offset k.
   void findSMAM(long k, const string &P, vector<match_t> &matches, int min_len, int maxCount) const;
 
   // NOTE: min_len must be > 1
-  void findMAM(const string &P, vector<match_t> &matches, int min_len) const;
+  void findMAM(const string &P, vector<match_t> &matches, int min_len, int maxCount) const;
   inline bool is_leftmaximal(const string &P, long p1, long p2) const;
 
   // Maximal Almost-Unique Match (MAM). Match is unique in the indexed
@@ -228,19 +228,19 @@ struct sparseSA {
   // et. al. Note this is a "one-sided" query. It "streams" the query
   // P throught he index.  Consequently, repeats can occur in the
   // pattern P.
-  void MAM(const string &P, vector<match_t> &matches, int min_len) const{
+  void MAM(const string &P, vector<match_t> &matches, int min_len, int maxCount) const{
     if(K != 1) return;  // Only valid for full suffix array.
-    findMAM(P, matches, min_len);
+    findMAM(P, matches, min_len, maxCount);
   }
 
   // Find Maximal Exact Matches (MEMs)
-  void MEM(const string &P, vector<match_t> &matches, int min_len) const;
+  void MEM(const string &P, vector<match_t> &matches, int min_len, int maxCount) const;
 
   // Find Maximal Exact Matches (MEMs)
   void SMAM(const string &P, vector<match_t> &matches, int min_len, int maxCount) const;
 
   // Maximal Unique Match (MUM)
-  void MUM(const string &P, vector<match_t> &unique, int min_len) const;
+  void MUM(const string &P, vector<match_t> &unique, int min_len, int maxCount) const;
   
   //save index to files
   void save(const string &prefix);
