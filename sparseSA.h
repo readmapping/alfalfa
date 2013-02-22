@@ -110,9 +110,11 @@ struct sparseSA {
   long K; // suffix sampling, K = 1 every suffix, K = 2 every other suffix, K = 3, every 3rd sffix
   bool hasChild;
   bool hasSufLink;
+  int sparseMult;
   
   long index_size_in_bytes(){
       long indexSize = 0L;
+      indexSize += sizeof(sparseMult);
       indexSize += sizeof(hasSufLink);
       indexSize += sizeof(hasChild);
       indexSize += sizeof(K);
@@ -145,7 +147,8 @@ struct sparseSA {
   }
 
   // Constructor builds sparse suffix array.
-  sparseSA(string &S_, vector<string> &descr_, vector<long> &startpos_, bool __4column, long K_);
+  sparseSA(string &S_, vector<string> &descr_, vector<long> &startpos_, bool __4column, long K_, 
+  bool suflink_, bool child_);
 
   // Modified Kasai et all for LCP computation.
   void computeLCP();

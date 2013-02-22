@@ -13,6 +13,11 @@
 #include <string.h>
 #include "dp.h"
 
+enum mum_t { MUM, MAM, MEM, SMAM };
+static const int MINOPTIONCOUNT = 2;
+enum command_t {INDEX, MATCHES, ALN};
+enum orientation_t { PAIR_FR, PAIR_RF, PAIR_FF};
+
 //match options
 struct align_opt {
     dp_scores scores;
@@ -29,9 +34,9 @@ struct align_opt {
     bool noFW; 
     bool noRC;
     int print;
+    mum_t memType;
+    int sparseMult;
 };
-
-enum orientation_t { PAIR_FR, PAIR_RF, PAIR_FF};
 
 struct paired_opt {
     int minInsert;
@@ -45,10 +50,6 @@ struct paired_opt {
     orientation_t orientation;
 };
 
-enum mum_t { MUM, MAM, MEM, SMAM };
-static const int MINOPTIONCOUNT = 2;
-enum command_t {INDEX, MATCHES, ALN};
-
 struct mapOptions_t{//commentary + sort + constructor
     mapOptions_t(){ initOptions(); }
     void initOptions(){
@@ -56,7 +57,8 @@ struct mapOptions_t{//commentary + sort + constructor
         _4column = false;
         nucleotidesOnly = false;
         alnOptions.minMemLength = 20;
-        memType = SMAM;
+        alnOptions.memType = SMAM;
+        alnOptions.sparseMult = 1;
         alnOptions.noFW = alnOptions.noRC = false;
         alnOptions.errorPercent = 0.08;
         alnOptions.print = 0;
@@ -84,6 +86,8 @@ struct mapOptions_t{//commentary + sort + constructor
         unpairedQ = pair1 = pair2 = ref_fasta = outputName = "";
         command = ALN;
         saveIndex = false;
+        hasChild = true;
+        hasSuflink = false;
         index_prefix = indexLocation = "";
     }
     void printOptions(){
@@ -107,7 +111,7 @@ struct mapOptions_t{//commentary + sort + constructor
         cerr << "errors   \t\t\t" << alnOptions.errorPercent << endl;
         cerr << "min seed length\t\t\t" << alnOptions.minMemLength << endl;
         cerr << "fixed seed length\t\t\t" << (alnOptions.fixedMinLength ? "yes" : "no") << endl;
-        cerr << "type of seeds\t\t\t" << memType << endl;
+        cerr << "type of seeds\t\t\t" << alnOptions.memType << endl;
         cerr << "save seed finding\t\t\t" << (alnOptions.tryHarder ? "yes" : "no") << endl;
         cerr << "use other characters too\t\t" << (nucleotidesOnly ? "no" : "yes") << endl;
         cerr << "#alignments\t\t\t" << alnOptions.alignmentCount << endl;
@@ -146,13 +150,13 @@ struct mapOptions_t{//commentary + sort + constructor
     string ref_fasta;
     string index_prefix;
     bool saveIndex;
+    bool hasChild;
+    bool hasSuflink;
     string indexLocation;
     string outputName;
     bool _4column;//for MEM output
     //Sequence options
     bool nucleotidesOnly;
-    //MAM options
-    enum mum_t memType;
     //alignment options
     align_opt alnOptions;    
     //paired end options
@@ -180,6 +184,9 @@ enum {
     ARG_NO_OVERLAP,      //--no-overlap
     ARG_PAIR_MODE,       //--paired-mode
     ARG_SAVE_INDEX,      //--save
+    ARG_SEEDTYPE,         //--memtype
+    ARG_CHILD,         //--memtype
+    ARG_SUFLINK,         //--memtype
     ARG_VVERBOSE         //--vverbose
 };
 
@@ -217,7 +224,10 @@ static struct option long_options[] = {
     {(char*)"paired-mode",      required_argument, 0,            ARG_PAIR_MODE},
     {(char*)"index",            required_argument, 0,            'i'},
     {(char*)"prefix",           required_argument, 0,            'p'},
+    {(char*)"seedtype",         required_argument, 0,            ARG_SEEDTYPE},
     {(char*)"save",             required_argument, 0,            ARG_SAVE_INDEX},
+    {(char*)"child",            required_argument, 0,            ARG_CHILD},
+    {(char*)"suflink",          required_argument, 0,            ARG_SUFLINK},
     {(char*)0, 0, 0, 0} // terminator
 };
 
@@ -242,6 +252,8 @@ static void usageIndex(const string prog) {
           << "Note that the value needs to be lower than -L parameter in the ALN command[1]." << endl;
   cerr << "-p/--prefix (string/path)  prefix of the index names [reference-file name]" << endl;
   cerr << "--save (0 or 1)            save index to disk or not [1]" << endl;
+  cerr << "--child (0 or 1)           use sparse child array (useful for s>=3 and for MEMs)[1]" << endl;
+  cerr << "--suflink (0 or 1)         use suffix links (useful for s<=3 for MAM and SMAM)[1]" << endl;
   exit(1);
 }
 
@@ -266,11 +278,11 @@ static void usageAln(const string prog) {
   cerr << "ALIGNMENT OPTIONS " << endl;
   cerr << "-d/--errors (double)       percentage of errors allowed according to the edit distance [0.08]" << endl;
   cerr << "-L/--seedminlength (int)   minimum length of the seeds used [depending on errorPercent and read length, [min 20]" << endl;
+  cerr << "--seedtype (string)        type of seeds used, choice of MEM,MAM,MUM,SMAM [SMAM]." << endl;
   cerr << "-k/--alignments (int)      expected number of alignments required per strand per read [50]" << endl;
   cerr << "-T/--trials (int)          maximum number of times alignment is attempted before we give up [10]" << endl;
   cerr << "-C/--mincoverage (int)     minimum percent of bases of read the seeds have to cover [25]" << endl;
   cerr << "--tryharder                enable: 'try harder': when no seeds have been found, search using less stringent parameters" << endl;
-  //cerr << "--seedthreads (int)        number of threads for calculating the seeds [1]" << endl;
   cerr << "--nofw                     do not compute forward matches" << endl;
   cerr << "--norc                     do not compute reverse complement matches" << endl;
   cerr << "-n/--wildcards             treat Ns as wildcard characters" << endl;
@@ -299,6 +311,19 @@ static void usageAln(const string prog) {
   cerr << "--vverbose                 enable very verbose mode (not by default)" << endl;
   cerr << "-h/--help                  print this statement" << endl;
   exit(1);
+}
+
+static mum_t parseSeedType(string type){
+    if(type.compare("MEM")==0)
+        return MEM;
+    else if(type.compare("MAM")==0)
+        return MAM;
+    else if(type.compare("MUM")==0)
+        return MUM;
+    else if(type.compare("SMAM")==0)
+        return SMAM;
+    else
+        return SMAM;
 }
 
 //move process Command to main, 
@@ -368,6 +393,9 @@ inline void processParameters(int argc, char* argv[], mapOptions_t& opt, const s
                 case 'i': opt.indexLocation = optarg; break;
                 case 'p': opt.index_prefix = optarg; break;
                 case ARG_SAVE_INDEX: opt.saveIndex = atoi(optarg); break;
+                case ARG_CHILD: opt.hasChild = atoi(optarg); break;
+                case ARG_SUFLINK: opt.hasSuflink = atoi(optarg); break;
+                case ARG_SEEDTYPE: opt.alnOptions.memType = parseSeedType(optarg); break;
                 case -1: /* Done with options. */
                 break;
                 case 0: if (long_options[option_index].flag != 0) break;
@@ -387,6 +415,10 @@ inline void processParameters(int argc, char* argv[], mapOptions_t& opt, const s
         if(opt.command == INDEX){
             if(opt.saveIndex == false)
                 fprintf(stderr, "Warning, index will not be saved to memory! \n");
+            if(opt.hasChild && opt.hasSuflink)
+                fprintf(stderr, "Warning, having both child array and suffix link support is marginally useful and requires more memory! \n");
+            if(!opt.hasChild && opt.K>=3)
+                fprintf(stderr, "Warning no child array means much slower search times! \n");
         }
         if(opt.command == ALN && (opt.unpairedQ.empty() && (opt.pair1.empty() || opt.pair2.empty()))){
             fprintf(stderr, "ALFALFA requires query files (1 unpaired and/or 2 mate files \n");
@@ -394,6 +426,10 @@ inline void processParameters(int argc, char* argv[], mapOptions_t& opt, const s
         }
         if(opt.saveIndex && opt.index_prefix.empty())
                 opt.index_prefix = opt.ref_fasta;
+        if(opt.K > 1 && (opt.alnOptions.memType == MAM || opt.alnOptions.memType == MUM)){
+                fprintf(stderr, "MAM and MUM seeds are not supported with s>1\n");
+                exit(1);
+        }
         if(opt.alnOptions.print > 0)
             opt.printOptions();
     }

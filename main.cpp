@@ -295,7 +295,7 @@ int main(int argc, char* argv[]){
             //build index
             cerr << "building index with s = " << opt.K  << " ... "<< endl;
             clock_t start = clock();
-            sa = new sparseSA(ref, output.refdescr, output.startpos, opt._4column, opt.K);
+            sa = new sparseSA(ref, output.refdescr, output.startpos, opt._4column, opt.K, opt.hasSuflink, opt.hasChild);
             sa->construct();
             cerr << "building index: done" << endl;
             if(opt.saveIndex){
@@ -311,9 +311,32 @@ int main(int argc, char* argv[]){
         }
         else if(opt.command == ALN){
             //build or load index
-            sa = new sparseSA(ref, output.refdescr, output.startpos, opt._4column, opt.K);
+            sa = new sparseSA(ref, output.refdescr, output.startpos, opt._4column, opt.K, opt.hasSuflink, opt.hasChild);
             if(opt.indexLocation.empty() || !sa->load(opt.indexLocation)){
                 cerr << "building index with s = " << opt.K  << " ... "<< endl;
+                //adjust data structure to seed choice and sparseness
+                if((opt.alnOptions.memType == MAM || opt.alnOptions.memType == MUM) && opt.K>3){
+                    opt.hasChild = sa->hasChild = false;
+                    opt.hasSuflink = sa->hasSufLink = true;
+                    cerr << "because of MAM or MUM seeds, ESSA has suffix links and no child array" << endl;
+                }
+                else if(opt.alnOptions.memType == SMAM){
+                    if(opt.K >= 3){
+                        opt.hasChild = sa->hasChild = true;
+                        opt.hasSuflink = sa->hasSufLink = false;
+                        cerr << "because of SMAM seeds and s= " << opt.K << ", ESSA has child array and no suffix links" << endl;
+                    }
+                    else{
+                        opt.hasChild = sa->hasChild = true;
+                        opt.hasSuflink = sa->hasSufLink = false;
+                        cerr << "because of SMAM seeds and s= " << opt.K << ", ESSA has suffix links and no child array" << endl;
+                    }
+                }
+                else if(opt.alnOptions.memType == MEM){
+                    opt.hasChild = sa->hasChild = true;
+                    opt.hasSuflink = sa->hasSufLink = false;
+                    cerr << "because of MEM seeds, ESSA has child array and no suffix links" << endl;
+                }
                 clock_t start = clock();
                 sa->construct();
                 cerr << "building index: done" << endl;
@@ -326,10 +349,18 @@ int main(int argc, char* argv[]){
                 double cpu_time = (double)( end - start ) /CLOCKS_PER_SEC;
                 cerr << "time for building index structure: " << cpu_time << endl;
             }
+            //calculate skip parameter for MEMs
+            if(opt.alnOptions.memType == MEM){
+                if (opt.K >= 4) sa->sparseMult = (int) (opt.alnOptions.minMemLength - 10) / opt.K;
+                else sa->sparseMult = (int) (opt.alnOptions.minMemLength - 12) / opt.K;
+                opt.alnOptions.sparseMult = sa->sparseMult;
+                if(opt.alnOptions.print) cerr << "skip factor was set to " << opt.alnOptions.sparseMult << endl;
+            }
             if(opt.alnOptions.print>0){
                 cerr << "index has sparseness " << opt.K << endl;
                 cerr << "index uses suffix links? " << (sa->hasSufLink ? "yes" : "no") << endl;
                 cerr << "index uses child array? " << (sa->hasChild ? "yes" : "no") << endl;
+                cerr << "skip factor is set to " << sa->sparseMult << endl;
                 cerr << "INDEX SIZE IN BYTES: " << sa->index_size_in_bytes() << endl;
             }
             if(opt.outputName.empty()){

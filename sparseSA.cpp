@@ -37,10 +37,11 @@ extern "C" { void suffixsort(int *x, int *p, int n, int k, int l); };
 
 pthread_mutex_t cout_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-sparseSA::sparseSA(string &S_, vector<string> &descr_, vector<long> &startpos_, bool __4column, long K_) :
+sparseSA::sparseSA(string &S_, vector<string> &descr_, vector<long> &startpos_, bool __4column, long K_, bool _hasSufLink, bool _hasChild) :
   descr(descr_), startpos(startpos_), S(S_) {
   _4column = __4column;
-
+  hasSufLink = _hasSufLink;
+  hasChild = _hasChild;
   // Get maximum query sequence description length.
   maxdescrlen = 0;
   for(long i = 0; i < (long)descr.size(); i++) {
@@ -61,17 +62,7 @@ sparseSA::sparseSA(string &S_, vector<string> &descr_, vector<long> &startpos_, 
 
   // Adjust to "sampled" size.
   logN = (long)ceil(log(N/K) / log(2.0));
-
-  if(K >= 3){
-        hasChild = true;
-        hasSufLink = false;
-    }
-    else{
-        hasChild = false;
-        hasSufLink = true;
-    }
-
-    NKm1 = N/K-1;
+  NKm1 = N/K-1;
 }
 
 // Uses the algorithm of Kasai et al 2001 which was described in
@@ -253,7 +244,8 @@ bool sparseSA::load(const string &prefix){
 void sparseSA::construct(){
     if(K > 1) {
         long bucketNr = 1;
-        int *intSA = new int[N/K+1];  for(int i = 0; i < N/K; i++) intSA[i] = i; // Init SA.
+        int *intSA = new int[N/K+1];  
+        for(int i = 0; i < N/K; i++) intSA[i] = i; // Init SA.
         int* t_new = new int[N/K+1];
         long* BucketBegin = new long[256]; // array to save current bucket beginnings
         radixStep(t_new, intSA, bucketNr, BucketBegin, 0, N/K-1, 0); // start radix sort
@@ -452,7 +444,12 @@ void sparseSA::traverse_faster(const string &P,const long prefix, interval_t &cu
         if(cur.depth >= min_len) return;
         long c = prefix + cur.depth;
         bool intervalFound = c < (long) P.length();
-        if(intervalFound && cur.size() > 1)
+        int curLCP; //check if this is correct for root interval (unlikely case)
+        if (cur.start < CHILD[cur.end] && CHILD[cur.end] <= cur.end)
+            curLCP = LCP[CHILD[cur.end]];
+        else
+            curLCP = LCP[CHILD[cur.start]];
+        if (intervalFound && cur.size() > 1 && curLCP == cur.depth)
             intervalFound = top_down_child(P[c], cur);
         else if(intervalFound)
             intervalFound = P[c] == S[((long)SA[cur.start])+cur.depth];
@@ -598,31 +595,65 @@ void sparseSA::findMEM(long k, const string &P, vector<match_t> &matches, int mi
   interval_t xmi(0,N/K-1,0); // max match interval
 
   // Right-most match used to terminate search.
-  int min_lenK = min_len - (K-1);
+  int min_lenK = min_len - (sparseMult * K - 1);
 
   while( prefix <= (long)P.length() - (K-k)) {
-    traverse(P, prefix, mli, min_lenK);    // Traverse until minimum length matched.
+    if (hasChild)
+        traverse_faster(P, prefix, mli, min_lenK); // Traverse until minimum length matched.
+    else
+        traverse(P, prefix, mli, min_lenK);    // Traverse until minimum length matched.
     if(mli.depth > xmi.depth) xmi = mli;
-    if(mli.depth <= 1) { mli.reset(N/K-1); xmi.reset(N/K-1); prefix+=K; continue; }
+    if(mli.depth <= 1) { mli.reset(N/K-1); xmi.reset(N/K-1); prefix += sparseMult*K; continue; }
 
     if(mli.depth >= min_lenK) {
-      traverse(P, prefix, xmi, P.length()); // Traverse until mismatch.
+      if (hasChild)
+          traverse_faster(P, prefix, xmi, P.length()); // Traverse until mismatch.
+      else
+          traverse(P, prefix, xmi, P.length()); // Traverse until mismatch.
       collectMEMs(P, prefix, mli, xmi, matches, min_len, print); // Using LCP info to find MEM length.
       // When using ISA/LCP trick, depth = depth - K. prefix += K.
-      prefix+=K;
-      if( suffixlink(mli) == false ) { mli.reset(N/K-1); xmi.reset(N/K-1); continue; }
-      suffixlink(xmi);
+      prefix += sparseMult*K;
+      if (!hasSufLink) {
+        mli.reset(N / K - 1);
+        xmi.reset(N / K - 1);
+        continue;
+      }
+      else{
+        int i = 0;
+        bool succes = true;
+        while (i < sparseMult && (succes = suffixlink(mli))) {
+            suffixlink(xmi);
+            i++;
+        }
+        if (!succes) {
+            mli.reset(N / K - 1);
+            xmi.reset(N / K - 1);
+            continue;
+        }
+      }
     }
     else {
-      // When using ISA/LCP trick, depth = depth - K. prefix += K.
-      prefix+=K;
-      if( suffixlink(mli) == false ) { mli.reset(N/K-1); xmi.reset(N/K-1); continue; }
-      xmi = mli;
+        // When using ISA/LCP trick, depth = depth - K. prefix += K.
+        prefix += sparseMult*K;
+        if (!hasSufLink) {
+            mli.reset(N / K - 1);
+            xmi.reset(N / K - 1);
+            continue;
+        } else {
+            int i = 0;
+            bool succes = true;
+            while (i < sparseMult && (succes = suffixlink(mli))) {
+                i++;
+            }
+            if (!succes) {
+                mli.reset(N / K - 1);
+                xmi.reset(N / K - 1);
+                continue;
+            }
+            xmi = mli;
+        }
     }
   }
-#ifndef NDEBUG
-  if(print) print_match(match_t(), matches);   // Clear buffered matches.
-#endif
 }
 
 
@@ -661,13 +692,10 @@ void sparseSA::collectMEMs(const string &P, long prefix, const interval_t mli,
 void sparseSA::find_Lmaximal(const string &P, long prefix, long i,
         long len, vector<match_t> &matches, int min_len, bool print) const {
   // Advance to the left up to K steps.
-  for(long k = 0; k < K; k++) {
+  for(long k = 0; k < sparseMult * K; k++) {
     // If we reach the end and the match is long enough, print.
     if(prefix == 0 || i == 0) {
       if(len >= (long) min_len) {
-#ifndef NDEBUG
-	if(print) print_match(match_t(i, prefix, len), matches);
-#endif
 	matches.push_back(match_t(i, prefix, len));
       }
       return; // Reached mismatch, done.
@@ -675,9 +703,6 @@ void sparseSA::find_Lmaximal(const string &P, long prefix, long i,
     else if(P[prefix-1] != S[i-1]){
       // If we reached a mismatch, print the match if it is long enough.
       if(len >= (long) min_len) {
-#ifndef NDEBUG
-	if(print) print_match(match_t(i, prefix, len), matches);
-#endif
 	matches.push_back(match_t(i, prefix, len));
       }
       return; // Reached mismatch, done.
@@ -732,16 +757,16 @@ void sparseSA::findMAM(const string &P, vector<match_t> &matches, int min_len, b
   long prefix = 0;
   while(prefix < (long)P.length()) {
     // Traverse SA top down until mismatch or full string is matched.
-    traverse(P, prefix, cur, P.length());
+    if (hasChild)
+        traverse_faster(P, prefix, cur, P.length());
+    else
+        traverse(P, prefix, cur, P.length());
     if(cur.depth <= 1) { cur.depth = 0; cur.start = 0; cur.end = N-1; prefix++; continue; }
     if(cur.depth >= min_len) {//cur.size() == 1 &&
         for(int i = 0; i < cur.size(); i++){
           if(is_leftmaximal(P, prefix, SA[cur.start+i])) {
             // Yes, it's a MAM.
             match_t m; m.ref = SA[cur.start+i]; m.query = prefix; m.len = cur.depth;
-#ifndef NDEBUG
-            if(print) print_match(m);
-#endif
             matches.push_back(m);
           }
         }
@@ -889,17 +914,41 @@ void sparseSA::findSMAM(long k, const string &P, vector<match_t> &matches, int m
         traverse_faster(P, prefix, xmi, P.length());
     else
         traverse(P, prefix, xmi, P.length());// Traverse until mismatch.
-    if(xmi.depth <= 1) { xmi.reset(N/K-1); prefix+=K; continue; }
+    if(xmi.depth <= 1) { xmi.reset(N/K-1); prefix += sparseMult*K; continue; }
     if(xmi.depth >= min_lenK) {
         collectSMAMs(P, prefix, mli, xmi, matches, min_len, maxCount, print); // Using LCP info to find MEM length.
         // When using ISA/LCP trick, depth = depth - K. prefix += K.
-        prefix+=K;
-        if( !hasSufLink || suffixlink(xmi) == false ) { xmi.reset(N/K-1); continue; }
+        prefix += sparseMult*K;
+        if (!hasSufLink) {
+            xmi.reset(N / K - 1);
+            continue;
+        } else {
+            int i = 0;
+            bool succes = true;
+            while (i < sparseMult && (succes = suffixlink(xmi)))
+                i++;
+            if (!succes) {
+                xmi.reset(N / K - 1);
+                continue;
+            }
+        }
     }
     else {
       // When using ISA/LCP trick, depth = depth - K. prefix += K.
-      prefix+=K;
-      if( !hasSufLink || suffixlink(xmi) == false ) { xmi.reset(N/K-1); continue; }
+      prefix += sparseMult*K;
+      if (!hasSufLink) {
+            xmi.reset(N / K - 1);
+            continue;
+      } else {
+        int i = 0;
+        bool succes = true;
+        while (i < sparseMult && (succes = suffixlink(xmi)))
+            i++;
+        if (!succes) {
+            xmi.reset(N / K - 1);
+            continue;
+        }
+      }
     }
   }
 #ifndef NDEBUG
