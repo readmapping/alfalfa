@@ -11,6 +11,7 @@
 #include <getopt.h>
 #include <stdio.h>
 #include <string.h>
+#include <limits.h>
 #include "dp.h"
 
 enum mum_t { MUM, MAM, MEM, SMAM };
@@ -24,11 +25,11 @@ struct align_opt {
     bool noClipping;
     double errorPercent;
     int minMemLength;
+    int maxSeedCandidates;
     int alignmentCount;
     int maxTrial;
     int minCoverage;
     bool tryHarder;
-    bool fixedMinLength;
     bool unique;
     bool noFW; 
     bool noRC;
@@ -55,7 +56,7 @@ struct mapOptions_t{//commentary + sort + constructor
         K = 1; query_threads = 1;
         nucleotidesOnly = false;
         alnOptions.minMemLength = 20;
-        alnOptions.memType = SMAM;
+        alnOptions.memType = MEM;
         alnOptions.sparseMult = 1;
         alnOptions.noFW = alnOptions.noRC = false;
         alnOptions.errorPercent = 0.08;
@@ -69,8 +70,8 @@ struct mapOptions_t{//commentary + sort + constructor
         alnOptions.maxTrial = 10;
         alnOptions.minCoverage = 25;
         alnOptions.tryHarder = false;
-        alnOptions.fixedMinLength = false;
         alnOptions.unique = false;
+        alnOptions.maxSeedCandidates = -1;
         pairedOpt.contain = true;
         pairedOpt.discordant = true;
         pairedOpt.dovetail = false;
@@ -107,7 +108,7 @@ struct mapOptions_t{//commentary + sort + constructor
         cerr << "threads  \t\t\t" << query_threads << endl;
         cerr << "errors   \t\t\t" << alnOptions.errorPercent << endl;
         cerr << "min seed length\t\t\t" << alnOptions.minMemLength << endl;
-        cerr << "fixed seed length\t\t\t" << (alnOptions.fixedMinLength ? "yes" : "no") << endl;
+        cerr << "max seed candidates\t\t\t" << alnOptions.maxSeedCandidates << endl;
         cerr << "type of seeds\t\t\t" << alnOptions.memType << endl;
         cerr << "save seed finding\t\t\t" << (alnOptions.tryHarder ? "yes" : "no") << endl;
         cerr << "use other characters too\t\t" << (nucleotidesOnly ? "no" : "yes") << endl;
@@ -159,7 +160,7 @@ struct mapOptions_t{//commentary + sort + constructor
     paired_opt pairedOpt;
 };
 
-static const char * short_options = "i:s:k:L:np:q:d:m:u:o:e:C:T:hx:U:1:2:S:I:X:";
+static const char * short_options = "i:s:k:L:np:q:d:m:u:o:e:C:T:hx:U:1:2:S:I:X:M:";
 
 //Reads from - to ; trim ; phred quals
 enum {
@@ -222,6 +223,7 @@ static struct option long_options[] = {
     {(char*)"save",             required_argument, 0,            ARG_SAVE_INDEX},
     {(char*)"child",            required_argument, 0,            ARG_CHILD},
     {(char*)"suflink",          required_argument, 0,            ARG_SUFLINK},
+    {(char*)"seedmaxcand",      required_argument, 0,            'M'},
     {(char*)0, 0, 0, 0} // terminator
 };
 
@@ -253,11 +255,11 @@ static void usageIndex(const string prog) {
 
 static void usageAln(const string prog) {
   cerr << "Usage: " << prog << " aln [options]" << endl;
-  cerr << "the options for are ordered by functionality: " << endl;
+  cerr << "the options are ordered by functionality: " << endl;
   cerr << endl;
   cerr << "I/O OPTIONS " << endl;
-  cerr << "-x (string)                reference sequence in mult-fasta" << endl;
-  cerr << "-i/--index (string)        prefix or path of the index to load, if not set, index will first be calculated" << endl;
+  cerr << "-x (string)                reference sequence in multi-fasta" << endl;
+  cerr << "-i/--index (string)        prefix or path of the index to load. If not set, index will first be calculated" << endl;
   cerr << "-1                         query file with first mates (fasta or fastq)" << endl;
   cerr << "-2                         query file with second mates (fasta or fastq)" << endl;
   cerr << "-U                         query file with unpaired reads (fasta or fastq)" << endl;
@@ -271,7 +273,8 @@ static void usageAln(const string prog) {
   cerr << endl;
   cerr << "ALIGNMENT OPTIONS " << endl;
   cerr << "-d/--errors (double)       percentage of errors allowed according to the edit distance [0.08]" << endl;
-  cerr << "-L/--seedminlength (int)   minimum length of the seeds used [depending on errorPercent and read length, [min 20]" << endl;
+  cerr << "-L/--seedminlength (int)   minimum length of the seeds used [INT_MAX because seedmaxcand is used]" << endl;
+  cerr << "-M/--seedmaxcand (int)     max number of right max matches per query index [max(-k,20)]" << endl;
   cerr << "--seedtype (string)        type of seeds used, choice of MEM,MAM,MUM,SMAM [SMAM]." << endl;
   cerr << "-k/--alignments (int)      expected number of alignments required per strand per read [50]" << endl;
   cerr << "-T/--trials (int)          maximum number of times alignment is attempted before we give up [10]" << endl;
@@ -355,7 +358,8 @@ inline void processParameters(int argc, char* argv[], mapOptions_t& opt, const s
                 case 'S': opt.outputName = optarg; break;
                 case 's': opt.K = atoi(optarg); break;
                 case 'k': opt.alnOptions.alignmentCount = atoi(optarg); break;
-                case 'L': opt.alnOptions.minMemLength = atoi(optarg); opt.alnOptions.fixedMinLength = true; break;
+                case 'L': opt.alnOptions.minMemLength = atoi(optarg); break;
+                case 'M': opt.alnOptions.maxSeedCandidates = atoi(optarg); break;
                 case ARG_NOFW: opt.alnOptions.noFW = 1; break;
                 case ARG_NORC: opt.alnOptions.noRC = 1; break;
                 case 'n': opt.nucleotidesOnly = 1; break;
@@ -395,6 +399,9 @@ inline void processParameters(int argc, char* argv[], mapOptions_t& opt, const s
                 default: opt.command == INDEX ? usageIndex(program) : usageAln(program);
                 throw 1;
             }
+        }
+        if(opt.alnOptions.maxSeedCandidates == -1){
+           opt.alnOptions.maxSeedCandidates = max(opt.alnOptions.alignmentCount,5);
         }
         if(opt.alnOptions.alignmentCount < 1){
             opt.alnOptions.alignmentCount = 1;

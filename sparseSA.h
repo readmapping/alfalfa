@@ -89,7 +89,7 @@ struct interval_t {
   interval_t(long s, long e, long d): start(s), end(e), depth(d) {}
   void reset(long e) { start = 0; end = e; depth = 0; }
   long start, end, depth;
-  long size() { return end - start + 1; }
+  long size() const { return end - start + 1; }
 };
 
 struct sparseSA {
@@ -176,8 +176,8 @@ struct sparseSA {
 
   // Traverse pattern P starting from a given prefix and interval
   // until mismatch or min_len characters reached.
-  inline void traverse(const string &P, long prefix, interval_t &cur, int min_len) const;
-  inline void traverse_faster(const string &P,const long prefix, interval_t &cur, int min_len) const;
+  inline void traverse(const string &P, long prefix, interval_t &cur, int min_len, int maxCount) const;
+  inline void traverse_faster(const string &P,const long prefix, interval_t &cur, int min_len, int maxCount) const;
 
   // Simulate a suffix link.
   inline bool suffixlink(interval_t &m) const;

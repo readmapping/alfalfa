@@ -48,7 +48,7 @@ using namespace std;
 //mapper options
 static const string PROG = "ALFALFA";
 static const string SAM_VERSION = "1.3";
-static const string PROG_VERSION = "0.6.3.2";
+static const string PROG_VERSION = "0.6.3.3";
 static const string NOT_AVAILABLE = "*";
 static const long INIT_DP_DIMENSION = 2048;
 
@@ -351,8 +351,9 @@ int main(int argc, char* argv[]){
             }
             //calculate skip parameter for MEMs
             if(opt.alnOptions.memType == MEM){
-                if (opt.K >= 4) sa->sparseMult = (int) (opt.alnOptions.minMemLength - 10) / opt.K;
-                else sa->sparseMult = (int) (opt.alnOptions.minMemLength - 12) / opt.K;
+                int minLength = opt.alnOptions.minMemLength;
+                if (opt.K >= 4) sa->sparseMult = (int) (minLength - 10) / opt.K;
+                else sa->sparseMult = (int) (minLength - 12) / opt.K;
                 opt.alnOptions.sparseMult = sa->sparseMult;
                 if(opt.alnOptions.print) cerr << "skip factor was set to " << opt.alnOptions.sparseMult << endl;
             }

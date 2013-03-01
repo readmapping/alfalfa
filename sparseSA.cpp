@@ -421,8 +421,8 @@ bool sparseSA::search(const string &P, long &start, long &end) const{
 
 // Traverse pattern P starting from a given prefix and interval
 // until mismatch or min_len characters reached.
-void sparseSA::traverse(const string &P, long prefix, interval_t &cur, int min_len) const {
-  if(cur.depth >= min_len) return;
+void sparseSA::traverse(const string &P, long prefix, interval_t &cur, int min_len, int maxBranching) const {
+  if(cur.depth >= min_len || cur.size() <= maxBranching) return;
 
   while(prefix+cur.depth < (long)P.length()) {
     long start = cur.start; long end = cur.end;
@@ -433,15 +433,15 @@ void sparseSA::traverse(const string &P, long prefix, interval_t &cur, int min_l
     cur.depth += 1; cur.start = start; cur.end = end;
 
     // If we reach min_len, stop.
-    if(cur.depth == min_len) return;
+    if(cur.depth == min_len || cur.size() <= maxBranching) return;
   }
 }
 
 // Traverse pattern P starting from a given prefix and interval
 // until mismatch or min_len characters reached.
 // Uses the child table for faster traversal
-void sparseSA::traverse_faster(const string &P,const long prefix, interval_t &cur, int min_len) const{
-        if(cur.depth >= min_len) return;
+void sparseSA::traverse_faster(const string &P,const long prefix, interval_t &cur, int min_len, int maxBranching) const{
+        if(cur.depth >= (long) min_len || cur.size() <= maxBranching) return;
         long c = prefix + cur.depth;
         bool intervalFound = c < (long) P.length();
         int curLCP; //check if this is correct for root interval (unlikely case)
@@ -455,7 +455,7 @@ void sparseSA::traverse_faster(const string &P,const long prefix, interval_t &cu
             intervalFound = P[c] == S[((long)SA[cur.start])+cur.depth];
         bool mismatchFound = false;
         while(intervalFound && !mismatchFound &&
-                c < (long) P.length() && cur.depth < (long) min_len){
+                c < (long) P.length() && (cur.depth < (long) min_len && cur.size() > maxBranching)){
             c++;
             cur.depth++;
             if(cur.start != cur.end){
@@ -467,7 +467,7 @@ void sparseSA::traverse_faster(const string &P,const long prefix, interval_t &cu
                 else
                     childLCP = LCP[CHILD[cur.start]];
                 int minimum = min(childLCP,min_len);
-                //match along branch
+                //match along branch, note: no cur.size() restriction as this does not change 
                 while(!mismatchFound && c < (long) P.length() && cur.depth < (long) minimum){
                     mismatchFound = S[((long)SA[cur.start])+cur.depth] != P[c];
                     c++;
@@ -599,18 +599,18 @@ void sparseSA::findMEM(long k, const string &P, vector<match_t> &matches, int mi
 
   while( prefix <= (long)P.length() - (K-k)) {
     if (hasChild)
-        traverse_faster(P, prefix, mli, min_lenK); // Traverse until minimum length matched.
+        traverse_faster(P, prefix, mli, min_lenK, -1); // Traverse until minimum length matched.
     else
-        traverse(P, prefix, mli, min_lenK);    // Traverse until minimum length matched.
+        traverse(P, prefix, mli, min_lenK, -1);    // Traverse until minimum length matched.
     if(mli.depth > xmi.depth) xmi = mli;
     if(mli.depth <= 1) { mli.reset(N/K-1); xmi.reset(N/K-1); prefix += sparseMult*K; continue; }
 
     if(mli.depth >= min_lenK) {
       if (hasChild)
-          traverse_faster(P, prefix, xmi, P.length()); // Traverse until mismatch.
+          traverse_faster(P, prefix, xmi, P.length(), -1); // Traverse until mismatch.
       else
-          traverse(P, prefix, xmi, P.length()); // Traverse until mismatch.
-      collectMEMs(P, prefix, mli, xmi, matches, min_len, maxCount); // Using LCP info to find MEM length.
+          traverse(P, prefix, xmi, P.length(), -1); // Traverse until mismatch.
+      collectMEMs(P, prefix, mli, xmi, matches, min_len, sparseMult*maxCount); // Using LCP info to find MEM length.
       // When using ISA/LCP trick, depth = depth - K. prefix += K.
       prefix += sparseMult*K;
       if (!hasSufLink) {
@@ -662,11 +662,11 @@ void sparseSA::findMEM(long k, const string &P, vector<match_t> &matches, int mi
 void sparseSA::collectMEMs(const string &P, long prefix, const interval_t mli,
         interval_t xmi, vector<match_t> &matches, int min_len, int maxCount) const {
   // All of the suffixes in xmi's interval are right maximal.
-  long xmiEnd = min(xmi.end,xmi.start+sparseMult*maxCount-1);
+  long xmiEnd = min(xmi.end,xmi.start+maxCount-1);
   for(long i = xmi.start; i <= xmiEnd; i++) find_Lmaximal(P, prefix, SA[i], xmi.depth, matches, min_len);
 
   if(mli.start == xmi.start && mli.end == xmi.end) return;
-  long allowedCount = sparseMult*maxCount - (xmi.end-xmi.start+1);
+  long allowedCount = maxCount - xmi.size();
   while(xmi.depth >= mli.depth && allowedCount>0) {
     // Attempt to "unmatch" xmi using LCP information.
     if(xmi.end+1 < N/K) xmi.depth = max(LCP[xmi.start], LCP[xmi.end+1]);
@@ -698,16 +698,12 @@ void sparseSA::find_Lmaximal(const string &P, long prefix, long i,
   for(long k = 0; k < sparseMult * K; k++) {
     // If we reach the end and the match is long enough, print.
     if(prefix == 0 || i == 0) {
-      if(len >= (long) min_len) {
 	matches.push_back(match_t(i, prefix, len));
-      }
       return; // Reached mismatch, done.
     }
     else if(P[prefix-1] != S[i-1]){
       // If we reached a mismatch, print the match if it is long enough.
-      if(len >= (long) min_len) {
 	matches.push_back(match_t(i, prefix, len));
-      }
       return; // Reached mismatch, done.
     }
     prefix--; i--; len++; // Continue matching.
@@ -722,12 +718,12 @@ void sparseSA::findMAM(const string &P, vector<match_t> &matches, int min_len, i
   while(prefix < (long)P.length()) {
     // Traverse SA top down until mismatch or full string is matched.
     if (hasChild)
-        traverse_faster(P, prefix, cur, P.length());
+        traverse_faster(P, prefix, cur, P.length(), -1);
     else
-        traverse(P, prefix, cur, P.length());
+        traverse(P, prefix, cur, P.length(), -1);
     if(cur.depth <= 1) { cur.depth = 0; cur.start = 0; cur.end = N-1; prefix++; continue; }
     if(cur.depth >= min_len) {//cur.size() == 1 &&
-        for(int i = 0; i < min(cur.size(),(long) sparseMult*maxCount); i++){
+        for(int i = 0; i < min(cur.size(),(long) maxCount); i++){
           if(is_leftmaximal(P, prefix, SA[cur.start+i])) {
             // Yes, it's a MAM.
             match_t m; m.ref = SA[cur.start+i]; m.query = prefix; m.len = cur.depth;
@@ -739,7 +735,7 @@ void sparseSA::findMAM(const string &P, vector<match_t> &matches, int min_len, i
       cur.depth = cur.depth-1;
       cur.start = ISA[SA[cur.start] + 1];
       cur.end = ISA[SA[cur.end] + 1];
-      prefix++;
+      prefix++;//next line shows that this is not updated for K>1
       if( cur.depth == 0 || expand_link(cur) == false ) { cur.depth = 0; cur.start = 0; cur.end = N-1; break; }
     } while(cur.depth > 0 && cur.size() == 1);
   }
@@ -802,8 +798,7 @@ void sparseSA::MEM(const string &P, vector<match_t> &matches, int min_len, int m
 void sparseSA::collectSMAMs(const string &P, long prefix,
         const interval_t mli, interval_t xmi, vector<match_t> &matches, int min_len, int maxCount) const {
   // All of the suffixes in xmi's interval are right maximal.
-  //if(xmi.size() > maxCount ) return;// --> many long matches is ok, do not have to be unique!!!
-  long upperLimit = xmi.size() < (long) sparseMult*maxCount ? xmi.end : xmi.start + (long) sparseMult*maxCount-1;
+  long upperLimit = xmi.size() < (long) maxCount ? xmi.end : xmi.start + (long) maxCount-1;
   for(long i = xmi.start; i <= upperLimit; i++) find_Lmaximal(P, prefix, SA[i], xmi.depth, matches, min_len);
 }
 
@@ -820,12 +815,12 @@ void sparseSA::findSMAM(long k, const string &P, vector<match_t> &matches, int m
 
   while( prefix <= (long)P.length() - (K-k)) {
     if(hasChild) 
-        traverse_faster(P, prefix, xmi, P.length());
+        traverse_faster(P, prefix, xmi, P.length(), -1);
     else
-        traverse(P, prefix, xmi, P.length());// Traverse until mismatch.
+        traverse(P, prefix, xmi, P.length(), -1);// Traverse until mismatch.
     if(xmi.depth <= 1) { xmi.reset(N/K-1); prefix += sparseMult*K; continue; }
-    if(xmi.depth >= min_lenK) {
-        collectSMAMs(P, prefix, mli, xmi, matches, min_len, maxCount); // Using LCP info to find MEM length.
+    if(xmi.depth >= min_lenK || xmi.size() <= sparseMult*maxCount) {//less restriction seems to give best results
+        collectSMAMs(P, prefix, mli, xmi, matches, min_len, sparseMult*maxCount); // Using LCP info to find MEM length.
         // When using ISA/LCP trick, depth = depth - K. prefix += K.
         prefix += sparseMult*K;
         if (!hasSufLink) {

@@ -27,21 +27,21 @@
 
 #include "mapper.h"
 
-bool compMatches(const match_t i, const match_t j){
+bool compMatches(const match_t & i, const match_t & j){
     return (i.ref < j.ref || (i.ref == j.ref && i.query < j.query));
     //return (i.query < j.query || (i.query == j.query && i.ref < j.ref));
 }
 
-bool compMatchesQuery(const match_t i,const match_t j){
+bool compMatchesQuery(const match_t & i,const match_t & j){
     //return (i.ref < j.ref || (i.ref == j.ref && i.query < j.query));
     return (i.query < j.query || (i.query == j.query && i.ref < j.ref));
 }
 
-bool compIntervals(const lis_t i,const lis_t j){
+bool compIntervals(const lis_t & i,const lis_t & j){
     return (i.len > j.len || (i.len == j.len && i.begin < j.begin));
 }
 
-bool compIntervalsRef(const lis_t i,const lis_t j){
+bool compIntervalsRef(const lis_t & i,const lis_t & j){
     return compMatches(i.matches->at(i.begin), j.matches->at(j.begin));
 }
 
@@ -49,7 +49,7 @@ bool compAlignmentScore(const alignment_t * i,const alignment_t * j){
     return (i->alignmentScore > j->alignmentScore || (i->alignmentScore == j->alignmentScore && i->globPos < j->globPos));
 }
 
-bool compAlignmentAndScore(const lis_t i,const lis_t j){
+bool compAlignmentAndScore(const lis_t & i,const lis_t & j){
     return (i.extended&&!j.extended )|| 
             ((i.extended && j.extended ) && 
             (i.alignment->alignmentScore > j.alignment->alignmentScore 
@@ -72,8 +72,7 @@ void postProcess(vector<match_t> &matches){
     sort(matches.begin(),matches.end(), compMatches);
 }
 
-void calculateSeeds(const sparseSA& sa, const string& P, int min_len, int alignmentCount, vector<match_t>& matches, bool tryHarder, mum_t memType){
-    int maxBranchWidth = max(alignmentCount,20);
+void calculateSeeds(const sparseSA& sa, const string& P, int min_len, int maxBranchWidth, vector<match_t>& matches, bool tryHarder, mum_t memType){
     if(memType == SMAM)
         sa.SMAM(P, matches, min_len, maxBranchWidth);
     else if(memType == MEM)
@@ -357,14 +356,14 @@ void inexactMatch(const sparseSA& sa, dynProg& dp_, read_t & read,const align_op
     if(!fwStrand)
         P = read.rcSequence;
     int min_len = alnOptions.minMemLength;
-    if(!alnOptions.fixedMinLength && Plength/editDist > min_len){
+    if(Plength/editDist > min_len){
         min_len = Plength/editDist;
         if(print) cerr << "min length adjusted to " << min_len << endl;
     }
     vector<match_t> matches;
     //calc seeds
     if(print) cerr << "calculate seeds" << endl;
-    calculateSeeds(sa, P, min_len, alnOptions.alignmentCount/2, matches, alnOptions.tryHarder, alnOptions.memType);
+    calculateSeeds(sa, P, min_len, alnOptions.maxSeedCandidates, matches, alnOptions.tryHarder, alnOptions.memType);
     if(print) cerr << "found " << matches.size() << " seeds"<< endl;
     //sort matches
     if(matches.size()>0){
@@ -426,7 +425,7 @@ void unpairedMatch(const sparseSA& sa, dynProg& dp_, read_t & read,const align_o
     long Plength = (long) P.length();
     long editDist = (long)(alnOptions.errorPercent*Plength)+1;
     int min_len = alnOptions.minMemLength;
-    if(!alnOptions.fixedMinLength && Plength/editDist > min_len){
+    if(Plength/editDist > min_len){
         min_len = Plength/editDist;
         if(print) cerr << "min length adjusted to " << min_len << endl;
     }
@@ -435,11 +434,11 @@ void unpairedMatch(const sparseSA& sa, dynProg& dp_, read_t & read,const align_o
     //calc seeds
     if(print) cerr << "calculate seeds" << endl;
     if(!alnOptions.noFW){
-        calculateSeeds(sa, P, min_len, alnOptions.alignmentCount, matches, alnOptions.tryHarder, alnOptions.memType);
+        calculateSeeds(sa, P, min_len, alnOptions.maxSeedCandidates, matches, alnOptions.tryHarder, alnOptions.memType);
     }
     if(print) cerr << "found " << matches.size() << " seeds on forward direction"<< endl;
     if(!alnOptions.noRC){
-        calculateSeeds(sa, Prc, min_len, alnOptions.alignmentCount, matchesRC, alnOptions.tryHarder, alnOptions.memType);
+        calculateSeeds(sa, Prc, min_len, alnOptions.maxSeedCandidates, matchesRC, alnOptions.tryHarder, alnOptions.memType);
     }
     if(print) cerr << "found " << matchesRC.size() << " seeds on reverse direction"<< endl;
     //sort matches
@@ -878,8 +877,8 @@ void pairedMatch3(const sparseSA& sa, dynProg& dp_, read_t & mate1, read_t & mat
     long editDistM2 = (long)(alnOptions.errorPercent*M2length)+1;
     //Calc seeds for first direction (put this in separate function for each direction
     if(print) cerr << "calculate seeds for mate 1 and 2 in first direction" << endl;
-    calculateSeeds(sa, mate1FWfirst ? mate1.sequence : mate1.rcSequence, min_len, alnOptions.alignmentCount, firstmatchesM1, alnOptions.tryHarder, alnOptions.memType);
-    calculateSeeds(sa, mate2FWfirst ? mate2.sequence : mate2.rcSequence, min_len, alnOptions.alignmentCount, firstmatchesM2, alnOptions.tryHarder, alnOptions.memType);
+    calculateSeeds(sa, mate1FWfirst ? mate1.sequence : mate1.rcSequence, min_len, alnOptions.maxSeedCandidates, firstmatchesM1, alnOptions.tryHarder, alnOptions.memType);
+    calculateSeeds(sa, mate2FWfirst ? mate2.sequence : mate2.rcSequence, min_len, alnOptions.maxSeedCandidates, firstmatchesM2, alnOptions.tryHarder, alnOptions.memType);
     if(print) cerr << "found " << firstmatchesM1.size() << " seeds for mate 1 and " << firstmatchesM2.size() << " seeds for mate 2" << endl;
     if(firstmatchesM1.size()>0 && firstmatchesM2.size()>0){
         //Calc LIS intervals
@@ -894,8 +893,8 @@ void pairedMatch3(const sparseSA& sa, dynProg& dp_, read_t & mate1, read_t & mat
     //Do the same for other direction if necessary
     if(concordant < alnOptions.alignmentCount){
         if(print) cerr << "calculate seeds for mate 1 and 2 in second direction" << endl;
-        calculateSeeds(sa, mate1FWfirst ? mate1.rcSequence : mate1.sequence, min_len, alnOptions.alignmentCount, secondmatchesM1, alnOptions.tryHarder, alnOptions.memType);
-        calculateSeeds(sa, mate2FWfirst ? mate2.rcSequence : mate2.sequence, min_len, alnOptions.alignmentCount, secondmatchesM2, alnOptions.tryHarder, alnOptions.memType);
+        calculateSeeds(sa, mate1FWfirst ? mate1.rcSequence : mate1.sequence, min_len, alnOptions.maxSeedCandidates, secondmatchesM1, alnOptions.tryHarder, alnOptions.memType);
+        calculateSeeds(sa, mate2FWfirst ? mate2.rcSequence : mate2.sequence, min_len, alnOptions.maxSeedCandidates, secondmatchesM2, alnOptions.tryHarder, alnOptions.memType);
         if(print) cerr << "found " << secondmatchesM1.size() << " seeds for mate 1 and " << secondmatchesM2.size() << " seeds for mate 2" << endl;
         if(secondmatchesM1.size()>0 && secondmatchesM2.size()>0){
             //Calc LIS intervals
@@ -1181,8 +1180,8 @@ void pairedMatch4(const sparseSA& sa, dynProg& dp_, read_t & mate1, read_t & mat
     long editDistM2 = (long)(alnOptions.errorPercent*M2length)+1;
     //Calc seeds for first direction (put this in separate function for each direction
     if(print) cerr << "calculate seeds for mate 1 and 2 in first direction" << endl;
-    calculateSeeds(sa, mate1FWfirst ? mate1.sequence : mate1.rcSequence, min_len, alnOptions.alignmentCount, firstmatchesM1, alnOptions.tryHarder, alnOptions.memType);
-    calculateSeeds(sa, mate2FWfirst ? mate2.sequence : mate2.rcSequence, min_len, alnOptions.alignmentCount, firstmatchesM2, alnOptions.tryHarder, alnOptions.memType);
+    calculateSeeds(sa, mate1FWfirst ? mate1.sequence : mate1.rcSequence, min_len, alnOptions.maxSeedCandidates, firstmatchesM1, alnOptions.tryHarder, alnOptions.memType);
+    calculateSeeds(sa, mate2FWfirst ? mate2.sequence : mate2.rcSequence, min_len, alnOptions.maxSeedCandidates, firstmatchesM2, alnOptions.tryHarder, alnOptions.memType);
     if(print) cerr << "found " << firstmatchesM1.size() << " seeds for mate 1 and " << firstmatchesM2.size() << " seeds for mate 2" << endl;
     if(firstmatchesM1.size()>0 && firstmatchesM2.size()>0){
         //Calc LIS intervals
@@ -1197,8 +1196,8 @@ void pairedMatch4(const sparseSA& sa, dynProg& dp_, read_t & mate1, read_t & mat
     //Do the same for other direction if necessary
     if(concordant < alnOptions.alignmentCount){
         if(print) cerr << "calculate seeds for mate 1 and 2 in second direction" << endl;
-        calculateSeeds(sa, mate1FWfirst ? mate1.rcSequence : mate1.sequence, min_len, alnOptions.alignmentCount, secondmatchesM1, alnOptions.tryHarder, alnOptions.memType);
-        calculateSeeds(sa, mate2FWfirst ? mate2.rcSequence : mate2.sequence, min_len, alnOptions.alignmentCount, secondmatchesM2, alnOptions.tryHarder, alnOptions.memType);
+        calculateSeeds(sa, mate1FWfirst ? mate1.rcSequence : mate1.sequence, min_len, alnOptions.maxSeedCandidates, secondmatchesM1, alnOptions.tryHarder, alnOptions.memType);
+        calculateSeeds(sa, mate2FWfirst ? mate2.rcSequence : mate2.sequence, min_len, alnOptions.maxSeedCandidates, secondmatchesM2, alnOptions.tryHarder, alnOptions.memType);
         if(print) cerr << "found " << secondmatchesM1.size() << " seeds for mate 1 and " << secondmatchesM2.size() << " seeds for mate 2" << endl;
         if(secondmatchesM1.size()>0 && secondmatchesM2.size()>0){
             //Calc LIS intervals
@@ -1386,11 +1385,11 @@ void pairedBowtie2(const sparseSA& sa,
     long editDistBase = (long)(alnOptions.errorPercent*Plength)+1;
     long editDistOther = (long)(alnOptions.errorPercent*Olength)+1;
     int min_len = alnOptions.minMemLength;
-    if(!alnOptions.fixedMinLength && Plength/editDistBase > min_len)
+    if(Plength/editDistBase > min_len)
         min_len = Plength/editDistBase;
     vector<match_t> matches;
     //calc seeds
-    calculateSeeds(sa, P, min_len, alnOptions.alignmentCount, matches, alnOptions.tryHarder, alnOptions.memType);
+    calculateSeeds(sa, P, min_len, alnOptions.maxSeedCandidates, matches, alnOptions.tryHarder, alnOptions.memType);
     //sort matches
     if(print) cerr << "found " << matches.size() << " seeds" << endl;
     if(matches.size()>0){
