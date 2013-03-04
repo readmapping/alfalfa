@@ -29,9 +29,39 @@
 #include <string>
 #include <algorithm>
 #include <limits>
+#include <limits.h>
 #include <iostream>
 
 using namespace std;
+
+static const long KMERSIZE = 10;
+static const long TABLESIZE = 1 << (2*KMERSIZE);//10 is k-mer size
+static const unsigned int BITADD[256] = { UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX,//0-9
+                                         UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX,//10-19
+                                         UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX,//20-29
+                                         UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX,//30-39
+                                         UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX,//40-49
+                                         UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX,//50-59
+                                         UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, 0,        UINT_MAX, 1,        UINT_MAX, UINT_MAX,//60-69 65:A, 67:C
+                                         UINT_MAX, 2,        UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX,//70-79 71:G
+                                         UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, 3,        UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX,//80-89 84:T
+                                         UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, 0,        UINT_MAX, 1,       //90-99 97:a, 99: c
+                                         UINT_MAX, UINT_MAX, UINT_MAX, 2,        UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX,//100-109 103:g
+                                         UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, 3,        UINT_MAX, UINT_MAX, UINT_MAX,//110-119 116:t
+                                         UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX,//120-129
+                                         UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX,//130-139
+                                         UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX,//140-149
+                                         UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX,//150-159
+                                         UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX,//160-169
+                                         UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX,//170-179
+                                         UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX,//180-189
+                                         UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX,//190-199
+                                         UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX,//200-209
+                                         UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX,//210-219
+                                         UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX,//220-229
+                                         UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX,//230-239
+                                         UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX,//240-249
+                                         UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX };//250-255
 
 // Stores the LCP array in an unsigned char (0-255).  Values larger
 // than or equal to 255 are stored in a sorted array.
@@ -83,10 +113,18 @@ struct match_t {
   long len; // length of match
 };
 
+struct saTuple_t {
+    saTuple_t(): left(0), right(0) {}
+    saTuple_t(unsigned int l, unsigned int r): left(l), right(r){}
+    unsigned int left;
+    unsigned int right;
+};
+
 // depth : [start...end]
 struct interval_t {
   interval_t(): start(1), end(0), depth(-1) {}
   interval_t(long s, long e, long d): start(s), end(e), depth(d) {}
+  interval_t(const interval_t & other): start(other.start), end(other.end), depth(other.depth) {}
   void reset(long e) { start = 0; end = e; depth = 0; }
   long start, end, depth;
   long size() const { return end - start + 1; }
@@ -111,6 +149,10 @@ struct sparseSA {
   bool hasSufLink;
   int sparseMult;
   
+  //fields for lookup table of sa intervals to a certain small depth
+  bool hasKmer;
+  vector<saTuple_t> KMR;
+  
   long index_size_in_bytes(){
       long indexSize = 0L;
       indexSize += sizeof(sparseMult);
@@ -131,6 +173,8 @@ struct sparseSA {
       indexSize += sizeof(ISA) + ISA.capacity()*sizeof(int);
       indexSize += sizeof(CHILD) + CHILD.capacity()*sizeof(int);
       indexSize += LCP.index_size_in_bytes();
+      indexSize += sizeof(hasKmer);
+      indexSize += sizeof(KMR) + KMR.capacity()*sizeof(saTuple_t);
       return indexSize;
   }
 
@@ -146,20 +190,17 @@ struct sparseSA {
 
   // Constructor builds sparse suffix array.
   sparseSA(string &S_, vector<string> &descr_, vector<long> &startpos_, long K_, 
-  bool suflink_, bool child_);
+  bool suflink_, bool child_, bool kmer_);
 
   // Modified Kasai et all for LCP computation.
   void computeLCP();
   //Modified Abouelhoda et all for CHILD Computation.
   void computeChild();
+  //build look-up table for sa intervals of kmers up to depth 10
+  void computeKmer();
 
   // Radix sort required to construct transformed text for sparse SA construction.
   void radixStep(int *t_new, int *SA, long &bucketNr, long *BucketBegin, long l, long r, long h);
-
-  // Prints match to cout.
-  void print_match(const match_t m) const;
-  void print_match(const match_t m, vector<match_t> &buf) const; // buffered version
-  void print_match(const string meta, vector<match_t> &buf, bool rc) const; // buffered version
 
   // Binary search for left boundry of interval.
   inline long bsearch_left(char c, long i, long s, long e) const;

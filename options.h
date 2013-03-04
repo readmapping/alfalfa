@@ -86,6 +86,7 @@ struct mapOptions_t{//commentary + sort + constructor
         saveIndex = false;
         hasChild = true;
         hasSuflink = false;
+        hasKmer = false;
         index_prefix = indexLocation = "";
     }
     void printOptions(){
@@ -150,6 +151,7 @@ struct mapOptions_t{//commentary + sort + constructor
     bool saveIndex;
     bool hasChild;
     bool hasSuflink;
+    bool hasKmer;
     string indexLocation;
     string outputName;
     //Sequence options
@@ -180,9 +182,10 @@ enum {
     ARG_NO_OVERLAP,      //--no-overlap
     ARG_PAIR_MODE,       //--paired-mode
     ARG_SAVE_INDEX,      //--save
-    ARG_SEEDTYPE,         //--memtype
-    ARG_CHILD,         //--memtype
-    ARG_SUFLINK,         //--memtype
+    ARG_SEEDTYPE,        //--seedtype
+    ARG_CHILD,           //--child
+    ARG_SUFLINK,         //--suflink
+    ARG_KMER,            //--kmer
     ARG_VVERBOSE         //--vverbose
 };
 
@@ -223,6 +226,7 @@ static struct option long_options[] = {
     {(char*)"save",             required_argument, 0,            ARG_SAVE_INDEX},
     {(char*)"child",            required_argument, 0,            ARG_CHILD},
     {(char*)"suflink",          required_argument, 0,            ARG_SUFLINK},
+    {(char*)"kmer",             required_argument, 0,            ARG_KMER},
     {(char*)"seedmaxcand",      required_argument, 0,            'M'},
     {(char*)0, 0, 0, 0} // terminator
 };
@@ -250,6 +254,7 @@ static void usageIndex(const string prog) {
   cerr << "--save (0 or 1)            save index to disk or not [1]" << endl;
   cerr << "--child (0 or 1)           use sparse child array (useful for s>=3 and for MEMs)[1]" << endl;
   cerr << "--suflink (0 or 1)         use suffix links (useful for s<=3 for MAM and SMAM)[1]" << endl;
+  cerr << "--kmer (0 or 1)            use a kmer table for the first 10 characters of the seed (speed-up?) [0]" << endl;
   exit(1);
 }
 
@@ -392,6 +397,7 @@ inline void processParameters(int argc, char* argv[], mapOptions_t& opt, const s
                 case ARG_SAVE_INDEX: opt.saveIndex = atoi(optarg); break;
                 case ARG_CHILD: opt.hasChild = atoi(optarg); break;
                 case ARG_SUFLINK: opt.hasSuflink = atoi(optarg); break;
+                case ARG_KMER: opt.hasKmer = atoi(optarg); break;
                 case ARG_SEEDTYPE: opt.alnOptions.memType = parseSeedType(optarg); break;
                 case -1: /* Done with options. */
                 break;

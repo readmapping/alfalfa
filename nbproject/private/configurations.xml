@@ -24,9 +24,6 @@
       </nativedebugger>
       <runprofile version="9">
         <runcommandpicklist>
-          <runcommandpicklistitem>"${OUTPUT_PATH}" check oracle -I C:/data/reference/razers_masonreads_600_2.sam -S C:/data/reference/mason_600_1.sam --otag XE</runcommandpicklistitem>
-          <runcommandpicklistitem>"${OUTPUT_PATH}" check oracle -I C:/data/reference/bowtie_masonreads_600_2.sam -S C:/data/reference/mason_600_1.sam --otag XE</runcommandpicklistitem>
-          <runcommandpicklistitem>"${OUTPUT_PATH}" index -s 4 -p C:/data/reference/drosophila/dmel -x C:/data/reference/drosophila/genome.fasta</runcommandpicklistitem>
           <runcommandpicklistitem>"${OUTPUT_PATH}" aln -s 4 -i C:/data/reference/drosophila/dmel -x C:/data/reference/drosophila/genome.fasta -U C:/data/reference/drosophila/reads_454/SRR034673.10k.fastq -S C:/data/reference/drosophila/output.sam --seedtype SMAM -L 20</runcommandpicklistitem>
           <runcommandpicklistitem>"${OUTPUT_PATH}" aln -s 4 -i C:/data/reference/drosophila/dmel -x C:/data/reference/drosophila/genome.fasta -U C:/data/reference/drosophila/reads_454/SRR034673.10k.fastq -S C:/data/reference/drosophila/output.sam --seedtype SMAM -L 20 --vverbose</runcommandpicklistitem>
           <runcommandpicklistitem>"${OUTPUT_PATH}" aln -s 4 -i C:/data/reference/drosophila/dmel -x C:/data/reference/drosophila/genome.fasta -U C:/data/reference/drosophila/reads_454/SRR034673.10k.fastq -S C:/data/reference/drosophila/output.sam --seedtype SMAM -L 20 --vverbose -k 1 2> C:/data/reference/drosophila/error.txt</runcommandpicklistitem>
@@ -35,8 +32,12 @@
 /reference/drosophila/output.sam -q 1 -s 4 -d 0.08 --seedtype SMAM -k 5 --vverbose</runcommandpicklistitem>
           <runcommandpicklistitem>"${OUTPUT_PATH}" aln -x C:/data/reference/drosophila/genome.fasta -i C:/data/reference/drosophila/dmel -U C:/data/reference/drosophila/reads_454/4999.fastq -S C:/data /reference/drosophila/output.sam -q 1 -s 4 -d 0.08 --seedtype SMAM -k 5 --vverbose</runcommandpicklistitem>
           <runcommandpicklistitem>"${OUTPUT_PATH}" aln -x C:/data/reference/drosophila/genome.fasta -i C:/data/reference/drosophila/dmel -U C:/data/reference/drosophila/reads_454/4999.fastq -S C:/data/reference/drosophila/output.sam -q 1 -s 4 -d 0.08 --seedtype SMAM -k 5 --vverbose</runcommandpicklistitem>
+          <runcommandpicklistitem>"${OUTPUT_PATH}" aln -x C:/data/reference/drosophila/genome.fasta -i C:/data/reference/drosophila/genome.fasta -U C:/data/reference/drosophila/reads_454/SRR034673.10k.fa
+stq -S C:/data/reference/drosophila/output.sam -q 1 -d 0.08 -L 40 -M 5 --seedtype MEM -s 4 -k 5 --kmer 1 --verbose</runcommandpicklistitem>
+          <runcommandpicklistitem>"${OUTPUT_PATH}" aln -x C:/data/reference/drosophila/genome.fasta -i C:/data/reference/drosophila/genome.fasta -U C:/data/reference/drosophila/reads_454/SRR034673.10k.fastq -S C:/data/reference/drosophila/output.sam -q 1 -d 0.08 -L 40 -M 5 --seedtype MEM -s 4 -k 5 --kmer 1 --verbose</runcommandpicklistitem>
+          <runcommandpicklistitem>"${OUTPUT_PATH}" aln -x C:/data/reference/drosophila/genome.fasta -i C:/data/reference/drosophila/genome.fasta -U C:/data/reference/drosophila/reads_454/SRR034673.10k.fastq -S C:/data/reference/drosophila/output.sam -q 1 -d 0.08 -L 40 -M 5 --seedtype MEM -s 4 -k 5 --kmer 1</runcommandpicklistitem>
         </runcommandpicklist>
-        <runcommand>"${OUTPUT_PATH}" aln -x C:/data/reference/drosophila/genome.fasta -i C:/data/reference/drosophila/dmel -U C:/data/reference/drosophila/reads_454/4999.fastq -S C:/data/reference/drosophila/output.sam -q 1 -s 4 -d 0.08 --seedtype SMAM -k 5 --vverbose</runcommand>
+        <runcommand>"${OUTPUT_PATH}" aln -x C:/data/reference/drosophila/genome.fasta -i C:/data/reference/drosophila/genome.fasta -U C:/data/reference/drosophila/reads_454/SRR034673.10k.fastq -S C:/data/reference/drosophila/output.sam -q 1 -d 0.08 -L 40 -M 5 --seedtype MEM -s 4 -k 5 --kmer 1</runcommand>
         <rundir></rundir>
         <buildfirst>true</buildfirst>
         <console-type>2</console-type>

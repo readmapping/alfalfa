@@ -37,10 +37,11 @@ extern "C" { void suffixsort(int *x, int *p, int n, int k, int l); };
 
 pthread_mutex_t cout_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-sparseSA::sparseSA(string &S_, vector<string> &descr_, vector<long> &startpos_, long K_, bool _hasSufLink, bool _hasChild) :
+sparseSA::sparseSA(string &S_, vector<string> &descr_, vector<long> &startpos_, long K_, bool _hasSufLink, bool _hasChild, bool _hasKmer) :
   descr(descr_), startpos(startpos_), S(S_) {
   hasSufLink = _hasSufLink;
   hasChild = _hasChild;
+  hasKmer = _hasKmer;
   sparseMult = 1;
   // Get maximum query sequence description length.
   maxdescrlen = 0;
@@ -128,6 +129,96 @@ void sparseSA::computeChild() {
     }
 }
 
+// Look-up table construction algorithm
+void sparseSA::computeKmer() {
+    stack<interval_t> intervalStack;
+    stack<unsigned int> indexStack;
+    
+    interval_t curInterval(0,N/K-1,0);
+    unsigned int curIndex = 0;
+    unsigned int newIndex = 0;
+    
+    intervalStack.push(interval_t(0,N/K-1,0));
+    indexStack.push(curIndex);
+    
+    while(!intervalStack.empty()){
+        curInterval = intervalStack.top(); intervalStack.pop();
+        curIndex = indexStack.top(); indexStack.pop();
+        if(curInterval.depth == KMERSIZE){
+            if(curIndex < TABLESIZE){
+                KMR[curIndex].left = curInterval.start;
+                KMR[curIndex].right = curInterval.end;
+            }
+        }
+        else{
+            if(hasChild){//similar to function traverse_faster
+                //walk up to depth KMERSIZE or new child
+                long curLCP; //max LCP of this interval
+                if (curInterval.start < CHILD[curInterval.end] && CHILD[curInterval.end] <= curInterval.end)
+                    curLCP = LCP[CHILD[curInterval.end]];
+                else
+                    curLCP = LCP[CHILD[curInterval.start]];
+                long minimum = min(curLCP,KMERSIZE);
+                newIndex = curIndex;
+                while(curInterval.depth < (long) minimum){
+                    newIndex = (newIndex << 2) | BITADD[S[SA[curInterval.start]+curInterval.depth]];
+                    curInterval.depth ++;
+                }
+                if(curInterval.depth == KMERSIZE){//reached KMERSIZE in the middle of an edge
+                    if(curIndex < TABLESIZE){
+                        KMR[newIndex].left = curInterval.start;
+                        KMR[newIndex].right = curInterval.end;
+                    }
+                }
+                else{//find child intervals
+                    long left = curInterval.start;
+                    long right = CHILD[curInterval.end];
+                    curIndex = newIndex;
+                    if(curInterval.start >= right || right > curInterval.end)
+                        right = CHILD[curInterval.start];
+                    //now left and right point to first child
+                    newIndex = (curIndex << 2) | BITADD[S[SA[left]+curInterval.depth]];
+                    if(newIndex < TABLESIZE){
+                        intervalStack.push(interval_t(left,right-1,curInterval.depth+1));
+                        indexStack.push(newIndex);
+                    }
+                    left = right;
+                    //while has next L-index
+                    while(CHILD[right] > right && LCP[right] == LCP[CHILD[right]]){
+                        right = CHILD[right];
+                        newIndex = (curIndex << 2) | BITADD[S[SA[left]+curInterval.depth]];
+                        if(newIndex < TABLESIZE){
+                            intervalStack.push(interval_t(left,right-1,curInterval.depth+1));
+                            indexStack.push(newIndex);
+                        }
+                        left = right;
+                    }
+                    //last interval
+                    newIndex = (curIndex << 2) | BITADD[S[SA[left]+curInterval.depth]];
+                    if(newIndex < TABLESIZE){
+                        intervalStack.push(interval_t(left,curInterval.end,curInterval.depth+1));
+                        indexStack.push(newIndex);
+                    }
+                }
+            }
+            else{//similar to function traverse
+                long start = curInterval.start; long end = curInterval.end;
+                while(start < curInterval.end){
+                    newIndex = (curIndex << 2) | BITADD[S[SA[start]+curInterval.depth]];
+                    top_down_faster(S[SA[start]+curInterval.depth], curInterval.depth, start, end);
+                    if(newIndex < TABLESIZE){
+                        intervalStack.push(interval_t(start,end,curInterval.depth+1));
+                        indexStack.push(newIndex);
+                    }
+                    // Advance to next interval.
+                    start = end+1; end = curInterval.end;
+                }
+            }
+        }
+    }
+    
+}
+
 //TODO: add error handling and messages
 void sparseSA::save(const string &prefix){
     string basic = prefix;
@@ -142,6 +233,7 @@ void sparseSA::save(const string &prefix){
     aux_s.write((const char*)&NKm1,sizeof(NKm1));
     aux_s.write((const char*)&hasSufLink,sizeof(hasSufLink));
     aux_s.write((const char*)&hasChild,sizeof(hasChild));
+    aux_s.write((const char*)&hasKmer,sizeof(hasKmer));
     aux_s.close();
     //print sa
     ofstream sa_s (sa.c_str(), ios::binary);
@@ -176,6 +268,15 @@ void sparseSA::save(const string &prefix){
         child_s.write((const char*)&CHILD[0],sizeCHILD*sizeof(int));
         child_s.close();
     }
+    //print child if nec
+    if(hasKmer){
+        string kmer = basic + ".kmer";
+        ofstream kmer_s (kmer.c_str(), ios::binary);
+        unsigned int sizeKMR = KMR.size();
+        kmer_s.write((const char*)&sizeKMR,sizeof(sizeKMR));
+        kmer_s.write((const char*)&KMR[0],sizeKMR*sizeof(saTuple_t));
+        kmer_s.close();
+    }
 }
 
 bool sparseSA::load(const string &prefix){
@@ -198,6 +299,7 @@ bool sparseSA::load(const string &prefix){
     aux_s.read((char*)&NKm1,sizeof(NKm1));
     aux_s.read((char*)&hasSufLink,sizeof(hasSufLink));
     aux_s.read((char*)&hasChild,sizeof(hasChild));
+    aux_s.read((char*)&hasKmer,sizeof(hasKmer));
     aux_s.close();
     //read sa
     ifstream sa_s (sa.c_str(), ios::binary);
@@ -236,6 +338,16 @@ bool sparseSA::load(const string &prefix){
         CHILD.resize(sizeCHILD);
         child_s.read((char*)&CHILD[0],sizeCHILD*sizeof(int));
         child_s.close();
+    }
+    //read kmer table if nec
+    if(hasKmer){
+        string kmer = basic + ".kmer";
+        ifstream kmer_s (kmer.c_str(), ios::binary);
+        unsigned int sizeKMR;
+        kmer_s.read((char*)&sizeKMR,sizeof(sizeKMR));
+        KMR.resize(sizeKMR);
+        kmer_s.read((char*)&KMR[0],sizeKMR*sizeof(saTuple_t));
+        kmer_s.close();
     }
     cerr << "index loaded succesful" << endl;
     return true;
@@ -314,6 +426,11 @@ void sparseSA::construct(){
         CHILD.resize(N/K);
         //Use algorithm by Abouelhoda et al to construct CHILD array
         computeChild();
+    }
+    if(hasKmer){
+        KMR.resize(TABLESIZE, saTuple_t());
+        //Use algorithm by Abouelhoda et al to construct CHILD array
+        computeKmer();
     }
 
     NKm1 = N/K-1;
@@ -422,6 +539,19 @@ bool sparseSA::search(const string &P, long &start, long &end) const{
 // Traverse pattern P starting from a given prefix and interval
 // until mismatch or min_len characters reached.
 void sparseSA::traverse(const string &P, long prefix, interval_t &cur, int min_len, int maxBranching) const {
+  if(hasKmer && cur.depth == 0 && min_len >= KMERSIZE){//free match first bases
+    unsigned int index = 0;
+    for(size_t i = 0; i < KMERSIZE; i++)
+        index = (index << 2 ) | BITADD[P[prefix + i]];
+    if(index < TABLESIZE && KMR[index].right>0){
+        cur.depth = KMERSIZE;
+        cur.start = KMR[index].left;
+        cur.end = KMR[index].right;
+    }
+    else{
+        return;//this results in no found seeds where the first KMERSIZE bases contain a non-ACGT character
+    }
+  }
   if(cur.depth >= min_len || cur.size() <= maxBranching) return;
 
   while(prefix+cur.depth < (long)P.length()) {
@@ -441,6 +571,19 @@ void sparseSA::traverse(const string &P, long prefix, interval_t &cur, int min_l
 // until mismatch or min_len characters reached.
 // Uses the child table for faster traversal
 void sparseSA::traverse_faster(const string &P,const long prefix, interval_t &cur, int min_len, int maxBranching) const{
+        if(hasKmer && cur.depth == 0 && min_len >= KMERSIZE){//free match first bases
+            unsigned int index = 0;
+            for(size_t i = 0; i < KMERSIZE; i++)
+                index = (index << 2 ) | BITADD[P[prefix + i]];
+            if(index < TABLESIZE && KMR[index].right>0){
+                cur.depth = KMERSIZE;
+                cur.start = KMR[index].left;
+                cur.end = KMR[index].right;
+            }
+            else{
+                return;//this results in no found seeds where the first KMERSIZE bases contain a non-ACGT character
+            }
+        }
         if(cur.depth >= (long) min_len || cur.size() <= maxBranching) return;
         long c = prefix + cur.depth;
         bool intervalFound = c < (long) P.length();
