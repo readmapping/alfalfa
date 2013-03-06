@@ -130,7 +130,7 @@ void calculateLISintervalsFair(vector<match_t>& matches, bool fw, long qLength, 
 
 alignment_t * extendAlignment(dynProg& dp_, const string& S, const string& P, 
         vector<match_t>& matches, int begin, int end, long editDist, 
-        const align_opt & alnOptions){
+        const align_opt & alnOptions, long chrStart, long chrEnd){
     int print = alnOptions.print;//print lvl 1: only display steps and results, lvl2: display seeds
     alignment_t * alignment = new alignment_t();
     dp_output output;
@@ -146,10 +146,10 @@ alignment_t * extendAlignment(dynProg& dp_, const string& S, const string& P,
     long queryRB = queryLB + firstSeed.len-1L;
     if(print) cerr << "max edit distance is " << editDist << endl;
     if(print>1) cerr << "first seed (q/r/l): " << firstSeed.query << "," << firstSeed.ref << "," << firstSeed.len << endl;
-    if(firstSeed.query > 0L && firstSeed.ref > 0L){
+    if(firstSeed.query > 0L && firstSeed.ref > chrStart){
         if(print) cerr << "dp required before first seed";
         //Alignment now!!! with beginQ-E in ref to begin match and beginQ to match
-        long alignmentBoundLeft = max(refstrLB-queryLB-editDist,0L);
+        long alignmentBoundLeft = max(refstrLB-queryLB-editDist,chrStart);
         boundaries grenzen(alignmentBoundLeft,refstrLB-1,0,queryLB-1);
         dp_type types;
         types.freeRefB = true;
@@ -176,7 +176,7 @@ alignment_t * extendAlignment(dynProg& dp_, const string& S, const string& P,
     else {
         alignment->globPos = firstSeed.ref + 1L;
     }
-    if (firstSeed.ref == 0L && firstSeed.query > 0L) {
+    if (firstSeed.ref == chrStart && firstSeed.query > 0L) {
         alignment->cigarChars.push_back(clipping ? 'S' : 'I');
         alignment->cigarLengths.push_back(firstSeed.query);
         curEditDist += clipping ? 0 : firstSeed.query;
@@ -216,7 +216,7 @@ alignment_t * extendAlignment(dynProg& dp_, const string& S, const string& P,
                         qDist = minDist + 1;
                 } else {
                     refDist -= qDist;
-                    if (refDist + refstrRB >= (long)S.length() || 1 - qDist >= match.len)
+                    if (refDist + refstrRB > chrEnd || 1 - qDist >= match.len)
                         refDist = minDist + 1;
                 }
             }
@@ -253,9 +253,8 @@ alignment_t * extendAlignment(dynProg& dp_, const string& S, const string& P,
                 alignment->cigarLengths.push_back(minRefDist);
                 alignment->cigarLengths.push_back(match.len - 1 + minQDist);
                 alignment->alignmentScore += dp_.scores.match*(match.len - 1 + minQDist) + dp_.scores.openGap + dp_.scores.extendGap*minRefDist;
-                curEditDist += Utils::contains(S, refstrRB + 1L, refstrRB + minRefDist - 1L, '`') ? editDist + 1 : minRefDist; //boundary of ref sequences is passed
+                curEditDist += minRefDist; //boundary of ref sequences is passed
                 if(print) cerr << "added deletion of size " << minRefDist << endl;
-                //TODO: only use of contains: add inline here
             } else if (minRefDist <= 0) {
                 alignment->cigarChars.push_back('I');
                 alignment->cigarChars.push_back('=');
@@ -300,10 +299,10 @@ alignment_t * extendAlignment(dynProg& dp_, const string& S, const string& P,
     //possible at the end characters
     //mapInterval += Integer.toString(queryRB+1)+"]";
     alignment->refLength = queryRB-queryLB;
-    if (queryRB + 1 < (long)P.length() && refstrRB < (long)S.length() - 1L && curEditDist <= editDist) {
+    if (queryRB + 1 < (long)P.length() && refstrRB < chrEnd && curEditDist <= editDist) {
         long refAlignRB = refstrRB + ((long)P.length() - queryRB) + 1L + editDist - curEditDist;
-        if (refAlignRB >= (long)S.length())
-            refAlignRB = (long)S.length() - 1L;
+        if (refAlignRB > chrEnd)
+            refAlignRB = chrEnd;
         boundaries grenzen(refstrRB + 1L, refAlignRB, queryRB + 1, P.length() - 1);
         dp_type types;
         types.freeRefE = true;
@@ -393,8 +392,10 @@ void inexactMatch(const sparseSA& sa, dynProg& dp_, read_t & read,const align_op
             int end = lisIntervals[lisIndex].end;
             //sort this candidate region by query position
             sort(matches.begin()+begin,matches.begin()+end+1, compMatchesQuery);
+            long chrStart, chrEnd;
+            sa.getChromBounds(matches[begin].ref, chrStart, chrEnd);
             if(print) cerr << "try cluster " << lisIndex << " with " << (end-begin+1) << " seeds." << endl;
-            alignment_t * alignment = extendAlignment(dp_, sa.S, P, matches, begin, end, editDist, alnOptions);
+            alignment_t * alignment = extendAlignment(dp_, sa.S, P, matches, begin, end, editDist, alnOptions, chrStart, chrEnd);
             if(alignment!=NULL){
                 if(!fwStrand){
                     alignment->flag.set(4,true);
@@ -472,8 +473,10 @@ void unpairedMatch(const sparseSA& sa, dynProg& dp_, read_t & read,const align_o
             vector<match_t>* matchVector = lisIntervals[lisIndex].matches;
             //sort this candidate region by query position
             sort(matchVector->begin()+begin,matchVector->begin()+end+1, compMatchesQuery);
+            long chrStart, chrEnd;
+            sa.getChromBounds(matchVector->at(begin).ref, chrStart, chrEnd);
             if(print) cerr << "try cluster " << lisIndex << " with " << (end-begin+1) << " seeds." << endl;
-            alignment_t * alignment = extendAlignment(dp_, sa.S, lisIntervals[lisIndex].fw ? P : Prc, *matchVector, begin, end, editDist, alnOptions);
+            alignment_t * alignment = extendAlignment(dp_, sa.S, lisIntervals[lisIndex].fw ? P : Prc, *matchVector, begin, end, editDist, alnOptions, chrStart, chrEnd);
             if(alignment!=NULL){
                 if(!lisIntervals[lisIndex].fw)
                     alignment->flag.set(4,true);
@@ -677,7 +680,9 @@ bool alignFromLIS(const sparseSA& sa, dynProg& dp_, read_t& read, lis_t & lis, l
     vector<match_t>* matchVector = lis.matches;
     //sort this candidate region by query position
     sort(matchVector->begin()+begin,matchVector->begin()+end+1, compMatchesQuery);
-    alignment_t * alignment = extendAlignment(dp_, sa.S, lis.fw ? read.sequence : read.rcSequence, *matchVector, begin, end, editDist, alnOptions);
+    long chrStart, chrEnd;
+    sa.getChromBounds(matchVector->at(begin).ref, chrStart, chrEnd);
+    alignment_t * alignment = extendAlignment(dp_, sa.S, lis.fw ? read.sequence : read.rcSequence, *matchVector, begin, end, editDist, alnOptions, chrStart, chrEnd);
     if(alignment!=NULL){
         lis.extended = true;
         if(!lis.fw){
@@ -826,9 +831,11 @@ void unpairedMatchFromLIS(const sparseSA& sa, dynProg& dp_, read_t & read, vecto
         vector<match_t>* matchVector = lisIntervals[lisIndex].matches;
         //sort this candidate region by query position
         sort(matchVector->begin()+begin,matchVector->begin()+end+1, compMatchesQuery);
+        long chrStart, chrEnd;
+        sa.getChromBounds(matchVector->at(begin).ref, chrStart, chrEnd);
         if(print) cerr << "try cluster " << lisIndex << " of " << lisIntervals.size() << " with " << (end-begin+1) << " seeds" << endl;
         alignment_t * alignment = extendAlignment(dp_, sa.S, lisIntervals[lisIndex].fw ? read.sequence : read.rcSequence, 
-                *matchVector, begin, end, editDist, alnOptions);
+                *matchVector, begin, end, editDist, alnOptions, chrStart, chrEnd);
         if(alignment!=NULL){
             if(print) cerr << "extension succes" << endl;
             if(!lisIntervals[lisIndex].fw){
@@ -1081,8 +1088,10 @@ void matchStrandOfPair(const sparseSA& sa,
             vector<match_t>* matchVector = lisIntervalsFM1[lisIndex].matches;
             //sort this candidate region by query position
             sort(matchVector->begin()+begin,matchVector->begin()+end+1, compMatchesQuery);
+            long chrStart, chrEnd;
+            sa.getChromBounds(matchVector->at(begin).ref, chrStart, chrEnd);
             alignment_t * alignment = extendAlignment(dp_, sa.S, lisIntervalsFM1[lisIndex].fw ? mate1.sequence : mate1.rcSequence, 
-                    *matchVector, begin, end, editDistM1, alnOptions);
+                    *matchVector, begin, end, editDistM1, alnOptions, chrStart, chrEnd);
             if(alignment!=NULL){
                 if(print) cerr << "cluster succesfully extended to an alignment" << endl;
                 lisIntervalsFM1[lisIndex].extended = true;
@@ -1415,8 +1424,10 @@ void pairedBowtie2(const sparseSA& sa,
                 int begin = lisIntervals[lisIndex].begin;
                 int end = lisIntervals[lisIndex].end;
                 sort(matches.begin()+begin,matches.begin()+end+1, compMatchesQuery);
+                long chrStart, chrEnd;
+                sa.getChromBounds(matches[begin].ref, chrStart, chrEnd);
                 if(print) cerr << "try to extend cluster " << lisIndex << endl;
-                alignment_t * alignment = extendAlignment(dp_, sa.S, P, matches, begin, end, editDistBase, alnOptions);
+                alignment_t * alignment = extendAlignment(dp_, sa.S, P, matches, begin, end, editDistBase, alnOptions, chrStart, chrEnd);
                 if(alignment!=NULL){
                     if(print) cerr << "cluster " << lisIndex << " yielded a good alignment" << endl;
                     alignment->setLocalPos(sa);

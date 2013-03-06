@@ -187,6 +187,17 @@ struct sparseSA {
     it--;
     seqpos = hit - *it;
   }
+  
+  // Get the index of the start and the end of the chromosome in the concatenated sequence
+  void getChromBounds(const long hit, long& chrStart, long& chrEnd) const {
+    long seq, seqpos;
+    this->from_set(hit, seq, seqpos);       
+    chrStart = this->startpos[seq];
+    if(this->startpos.size() > 1 && seq < this->startpos.size() - 1)
+        chrEnd = this->startpos[seq+1] - 1; // Minus one for the separation character
+    else
+        chrEnd =  S.length() - 1; // Minus one for the separation character
+  }
 
   // Constructor builds sparse suffix array.
   sparseSA(string &S_, vector<string> &descr_, vector<long> &startpos_, long K_, 
