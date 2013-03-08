@@ -125,11 +125,11 @@ int dynProg::updateMatrix(const dp_type& type, bool print){
     //TODO: change this to mallocs and initialize once per thread + realloc if nec.
     assert(L1 >=0 && L2 >= 0);
     int newDimL2 = DP_L2;
-    while(L2 > newDimL2){
+    while(L2 >= newDimL2){
         newDimL2 = 2*newDimL2;
     }
     int newDimL1 = DP_L1;
-    while(L1 > newDimL1){
+    while(L1 >= newDimL1){
         newDimL1 = 2*newDimL1;
     }
     if(newDimL2 > DP_L2 || newDimL1 > DP_L1){

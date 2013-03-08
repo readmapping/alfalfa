@@ -118,7 +118,7 @@ static void usageCheck(const string prog) {
   cerr << "COMMON OPTIONS" << endl;
   cerr << "-h/--help                  print this statement" << endl;
   cerr << "-o/--output                the filename to write the output to [std-out]" << endl;
-  cerr << "-p/--printfalse            print the alignments that were not correctly aligned and/or reads that were not aligned" << endl;
+  cerr << "-p/--print                 print a list of reads with a column that reports not/false aligned = 0, correct aligned = 1" << endl;
   cerr << endl;
   cerr << "ORACLE OPTIONS" << endl;
   cerr << "-S/--oracle (string)       reference SAM containing the simulated read coordinates" << endl;
@@ -450,7 +450,7 @@ static void checkOracle(samCheckOptions_t & opt){
     //if at least one record can be found
     bool paired = false;
     if(opt.print)
-        cerr << "reads that failed to align correctly: " << endl;
+        cerr << "summary of reads: " << endl;
     if(!oracleLine.empty() && oracleLine[0]!='@' && !queryLine.empty() && queryLine[0]!='@'){
         //check if it are paired reads
         samRecord_t tempQuery;
@@ -497,8 +497,8 @@ static void checkOracle(samCheckOptions_t & opt){
                 }
                 //sumarize for read
                 for(size_t j=0; j < rangeCount; j++){
-                    if(opt.print && results[j][0].tempReadResult==0)
-                        cerr << oracleUp.qname << endl;                    
+                    if(opt.print)
+                        cerr << oracleUp.qname << "\t" << (results[j][0].tempReadResult==0 ? 0 : 1) << endl;
                     results[j][0].finishRead();
                     results[j][1].finishRead();
                     for(size_t k=0; k < qualValCount; k++)
@@ -540,8 +540,8 @@ static void checkOracle(samCheckOptions_t & opt){
                 }
                 //sumarize for read
                 for(size_t j=0; j < rangeCount; j++){
-                    if(opt.print && results[j][0].tempReadResult==0)
-                        cerr << oracleUp.qname << endl;                    
+                    if(opt.print)
+                        cerr << oracleUp.qname << "\t" << (results[j][0].tempReadResult==0 ? 0 : 1) << endl;
                     results[j][0].finishRead();
                     results[j][1].finishRead();
                     for(size_t k=0; k < qualValCount; k++)
