@@ -423,6 +423,7 @@ void inexactMatch(const sparseSA& sa, dynProg& dp_, read_t & read,const align_op
                     //sort this candidate region by query position
                     sort(matches.begin()+begin,matches.begin()+end+1, compMatchesQuery);
                     long chrStart, chrEnd;
+                    cerr << "cluster " << i << " with " << end-begin+1 << " seeds and " << lisIntervals[i].len << " bases covered" << endl;
                     sa.getChromBounds(matches[begin].ref, chrStart, chrEnd, alnOptions.print);
                 }
             }
@@ -514,6 +515,7 @@ void unpairedMatch(const sparseSA& sa, dynProg& dp_, read_t & read,const align_o
                     //sort this candidate region by query position
                     sort(matchVector->begin()+begin,matchVector->begin()+end+1, compMatchesQuery);
                     long chrStart, chrEnd;
+                    cerr << "cluster " << i << " with " << end-begin+1 << " seeds and " << lisIntervals[i].len << " bases covered" << endl;
                     sa.getChromBounds(matchVector->at(begin).ref, chrStart, chrEnd, alnOptions.print);
                 }
             }
@@ -889,6 +891,7 @@ void unpairedMatchFromLIS(const sparseSA& sa, dynProg& dp_, read_t & read, vecto
                 //sort this candidate region by query position
                 sort(matchVector->begin()+begin,matchVector->begin()+end+1, compMatchesQuery);
                 long chrStart, chrEnd;
+                cerr << "cluster " << i << " with " << end-begin+1 << " seeds and " << lisIntervals[i].len << " bases covered" << endl;
                 sa.getChromBounds(matchVector->at(begin).ref, chrStart, chrEnd, alnOptions.print);
             }
         }
@@ -1206,6 +1209,7 @@ void matchStrandOfPair(const sparseSA& sa,
                 //sort this candidate region by query position
                 sort(matchVector->begin()+begin,matchVector->begin()+end+1, compMatchesQuery);
                 long chrStart, chrEnd;
+                cerr << "cluster " << i << " with " << end-begin+1 << " seeds and " << lisIntervalsFM1[i].len << " bases covered" << endl;
                 sa.getChromBounds(matchVector->at(begin).ref, chrStart, chrEnd, alnOptions.print);
             }
         }
@@ -1544,6 +1548,7 @@ void pairedBowtie2(const sparseSA& sa,
                     //sort this candidate region by query position
                     sort(matches.begin()+begin,matches.begin()+end+1, compMatchesQuery);
                     long chrStart, chrEnd;
+                    cerr << "cluster " << i << " with " << end-begin+1 << " seeds and " << lisIntervals[i].len << " bases covered" << endl;
                     sa.getChromBounds(matches[begin].ref, chrStart, chrEnd, alnOptions.print);
                 }
             }
