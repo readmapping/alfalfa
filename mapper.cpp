@@ -510,9 +510,11 @@ void unpairedMatch(const sparseSA& sa, dynProg& dp_, read_t & read,const align_o
                     int begin = lisIntervals[i].begin;
                     int end = lisIntervals[i].end;
                     //sort this candidate region by query position
-                    sort(matches.begin()+begin,matches.begin()+end+1, compMatchesQuery);
+                    vector<match_t>* matchVector = lisIntervals[i].matches;
+                    //sort this candidate region by query position
+                    sort(matchVector->begin()+begin,matchVector->begin()+end+1, compMatchesQuery);
                     long chrStart, chrEnd;
-                    sa.getChromBounds(matches[begin].ref, chrStart, chrEnd, alnOptions.print);
+                    sa.getChromBounds(matchVector->at(begin).ref, chrStart, chrEnd, alnOptions.print);
                 }
             }
         }
