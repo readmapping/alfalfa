@@ -393,7 +393,7 @@ void inexactMatch(const sparseSA& sa, dynProg& dp_, read_t & read,const align_op
             //sort this candidate region by query position
             sort(matches.begin()+begin,matches.begin()+end+1, compMatchesQuery);
             long chrStart, chrEnd;
-            sa.getChromBounds(matches[begin].ref, chrStart, chrEnd);
+            sa.getChromBounds(matches[begin].ref, chrStart, chrEnd, alnOptions.print);
             if(print) cerr << "try cluster " << lisIndex << " with " << (end-begin+1) << " seeds." << endl;
             alignment_t * alignment = extendAlignment(dp_, sa.S, P, matches, begin, end, editDist, alnOptions, chrStart, chrEnd);
             if(alignment!=NULL){
@@ -415,6 +415,17 @@ void inexactMatch(const sparseSA& sa, dynProg& dp_, read_t & read,const align_op
             else if(lisIndex >= lisIntervals.size()) cerr << " no more clusters are available."<< endl;
             else if(lisIntervals[lisIndex].len <= (Plength*alnOptions.minCoverage)/100) cerr << " no new clusters reach minimum query coverage."<< endl;
             else if(trial >= alnOptions.maxTrial) cerr << " max number of extensions without result have been reached."<< endl;
+            if(lisIndex < lisIntervals.size()){
+                cerr << "remaining clusters map approx to:" << endl;
+                for(int i = lisIndex; i < lisIntervals.size(); i++){
+                    int begin = lisIntervals[i].begin;
+                    int end = lisIntervals[i].end;
+                    //sort this candidate region by query position
+                    sort(matches.begin()+begin,matches.begin()+end+1, compMatchesQuery);
+                    long chrStart, chrEnd;
+                    sa.getChromBounds(matches[begin].ref, chrStart, chrEnd, alnOptions.print);
+                }
+            }
         }
     }
 }
@@ -474,7 +485,7 @@ void unpairedMatch(const sparseSA& sa, dynProg& dp_, read_t & read,const align_o
             //sort this candidate region by query position
             sort(matchVector->begin()+begin,matchVector->begin()+end+1, compMatchesQuery);
             long chrStart, chrEnd;
-            sa.getChromBounds(matchVector->at(begin).ref, chrStart, chrEnd);
+            sa.getChromBounds(matchVector->at(begin).ref, chrStart, chrEnd, alnOptions.print);
             if(print) cerr << "try cluster " << lisIndex << " with " << (end-begin+1) << " seeds." << endl;
             alignment_t * alignment = extendAlignment(dp_, sa.S, lisIntervals[lisIndex].fw ? P : Prc, *matchVector, begin, end, editDist, alnOptions, chrStart, chrEnd);
             if(alignment!=NULL){
@@ -493,6 +504,17 @@ void unpairedMatch(const sparseSA& sa, dynProg& dp_, read_t & read,const align_o
             else if(lisIndex >= lisIntervals.size()) cerr << " no more clusters are available."<< endl;
             else if(lisIntervals[lisIndex].len <= (Plength*alnOptions.minCoverage)/100) cerr << " no new clusters reach minimum query coverage."<< endl;
             else if(trial >= alnOptions.maxTrial) cerr << " max number of extensions without result have been reached."<< endl;
+            if(lisIndex < lisIntervals.size()){
+                cerr << "remaining clusters map approx to:" << endl;
+                for(int i = lisIndex; i < lisIntervals.size(); i++){
+                    int begin = lisIntervals[i].begin;
+                    int end = lisIntervals[i].end;
+                    //sort this candidate region by query position
+                    sort(matches.begin()+begin,matches.begin()+end+1, compMatchesQuery);
+                    long chrStart, chrEnd;
+                    sa.getChromBounds(matches[begin].ref, chrStart, chrEnd, alnOptions.print);
+                }
+            }
         }
     }
 }
@@ -681,7 +703,7 @@ bool alignFromLIS(const sparseSA& sa, dynProg& dp_, read_t& read, lis_t & lis, l
     //sort this candidate region by query position
     sort(matchVector->begin()+begin,matchVector->begin()+end+1, compMatchesQuery);
     long chrStart, chrEnd;
-    sa.getChromBounds(matchVector->at(begin).ref, chrStart, chrEnd);
+    sa.getChromBounds(matchVector->at(begin).ref, chrStart, chrEnd, alnOptions.print);
     alignment_t * alignment = extendAlignment(dp_, sa.S, lis.fw ? read.sequence : read.rcSequence, *matchVector, begin, end, editDist, alnOptions, chrStart, chrEnd);
     if(alignment!=NULL){
         lis.extended = true;
@@ -832,7 +854,7 @@ void unpairedMatchFromLIS(const sparseSA& sa, dynProg& dp_, read_t & read, vecto
         //sort this candidate region by query position
         sort(matchVector->begin()+begin,matchVector->begin()+end+1, compMatchesQuery);
         long chrStart, chrEnd;
-        sa.getChromBounds(matchVector->at(begin).ref, chrStart, chrEnd);
+        sa.getChromBounds(matchVector->at(begin).ref, chrStart, chrEnd, alnOptions.print);
         if(print) cerr << "try cluster " << lisIndex << " of " << lisIntervals.size() << " with " << (end-begin+1) << " seeds" << endl;
         alignment_t * alignment = extendAlignment(dp_, sa.S, lisIntervals[lisIndex].fw ? read.sequence : read.rcSequence, 
                 *matchVector, begin, end, editDist, alnOptions, chrStart, chrEnd);
@@ -856,6 +878,18 @@ void unpairedMatchFromLIS(const sparseSA& sa, dynProg& dp_, read_t & read, vecto
         else if(lisIndex >= lisIntervals.size()) cerr << " no more clusters are available."<< endl;
         else if(lisIntervals[lisIndex].len <= (read.sequence.size()*alnOptions.minCoverage)/100) cerr << " no new clusters reach minimum query coverage."<< endl;
         else if(trial >= alnOptions.maxTrial) cerr << " max number of extensions without result have been reached."<< endl;
+        if(lisIndex < lisIntervals.size()){
+            cerr << "remaining clusters map approx to:" << endl;
+            for(int i = lisIndex; i < lisIntervals.size(); i++){
+                int begin = lisIntervals[i].begin;
+                int end = lisIntervals[i].end;
+                vector<match_t>* matchVector = lisIntervals[i].matches;
+                //sort this candidate region by query position
+                sort(matchVector->begin()+begin,matchVector->begin()+end+1, compMatchesQuery);
+                long chrStart, chrEnd;
+                sa.getChromBounds(matchVector->at(begin).ref, chrStart, chrEnd, alnOptions.print);
+            }
+        }
     }
 }
 
@@ -1089,7 +1123,7 @@ void matchStrandOfPair(const sparseSA& sa,
             //sort this candidate region by query position
             sort(matchVector->begin()+begin,matchVector->begin()+end+1, compMatchesQuery);
             long chrStart, chrEnd;
-            sa.getChromBounds(matchVector->at(begin).ref, chrStart, chrEnd);
+            sa.getChromBounds(matchVector->at(begin).ref, chrStart, chrEnd, alnOptions.print);
             alignment_t * alignment = extendAlignment(dp_, sa.S, lisIntervalsFM1[lisIndex].fw ? mate1.sequence : mate1.rcSequence, 
                     *matchVector, begin, end, editDistM1, alnOptions, chrStart, chrEnd);
             if(alignment!=NULL){
@@ -1161,6 +1195,18 @@ void matchStrandOfPair(const sparseSA& sa,
         else if(lisIndex >= lisIntervalsFM1.size()) cerr << " no more clusters are available."<< endl;
         else if(lisIntervalsFM1[lisIndex].len <= (M1length*alnOptions.minCoverage)/100) cerr << " no new clusters reach minimum query coverage."<< endl;
         else if(trial >= alnOptions.maxTrial) cerr << " max number of extensions without result have been reached."<< endl;
+        if(lisIndex < lisIntervalsFM1.size()){
+            cerr << "remaining clusters map approx to:" << endl;
+            for(int i = lisIndex; i < lisIntervalsFM1.size(); i++){
+                int begin = lisIntervalsFM1[i].begin;
+                int end = lisIntervalsFM1[i].end;
+                vector<match_t>* matchVector = lisIntervalsFM1[i].matches;
+                //sort this candidate region by query position
+                sort(matchVector->begin()+begin,matchVector->begin()+end+1, compMatchesQuery);
+                long chrStart, chrEnd;
+                sa.getChromBounds(matchVector->at(begin).ref, chrStart, chrEnd, alnOptions.print);
+            }
+        }
     }
 }
 
@@ -1425,7 +1471,7 @@ void pairedBowtie2(const sparseSA& sa,
                 int end = lisIntervals[lisIndex].end;
                 sort(matches.begin()+begin,matches.begin()+end+1, compMatchesQuery);
                 long chrStart, chrEnd;
-                sa.getChromBounds(matches[begin].ref, chrStart, chrEnd);
+                sa.getChromBounds(matches[begin].ref, chrStart, chrEnd, alnOptions.print);
                 if(print) cerr << "try to extend cluster " << lisIndex << endl;
                 alignment_t * alignment = extendAlignment(dp_, sa.S, P, matches, begin, end, editDistBase, alnOptions, chrStart, chrEnd);
                 if(alignment!=NULL){
@@ -1488,6 +1534,17 @@ void pairedBowtie2(const sparseSA& sa,
             else if(lisIndex >= lisIntervals.size()) cerr << " no more clusters are available."<< endl;
             else if(lisIntervals[lisIndex].len <= (Plength*alnOptions.minCoverage)/100) cerr << " no new clusters reach minimum query coverage."<< endl;
             else if(trial >= alnOptions.maxTrial) cerr << " max number of extensions without result have been reached."<< endl;
+            if(lisIndex < lisIntervals.size()){
+                cerr << "remaining clusters map approx to:" << endl;
+                for(int i = lisIndex; i < lisIntervals.size(); i++){
+                    int begin = lisIntervals[i].begin;
+                    int end = lisIntervals[i].end;
+                    //sort this candidate region by query position
+                    sort(matches.begin()+begin,matches.begin()+end+1, compMatchesQuery);
+                    long chrStart, chrEnd;
+                    sa.getChromBounds(matches[begin].ref, chrStart, chrEnd, alnOptions.print);
+                }
+            }
         }
     }
 }

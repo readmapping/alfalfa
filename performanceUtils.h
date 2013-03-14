@@ -279,6 +279,14 @@ void getlijn2(ifstream & input, string & lijn){
         lijn.erase(--lijn.end());
 }
 
+//find edit distance:
+//read ref string, make out coordinates.
+//NEW OPTIONS
+//ref string, read it, dp matrix, create it.
+//boundaries: query full, ref begin and end: count from cigar (take into account clipping)
+//band: oracle --> NM = editDist
+//nothing free
+
 static bool readRecord(string & line, samRecord_t & record, string tag){
     int tabPos = 0;
     char delimeter = '\t';
