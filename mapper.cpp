@@ -953,25 +953,27 @@ void pairedMatch3(const sparseSA& sa, dynProg& dp_, read_t & mate1, read_t & mat
         }
     }
     concordant = concordant + discordant;
-    int maxScoreFirst;
-    int maxScoreSecond;
+    int maxScoreFirst = 0;
+    int maxScoreSecond = 0;
     if(print) cerr << "found " << concordant << " concordant alignments so far" << endl;
     //preprocessing for discordant and mixed: calculate more alignments
     if(concordant < alnOptions.alignmentCount && (pairedOpt.discordant || pairedOpt.mixed)){
-        cerr << "try to find discordant and/or unpaired alignments" << endl;
+        if(print) cerr << "try to find discordant and/or unpaired alignments" << endl;
         //concatenate the lists per mate
         lisIntervalsFM1.insert(lisIntervalsFM1.end(),lisIntervalsSM1.begin(),lisIntervalsSM1.end());
         lisIntervalsFM2.insert(lisIntervalsFM2.end(),lisIntervalsSM2.begin(),lisIntervalsSM2.end());
         //try to align some more LIS intervals
-        cerr << "extend more clusters to full alignments" << endl;
+        if(print) cerr << "extend more clusters to full alignments" << endl;
         unpairedMatchFromLIS(sa, dp_, mate1, lisIntervalsFM1, alnOptions, concordant);
         unpairedMatchFromLIS(sa, dp_, mate2, lisIntervalsFM2, alnOptions, concordant);
         //sort according to alignmentScore and globalPos
-        cerr << "sort clusters according to alignment score" << endl;
+        if(print) cerr << "sort clusters according to alignment score" << endl;
         sort(lisIntervalsFM1.begin(),lisIntervalsFM1.end(), compAlignmentAndScore);
         sort(lisIntervalsFM2.begin(),lisIntervalsFM2.end(), compAlignmentAndScore);
-        maxScoreFirst = lisIntervalsFM1[0].alignment->alignmentScore;
-        maxScoreSecond = lisIntervalsFM2[0].alignment->alignmentScore;
+        if(lisIntervalsFM1[0].extended)
+                maxScoreFirst = lisIntervalsFM1[0].alignment->alignmentScore;
+        if(lisIntervalsFM2[0].extended)
+                maxScoreSecond = lisIntervalsFM2[0].alignment->alignmentScore;
             //Set discordant to LIS, count something else, and make sure we can retrieve the right ones
         if(pairedOpt.discordant){
             //extra discordant searches depending on max score
@@ -992,7 +994,7 @@ void pairedMatch3(const sparseSA& sa, dynProg& dp_, read_t & mate1, read_t & mat
                     if(globPosMate.count(lisIntervalsFM2[j].alignment->globPos)==0){
                         //found extra discordant
                         concordant++;
-                        cerr << "discordant pair found between aln " << i << " of mate 1 and aln " << j << " of mate 2" << endl;
+                        if(print) cerr << "discordant pair found between aln " << i << " of mate 1 and aln " << j << " of mate 2" << endl;
                         setPaired(lisIntervalsFM1[i].alignment,lisIntervalsFM2[j].alignment,mate1,mate2, false);
                     }
                     j++;
@@ -1002,12 +1004,12 @@ void pairedMatch3(const sparseSA& sa, dynProg& dp_, read_t & mate1, read_t & mat
         }
         if(pairedOpt.mixed && concordant < alnOptions.alignmentCount ){
             //extra unpaired alignments
-            cerr << "search for unpaired aln" << endl;
+            if(print) cerr << "search for unpaired aln" << endl;
             size_t i = 0;
             int alnCountFirst = concordant;
             while(i < lisIntervalsFM1.size() && lisIntervalsFM1[i].extended && alnCountFirst < alnOptions.alignmentCount){
                 if(!lisIntervalsFM1[i].alignment->paired()){
-                    cerr << "unpaired aln " << i << " of mate 1 found" << endl;
+                    if(print) cerr << "unpaired aln " << i << " of mate 1 found" << endl;
                     setUnPaired(lisIntervalsFM1[i].alignment,mate1, true);
                     alnCountFirst++;
                 }
@@ -1017,7 +1019,7 @@ void pairedMatch3(const sparseSA& sa, dynProg& dp_, read_t & mate1, read_t & mat
             int alnCountSecond = concordant;
             while(i < lisIntervalsFM2.size() && lisIntervalsFM2[i].extended && alnCountSecond < alnOptions.alignmentCount){
                 if(!lisIntervalsFM2[i].alignment->paired()){
-                    cerr << "unpaired aln " << i << " of mate 1 found" << endl;
+                    if(print) cerr << "unpaired aln " << i << " of mate 1 found" << endl;
                     setUnPaired(lisIntervalsFM2[i].alignment,mate2, false);
                     alnCountSecond++;
                 }
@@ -1290,8 +1292,8 @@ void pairedMatch4(const sparseSA& sa, dynProg& dp_, read_t & mate1, read_t & mat
         }
     }
     concordant = concordant + discordant;
-    int maxScoreFirst;
-    int maxScoreSecond;
+    int maxScoreFirst = 0;
+    int maxScoreSecond = 0;
     //preprocessing for discordant and mixed: calculate more alignments
     if(concordant < alnOptions.alignmentCount && (pairedOpt.discordant || pairedOpt.mixed)){
         if(print) cerr << "search for discordant and/or unpaired alignments" << endl;
@@ -1302,8 +1304,10 @@ void pairedMatch4(const sparseSA& sa, dynProg& dp_, read_t & mate1, read_t & mat
         if(print) cerr << "sort aln according to alignment score and global pos" << endl;
         sort(lisIntervalsFM1.begin(),lisIntervalsFM1.end(), compAlignmentAndScore);
         sort(lisIntervalsFM2.begin(),lisIntervalsFM2.end(), compAlignmentAndScore);
-        maxScoreFirst = lisIntervalsFM1[0].alignment->alignmentScore;
-        maxScoreSecond = lisIntervalsFM2[0].alignment->alignmentScore;
+        if(lisIntervalsFM1[0].extended)
+            maxScoreFirst = lisIntervalsFM1[0].alignment->alignmentScore;
+        if(lisIntervalsFM2[0].extended)
+            maxScoreSecond = lisIntervalsFM2[0].alignment->alignmentScore;
         if(pairedOpt.discordant){
             //extra discordant searches depending on max score
             size_t i=0;
