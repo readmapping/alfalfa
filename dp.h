@@ -106,7 +106,11 @@ void deleteDPMatrix(bool affine);
 int updateMatrix(const dp_type& type, bool print);
 int dpFillOptStatic(const string& ref,const string& query, bool forward, 
         const boundaries& offset, const dp_type& type);
+int dpFillOptStaticBackward(const string& ref,const string& query, bool forward, 
+        const boundaries& offset, const dp_type& type);
 int dpFillStatic(const string& ref,const string& query, bool forward,
+        const boundaries& offset, const dp_type& type);
+int dpFillStaticBackward(const string& ref,const string& query, bool forward,
         const boundaries& offset, const dp_type& type);
 int findTraceBackPosStatic(bool forward, int* const i, int* const j,const dp_type& type);
 int dpTraceBackStatic(int& i, int& j, const dp_type& type, dp_output& output, 
@@ -124,7 +128,7 @@ void  print_seq( const string& ref,const string& query, boundaries& offset );
 //        const outputType&, dp_output&, int bandSize, bool print = false);
 
 int dpBandStatic( const string&, const string&, boundaries&, 
-        const dp_type&, const outputType&, dp_output&, int bandSize, bool print = false);
+        const dp_type&, const outputType&, dp_output&, int minbandSize, int maxbandSize, bool print = false);
 
 int dpBandFull( const string&, const string&, boundaries&, 
         const dp_type&, const outputType&, dp_output&, int bandLeft, int bandRight, bool print = false);

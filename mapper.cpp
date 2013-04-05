@@ -128,9 +128,248 @@ void calculateLISintervalsFair(vector<match_t>& matches, bool fw, long qLength, 
     }
 }
 
+alignment_t * extendAlignmentBWASWLike(dynProg& dp_, const string& S, const string& P, 
+        vector<match_t>& matches, int begin, int end, long editDist, 
+        const align_opt & alnOptions, long chrStart, long chrEnd){
+    int print = alnOptions.print;//print lvl 1: only display steps and results, lvl2: display seeds
+    alignment_t * alignment = new alignment_t();
+    dp_output output;
+    long curEditDist = 0;
+    
+    //BWA-SW PARAMETERS (currently hard-coded)
+    //reset scorematrix
+    int matchScore = dp_.scores.match;
+    int mismatchScore = dp_.scores.mismatch;
+    int gapopenScore = dp_.scores.openGap;
+    int gapextendScore = dp_.scores.extendGap;
+    dp_.scores.match = 1;
+    dp_.scores.mismatch = -3;
+    dp_.scores.openGap = -5;
+    dp_.scores.extendGap = -2;
+    dp_.scores.updateScoreMatrixDna();
+    int minBandSize = 33;
+    int maxBandSize = 100;
+    int Threshold = 37; //T parameter
+    double coverage = 5.5;//c parameter
+    long Plength = P.length();
+    int logPlength = 0;
+    while (Plength >>= 1) ++logPlength;
+    int minScore = dp_.scores.match*max(Threshold,(int)(coverage*logPlength));
+    
+    ///////////////////
+    //FIRST SEED
+    //////////////////
+    match_t firstSeed = matches[begin];
+    long refstrLB = firstSeed.ref;
+    long refstrRB = refstrLB + firstSeed.len -1L;
+    long queryLB = firstSeed.query;
+    long queryRB = queryLB + firstSeed.len-1L;
+    if(print) cerr << "min score is " << minScore << endl;
+    if(print>1) cerr << "first seed (q/r/l): " << firstSeed.query << "," << firstSeed.ref << "," << firstSeed.len << endl;
+    if(firstSeed.query > 0L && firstSeed.ref > chrStart){
+        if(print) cerr << "dp required before first seed";
+        //Alignment now!!! with beginQ-E in ref to begin match and beginQ to match
+        long alignmentBoundLeft = max(refstrLB-queryLB-editDist,chrStart);
+        boundaries grenzen(alignmentBoundLeft,refstrLB-1,0,queryLB-1);
+        dp_type types;
+        types.freeRefB = true;
+        types.freeQueryB = true;
+        if(print) cerr << "dp called with dimension " << (grenzen.queryE-grenzen.queryB+1) << "x" << (grenzen.refE-grenzen.refB+1) << endl;
+        if(dp_.dpBandStatic( S, P, grenzen, types, ERRORSTRING, output, minBandSize, maxBandSize, print>1)==0){//required if dp_ returns fail or too high editDist (output may not be initialized
+            queryLB = grenzen.queryB;
+            if(grenzen.queryB> 0){
+                alignment->cigarChars.push_back('S');
+                alignment->cigarLengths.push_back(grenzen.queryB);
+            }
+            alignment->cigarChars.insert(alignment->cigarChars.end(),output.cigarChars.begin(),output.cigarChars.end());
+            alignment->cigarLengths.insert(alignment->cigarLengths.end(),output.cigarLengths.begin(),output.cigarLengths.end());
+            alignment->globPos = grenzen.refB+1L;
+        }
+        alignment->alignmentScore += output.dpScore;
+        curEditDist += output.editDist;
+        if(print) cerr << "begin DP returned with score " << output.dpScore << endl;
+        output.clear();
+    }//fill in the starting position in the ref sequence
+    else {
+        alignment->globPos = firstSeed.ref + 1L;
+    }
+    if (firstSeed.ref == chrStart && firstSeed.query > 0L) {
+        alignment->cigarChars.push_back('S');
+        alignment->cigarLengths.push_back(firstSeed.query);
+    }
+    if(print) cerr << "current alignments startpos would be " << alignment->globPos << endl;
+    alignment->cigarChars.push_back('=');
+    alignment->cigarLengths.push_back(firstSeed.len);
+    alignment->alignmentScore += dp_.scores.match*firstSeed.len;
+    //extend seed to the right, filling gaps between mems
+    bool foundNext = true;
+    int memsIndex = begin+1;
+    //////////////////////
+    //NEXT SEEDS LOOP
+    //////////////////////
+    if(print) cerr << "enter chain loop" << endl;
+    if(print) cerr << "current score is " << alignment->alignmentScore << endl;
+    while (memsIndex <= end && foundNext) {
+        foundNext = false;
+        //search matchingstats and calc cost
+        int indexIncrease = 0;
+        int minDistMem = memsIndex - 1;
+        long minDist = (long)P.length();
+        long minQDist = (long)P.length();
+        long minRefDist = (long)P.length();
+        //temporary distance for this mem
+        long dist = minDist;
+        while (indexIncrease + memsIndex <= end && dist <= minDist) {
+            match_t match = matches[memsIndex + indexIncrease];
+            if(print>1) cerr << "try " << match.query << "," << match.ref << "," << match.len << endl;
+            //check distance: k is enlarged and compare minRef-refstrRB
+            long qDist = match.query - queryRB;
+            long refDist = match.ref - refstrRB;
+            if (qDist < 0 || refDist < 0) {
+                if (qDist >= refDist) {
+                    qDist -= refDist; //qDist insertions
+                    if (qDist + queryRB >= (long)P.length() || 1 - refDist >= match.len)//and refDist +1 matches lost
+                        qDist = minDist + 1;
+                } else {
+                    refDist -= qDist;
+                    if (refDist + refstrRB > chrEnd || 1 - qDist >= match.len)
+                        refDist = minDist + 1;
+                }
+            }
+            dist = max(qDist, refDist);
+            if (dist <= minDist) {
+                minDist = dist;
+                minDistMem = indexIncrease + memsIndex;
+                minQDist = qDist;
+                minRefDist = refDist;
+                foundNext = true;
+            }
+            indexIncrease++;
+        }
+        if(print>1){
+            cerr << "previous seed number " << (memsIndex-1-begin) << " was " << matches[memsIndex].query << "," << matches[memsIndex].ref << "," << matches[memsIndex].len << endl;
+            if(foundNext){
+                for(int i = memsIndex; i < minDistMem; i++)
+                    cerr << "seed skipped: " << matches[i].query << "," << matches[i].ref << "," << matches[i].len << endl;
+            }
+            else
+                cerr << "found no new seed" << endl;
+        }
+        if (foundNext) {
+            match_t match = matches[minDistMem];
+            //add indels and mutations to sol
+            if (minQDist <= 0) {
+                //minRefDist deletions
+                //1+|qDist| matches lost of next mem
+                alignment->cigarChars.push_back('D');
+                alignment->cigarChars.push_back('=');
+                alignment->cigarLengths.push_back(minRefDist);
+                alignment->cigarLengths.push_back(match.len - 1 + minQDist);
+                alignment->alignmentScore += dp_.scores.match*(match.len - 1 + minQDist) + dp_.scores.openGap + dp_.scores.extendGap*minRefDist;
+                curEditDist += minRefDist; //boundary of ref sequences is passed
+                if(print) cerr << "added deletion of size " << minRefDist << endl;
+            } else if (minRefDist <= 0) {
+                alignment->cigarChars.push_back('I');
+                alignment->cigarChars.push_back('=');
+                alignment->cigarLengths.push_back(minQDist);
+                alignment->cigarLengths.push_back(match.len - 1 + minRefDist);
+                alignment->alignmentScore += dp_.scores.match*(match.len - 1 + minRefDist) + dp_.scores.openGap + dp_.scores.extendGap*minQDist;
+                curEditDist += minQDist;
+                if(print) cerr << "added insertion of size " << minQDist << endl;
+            } else {//both distances are positive and not equal to (1,1)
+                boundaries grenzen(refstrRB + 1L, refstrRB + minRefDist - 1L, queryRB + 1, queryRB + minQDist - 1);
+                dp_type types;
+                if(print) cerr << "dp called with dimension " << (grenzen.queryE-grenzen.queryB+1) << "x" << (grenzen.refE-grenzen.refB+1) << endl;
+                if(dp_.dpBandStatic( S, P, grenzen, types, ERRORSTRING, output, minBandSize, maxBandSize, print>1)==0){
+                    alignment->cigarChars.insert(alignment->cigarChars.end(), output.cigarChars.begin(), output.cigarChars.end());
+                    alignment->cigarLengths.insert(alignment->cigarLengths.end(), output.cigarLengths.begin(), output.cigarLengths.end());
+                    alignment->cigarChars.push_back('=');
+                    alignment->cigarLengths.push_back(match.len);
+                }
+                alignment->alignmentScore += dp_.scores.match*match.len + output.dpScore;
+                curEditDist += output.editDist;
+                if(print) cerr << "DP returned with score " << output.dpScore << endl;
+                output.clear();
+            }
+            if(print) cerr << "new seed number " << (minDistMem-begin) << " was " << match.query << "," << match.ref << "," << match.len << endl;
+            if(print) cerr << "current score is " << alignment->alignmentScore << endl;
+            //set new positions
+            memsIndex = minDistMem + 1;
+            //add matches
+            refstrRB = match.ref + match.len - 1L;
+            queryRB = match.query + match.len - 1L;
+        }
+    }
+    if(print){
+        cerr << "stopped chain because ";
+        if(memsIndex > end) cerr << "all seeds in cluster were tried." << endl;
+        if(!foundNext) cerr << "no seed found within limits of the previous seed" << endl;        
+    }
+    /////////////
+    //FINAL DP?
+    ////////////
+    //possible at the end characters
+    //mapInterval += Integer.toString(queryRB+1)+"]";
+    alignment->refLength = queryRB-queryLB;
+    if (queryRB + 1 < (long)P.length() && refstrRB < chrEnd) {
+        long refAlignRB = refstrRB + ((long)P.length() - queryRB) + 1L + editDist;
+        if (refAlignRB > chrEnd)
+            refAlignRB = chrEnd;
+        boundaries grenzen(refstrRB + 1L, refAlignRB, queryRB + 1, P.length() - 1);
+        dp_type types;
+        types.freeRefE = true;
+        types.freeQueryE = true;
+        if(print) cerr << "END dp called with dimension " << (grenzen.queryE-grenzen.queryB+1) << "x" << (grenzen.refE-grenzen.refB+1) << endl;
+        if(dp_.dpBandStatic( S, P, grenzen, types, ERRORSTRING, output, minBandSize, maxBandSize, print>1)==0){
+            if(grenzen.queryE > queryRB){
+                int addToLength = grenzen.queryE-queryRB;
+                alignment->refLength += addToLength;
+            }
+            alignment->cigarChars.insert(alignment->cigarChars.end(), output.cigarChars.begin(), output.cigarChars.end());
+            alignment->cigarLengths.insert(alignment->cigarLengths.end(), output.cigarLengths.begin(), output.cigarLengths.end());
+            if (grenzen.queryE < (long)P.length() - 1) {
+                alignment->cigarChars.push_back('S');
+                alignment->cigarLengths.push_back(P.length() - 1 - grenzen.queryE);
+            }
+        }
+        if(print) cerr << "end DP returned with score " << output.dpScore << endl;
+        alignment->alignmentScore += output.dpScore;
+        curEditDist += output.editDist;
+        output.clear();
+    } else if (queryRB + 1 < (long)P.length() && curEditDist < editDist) {
+        alignment->cigarChars.push_back('S');
+        alignment->cigarLengths.push_back(P.length() - queryRB - 1);
+    }
+    if(print) cerr << "current score is " << alignment->alignmentScore << endl;
+    dp_.scores.match = matchScore;
+    dp_.scores.mismatch = mismatchScore;
+    dp_.scores.openGap = gapopenScore;
+    dp_.scores.extendGap = gapextendScore;
+    dp_.scores.updateScoreMatrixDna();
+    //TODO: check for possible optimizations (static initialisations
+    //TODO: reorder matches according to best hits
+    if(alignment->alignmentScore >= minScore){
+        if(print) cerr << "extension returned an alignment with score " << alignment->alignmentScore << endl;
+        if(print) cerr << "extension returned an alignment edit distance " << curEditDist << endl;
+        alignment->editDist = curEditDist;
+        return alignment;
+    }
+    else{
+        if(print) cerr << "extension failed because score " << alignment->alignmentScore << "<" << minScore << endl;
+        if(print) cerr << "extension failed with edit distance " << curEditDist << endl;
+        delete alignment;
+        return NULL;
+    }
+    
+}
+
+
 alignment_t * extendAlignment(dynProg& dp_, const string& S, const string& P, 
         vector<match_t>& matches, int begin, int end, long editDist, 
         const align_opt & alnOptions, long chrStart, long chrEnd){
+    if(!alnOptions.noClipping)
+        return extendAlignmentBWASWLike(dp_, S, P, matches, begin, end, editDist, 
+        alnOptions, chrStart, chrEnd);
     int print = alnOptions.print;//print lvl 1: only display steps and results, lvl2: display seeds
     alignment_t * alignment = new alignment_t();
     dp_output output;
@@ -155,10 +394,10 @@ alignment_t * extendAlignment(dynProg& dp_, const string& S, const string& P,
         types.freeRefB = true;
         types.freeQueryB = clipping;
         if(print) cerr << "dp called with dimension " << (grenzen.queryE-grenzen.queryB+1) << "x" << (grenzen.refE-grenzen.refB+1) << endl;
-        dp_.dpBandStatic( S, P, grenzen, types, ERRORSTRING, output, editDist-curEditDist, print>1);
+        dp_.dpBandStatic( S, P, grenzen, types, ERRORSTRING, output, editDist-curEditDist, editDist-curEditDist, print>1);
         if(curEditDist + output.editDist <= editDist){//required if dp_ returns fail or too high editDist (output may not be initialized
             queryLB = grenzen.queryB;
-            if(output.cigarChars[0] == 'I')
+            if(!output.cigarChars.empty() && output.cigarChars[0] == 'I')
                     queryLB += (long)output.cigarLengths[0];
             if(clipping && grenzen.queryB> 0){
                 alignment->cigarChars.push_back('S');
@@ -220,10 +459,7 @@ alignment_t * extendAlignment(dynProg& dp_, const string& S, const string& P,
                         refDist = minDist + 1;
                 }
             }
-            if (qDist < refDist)
-                dist = refDist;
-            else
-                dist = qDist;
+            dist = max(qDist, refDist);
             if (dist <= minDist) {
                 minDist = dist;
                 minDistMem = indexIncrease + memsIndex;
@@ -267,7 +503,7 @@ alignment_t * extendAlignment(dynProg& dp_, const string& S, const string& P,
                 boundaries grenzen(refstrRB + 1L, refstrRB + minRefDist - 1L, queryRB + 1, queryRB + minQDist - 1);
                 dp_type types;
                 if(print) cerr << "dp called with dimension " << (grenzen.queryE-grenzen.queryB+1) << "x" << (grenzen.refE-grenzen.refB+1) << endl;
-                dp_.dpBandStatic( S, P, grenzen, types, ERRORSTRING, output, editDist-curEditDist, print>1);
+                dp_.dpBandStatic( S, P, grenzen, types, ERRORSTRING, output, editDist-curEditDist, editDist-curEditDist, print>1);
                 if(curEditDist + output.editDist <= editDist){//required if dp_ returns fail or too high editDist (output may not be initialized
                     alignment->cigarChars.insert(alignment->cigarChars.end(), output.cigarChars.begin(), output.cigarChars.end());
                     alignment->cigarLengths.insert(alignment->cigarLengths.end(), output.cigarLengths.begin(), output.cigarLengths.end());
@@ -308,7 +544,7 @@ alignment_t * extendAlignment(dynProg& dp_, const string& S, const string& P,
         types.freeRefE = true;
         types.freeQueryE = clipping;
         if(print) cerr << "END dp called with dimension " << (grenzen.queryE-grenzen.queryB+1) << "x" << (grenzen.refE-grenzen.refB+1) << endl;
-        dp_.dpBandStatic( S, P, grenzen, types, ERRORSTRING, output, editDist-curEditDist+1, print>1);
+        dp_.dpBandStatic( S, P, grenzen, types, ERRORSTRING, output, editDist-curEditDist+1, editDist-curEditDist+1, print>1);
         if(curEditDist + output.editDist <= editDist){//required if dp_ returns fail or too high editDist (output may not be initialized
             if(grenzen.queryE > queryRB){
                 int addToLength = grenzen.queryE-queryRB;
@@ -364,6 +600,12 @@ void inexactMatch(const sparseSA& sa, dynProg& dp_, read_t & read,const align_op
     if(print) cerr << "calculate seeds" << endl;
     calculateSeeds(sa, P, min_len, alnOptions.maxSeedCandidates, matches, alnOptions.tryHarder, alnOptions.memType);
     if(print) cerr << "found " << matches.size() << " seeds"<< endl;
+    if(alnOptions.print>1){
+        cerr << "seeds are: " << endl;
+        for(int i = 0; i < matches.size(); i++){
+            cerr << matches[i].ref << " " << matches[i].query << " " << matches[i].len << endl;
+        }
+    }
     //sort matches
     if(matches.size()>0){
         /////////////////////////
@@ -970,9 +1212,9 @@ void pairedMatch3(const sparseSA& sa, dynProg& dp_, read_t & mate1, read_t & mat
         if(print) cerr << "sort clusters according to alignment score" << endl;
         sort(lisIntervalsFM1.begin(),lisIntervalsFM1.end(), compAlignmentAndScore);
         sort(lisIntervalsFM2.begin(),lisIntervalsFM2.end(), compAlignmentAndScore);
-        if(lisIntervalsFM1[0].extended)
+        if(!lisIntervalsFM1.empty() && lisIntervalsFM1[0].extended)
                 maxScoreFirst = lisIntervalsFM1[0].alignment->alignmentScore;
-        if(lisIntervalsFM2[0].extended)
+        if(!lisIntervalsFM2.empty() && lisIntervalsFM2[0].extended)
                 maxScoreSecond = lisIntervalsFM2[0].alignment->alignmentScore;
             //Set discordant to LIS, count something else, and make sure we can retrieve the right ones
         if(pairedOpt.discordant){
@@ -1304,9 +1546,9 @@ void pairedMatch4(const sparseSA& sa, dynProg& dp_, read_t & mate1, read_t & mat
         if(print) cerr << "sort aln according to alignment score and global pos" << endl;
         sort(lisIntervalsFM1.begin(),lisIntervalsFM1.end(), compAlignmentAndScore);
         sort(lisIntervalsFM2.begin(),lisIntervalsFM2.end(), compAlignmentAndScore);
-        if(lisIntervalsFM1[0].extended)
+        if(!lisIntervalsFM1.empty() && lisIntervalsFM1[0].extended)
             maxScoreFirst = lisIntervalsFM1[0].alignment->alignmentScore;
-        if(lisIntervalsFM2[0].extended)
+        if(!lisIntervalsFM2.empty() && lisIntervalsFM2[0].extended)
             maxScoreSecond = lisIntervalsFM2[0].alignment->alignmentScore;
         if(pairedOpt.discordant){
             //extra discordant searches depending on max score

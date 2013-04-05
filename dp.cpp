@@ -138,17 +138,18 @@ int dynProg::updateMatrix(const dp_type& type, bool print){
         if(print) cerr << "resize succesful" << endl;
     }
     //assert(!banded || (!type.freeQueryB && !type.freeRefB));
+//    bool backward = (type.freeQueryB || type.freeRefB) && !type.local;
     M[0][0] = 0;
-    if(type.freeQueryB)//no need for reinitialization if same values
-        for(int i = 1; i <= L2; i++)
-            M[i][0] = 0;
-    else
+//    if(type.freeQueryB)//no need for reinitialization if same values
+//        for(int i = 1; i <= L2; i++)
+//            M[i][0] = 0;
+//    else
         for(int i = 1; i <= L2; i++)
             M[i][0] = scores.openGap + i*scores.extendGap;
-    if(type.freeRefB)
-        for(int i = 1; i <= L1; i++)
-            M[0][i] = 0;
-    else
+//    if(type.freeRefB)
+//        for(int i = 1; i <= L1; i++)
+//            M[0][i] = 0;
+//    else
         for(int i = 1; i <= L1; i++)
             M[0][i] = scores.openGap + i*scores.extendGap;
     if(scores.openGap != 0){//affine gap penalties
@@ -279,10 +280,10 @@ int dynProg::updateMatrix(const dp_type& type, bool print){
 int dynProg::findTraceBackPosStatic(bool forward, int* const i, int* const j,const dp_type& type){
     //find beginPosition for traceBack and find dpScore
     int maximum = M[*i][*j];
-    int bandCorrection = forward ? 0 : L1 - L2;
+    int bandCorrection = 0;
     int bandL = max(bandLeft, bandSize);
     int bandR = max(bandRight, bandSize);
-    if((type.freeQueryE && type.freeRefE) || type.local){//local
+    if((type.freeQueryE && type.freeRefE) || (type.freeQueryB && type.freeRefB) || type.local){//local
         if(!banded){
             for(int idx = L2; idx >= 0; idx--){
                 for(int idx2 = L1; idx2 >= 0; idx2--){
@@ -306,7 +307,7 @@ int dynProg::findTraceBackPosStatic(bool forward, int* const i, int* const j,con
             }
         }
     }
-    else if(type.freeQueryE){//banded update
+    else if(type.freeQueryE || type.freeQueryB){//banded update
         for(int idx = min(L2, bandCorrection + L1 + bandR); 
                 idx >= min(L2, max(0, bandCorrection + L1 - bandL)); 
                 idx--){
@@ -316,7 +317,7 @@ int dynProg::findTraceBackPosStatic(bool forward, int* const i, int* const j,con
             }
         }
     }
-    else if(type.freeRefE){
+    else if(type.freeRefE || type.freeRefB){
         for(int idx = min(L1, bandCorrection + L2 + bandR); 
                 idx >= min(L1, max(0, bandCorrection + L2 - bandL)); 
                 idx--){
@@ -421,8 +422,10 @@ inline int  maximum( int f1, int f2, int f3, char * ptr )
 
 int dynProg::dpFillStatic(const string& ref,const string& query, bool forward,
         const boundaries& offset, const dp_type& type){
+    if(!forward)
+        return dpFillStaticBackward(ref, query, forward, offset, type);
     int        d = 0;
-    int        local = type.local || (type.freeQueryB && type.freeRefB) ? 0 : 1;
+    int        local = type.local || (type.freeQueryB && type.freeRefB) ? 0 : 1;//TODO: remove because this will never happen (speed up)
     int bandL = max(bandLeft, bandSize);
     int bandR = max(bandRight, bandSize);
     for(long i = 1; i <= L2; i++ ){
@@ -457,6 +460,46 @@ int dynProg::dpFillStatic(const string& ref,const string& query, bool forward,
             //fill in generic value for gapUp, such that it is defined, but not chosen in next step
             UP[i][idx2] = M[ i ][ idx2 ] + scores.extendGap + 2*scores.openGap;
             M[ i ][ idx2 ] = max(M[ i ][ idx2 ], 0 + local*M[ i ][ idx2 ]);
+        }
+    }
+    return 0;
+}
+
+int dynProg::dpFillStaticBackward(const string& ref,const string& query, bool forward,
+        const boundaries& offset, const dp_type& type){
+    int        d = 0;
+    int bandL = max(bandLeft, bandSize);
+    int bandR = max(bandRight, bandSize);
+    for(long i = 1; i <= L2; i++ ){
+        //always backward: traverse from right to left!
+        long idx2 = i-bandL;
+        long colRB = i+bandR;
+        if(idx2>0){//left value undefined
+            d = scores.scoreMatrix[size_t (ref[offset.refE-idx2+1])][size_t (query[offset.queryE-i+1])];
+            M[ i ][ idx2 ] = M[ i-1 ][ idx2-1 ] + d;
+            UP[i][idx2] = max(M[ i-1 ][ idx2 ] + scores.extendGap + scores.openGap, UP[i-1][idx2]+scores.extendGap);
+            M[ i ][ idx2 ] = max(M[ i ][ idx2 ] , UP[i][idx2]);
+            //fill in generic value for gapLeft, such that it is defined, but not chosen in next step
+            LEFT[i][idx2] = M[ i ][ idx2 ] + scores.extendGap + 2*scores.openGap;
+            idx2++;
+        }
+        for(long j = max( 1L, idx2); j <= min((long)L1, colRB-1); j++ ){
+            //here insert substitution matrix!
+            d = scores.scoreMatrix[size_t(ref[offset.refE-j+1])][size_t(query[offset.queryE-i+1])];
+            UP[i][j] = max(M[ i-1 ][ j ] + scores.extendGap + scores.openGap, UP[i-1][j]+scores.extendGap);
+            M[i][j] = M[ i-1 ][ j-1 ] + d;
+            LEFT[i][j] = max(M[ i ][ j-1 ] + scores.extendGap + scores.openGap, LEFT[i][j-1]+scores.extendGap);
+            M[i][j] = max(M[i][j], LEFT[i][j]);
+            M[i][j] = max(M[i][j], UP[i][j]);
+        }
+        if(colRB <= L1){
+            idx2 = colRB;
+            d = scores.scoreMatrix[size_t(ref[offset.refE-idx2+1])][size_t(query[offset.queryE-i+1])];
+            M[ i ][ idx2 ] = M[ i-1 ][ idx2-1 ] + d;
+            LEFT[i][idx2] = max(M[ i ][ idx2-1 ] + scores.extendGap + scores.openGap, LEFT[i][idx2-1]+scores.extendGap);
+            M[ i ][ idx2 ] = max(M[ i ][ idx2 ], LEFT[i][idx2]);
+            //fill in generic value for gapUp, such that it is defined, but not chosen in next step
+            UP[i][idx2] = M[ i ][ idx2 ] + scores.extendGap + 2*scores.openGap;
         }
     }
     return 0;
@@ -522,6 +565,8 @@ int dynProg::dpFillStatic(const string& ref,const string& query, bool forward,
 
 int dynProg::dpFillOptStatic(const string& ref,const string& query, bool forward, 
         const boundaries& offset, const dp_type& type){
+    if(!forward)
+        return dpFillOptStaticBackward(ref, query, forward, offset, type);
     //TODO: when changed to mallocs: use row-order traversal
     int        d = 0;
     int        local = type.local || (type.freeQueryB && type.freeRefB) ? 0 : 1;
@@ -547,6 +592,34 @@ int dynProg::dpFillOptStatic(const string& ref,const string& query, bool forward
             d = scores.scoreMatrix[size_t(ref[offset.refB+idx2-1])][size_t(query[offset.queryB+i-1])];
             M[ i ][ idx2 ] = max(M[ i-1 ][ idx2-1 ] + d, M[ i ][ idx2-1 ] + scores.extendGap);
             M[ i ][ idx2 ] = max(M[ i ][ idx2 ], 0 + local*M[ i ][ idx2 ]);
+        }
+    }
+    return 0;
+}
+
+int dynProg::dpFillOptStaticBackward(const string& ref,const string& query, bool forward, 
+        const boundaries& offset, const dp_type& type){
+    //TODO: when changed to mallocs: use row-order traversal
+    int        d = 0;
+    int bandL = max(bandLeft, bandSize);
+    int bandR = max(bandRight, bandSize);
+    for(long i = 1; i <= L2; i++ ){
+        long idx2 = i-bandL;
+        long colRB = i+bandR;
+        if(idx2>0){
+            d = scores.scoreMatrix[size_t(ref[offset.refE-idx2+1])][size_t(query[offset.queryE-i+1])];
+            M[ i ][ idx2 ] = max(M[ i-1 ][ idx2-1 ] + d, M[ i-1 ][ idx2 ] + scores.extendGap);
+            idx2++;
+        }
+        for(long j = max( 1L, idx2); j <= min((long)L1, colRB-1); j++ ){
+            d = scores.scoreMatrix[size_t(ref[offset.refE-j+1])][size_t(query[offset.queryE-i+1])];
+            M[ i ][ j ] = max(M[ i-1 ][ j-1 ] + d, M[ i ][ j-1 ] + scores.extendGap);
+            M[ i ][ j ] = max(M[ i ][ j ], M[ i-1 ][ j ] + scores.extendGap);
+        }
+        if(colRB <= L1){
+            idx2 = colRB;
+            d = scores.scoreMatrix[size_t(ref[offset.refE-idx2+1])][size_t(query[offset.queryE-i+1])];
+            M[ i ][ idx2 ] = max(M[ i-1 ][ idx2-1 ] + d, M[ i ][ idx2-1 ] + scores.extendGap);
         }
     }
     return 0;
@@ -590,14 +663,19 @@ int dynProg::dpTraceBackStatic(int& i, int& j, const dp_type& type, dp_output& o
     int qBound = 0; int rBound = 0;
     int bandL = max(bandLeft, bandSize);
     int bandR = max(bandRight, bandSize);
-    if(type.freeQueryB)
-        qBound = L2;
-    if(type.freeRefB)
-        rBound = L1;
+//    if(type.freeQueryB)
+//        qBound = L2;
+//    if(type.freeRefB)
+//        rBound = L1;
     bool local = type.local || (type.freeQueryB && type.freeRefB);
-    int bandCorrection = forward ? 0 : L1 - L2;
-    while( (i > qBound || j > rBound) && (!local || M[ i ][ j ] > 0)){
-        if( j > 0 && i > 0 && M[ i ][ j ] == M[ i-1 ][ j-1 ] + scores.match && ref[offset.refB+j-1] == query[offset.queryB+i-1]){
+//    int bandCorrection = forward ? 0 : L1 - L2;
+    int bandCorrection = 0;
+//    while( (i > qBound || j > rBound || local) && (!local || M[ i ][ j ] > 0)){
+    while( (i > qBound || j > rBound)){
+        bool equal = false;
+        if(j > 0 && i > 0)
+            equal = forward ? ref[offset.refB+j-1] == query[offset.queryB+i-1] : ref[offset.refE-j+1] == query[offset.queryE-i+1];
+        if( j > 0 && i > 0 && M[ i ][ j ] == M[ i-1 ][ j-1 ] + scores.match && equal){
             ss << '=';
             i-- ;  j-- ;
         }
@@ -606,12 +684,12 @@ int dynProg::dpTraceBackStatic(int& i, int& j, const dp_type& type, dp_output& o
             output.editDist++;
             i-- ;  j-- ;
         }
-        else if(j > 0 && j > i+bandCorrection - bandL && M[ i ][ j ] == LEFT[ i ][ j ]){
+        else if(j > 0 && j > i+bandCorrection - bandL && (M[ i ][ j ] == LEFT[ i ][ j ] || i==0)){
             ss << 'D';
             output.editDist++;
             j-- ;
         }
-        else if(i > 0 && j < i+bandCorrection + bandR && M[ i ][ j ] == UP[ i ][ j ]){
+        else if(i > 0 && j < i+bandCorrection + bandR && (M[ i ][ j ] == UP[ i ][ j ] || j==0)){
             ss << 'I';
             output.editDist++;
             i-- ;
@@ -643,14 +721,19 @@ int dynProg::dpTraceBackOptStatic(int& i, int& j, const dp_type& type, dp_output
     int qBound = 0; int rBound = 0;
     int bandL = max(bandLeft, bandSize);
     int bandR = max(bandRight, bandSize);
-    if(type.freeQueryB)
-        qBound = L2;
-    if(type.freeRefB)
-        rBound = L1;
+//    if(type.freeQueryB)
+//        qBound = L2;
+//    if(type.freeRefB)
+//        rBound = L1;
     bool local = type.local || (type.freeQueryB && type.freeRefB);
-    int bandCorrection = forward ? 0 : L1 - L2;
-    while( (i > qBound || j > rBound) && (!local || M[ i ][ j ] > 0)){
-        if( j > 0 && i > 0 && M[ i ][ j ] == M[ i-1 ][ j-1 ] + scores.match && ref[offset.refB+j-1] == query[offset.queryB+i-1]){
+//    int bandCorrection = forward ? 0 : L1 - L2;
+    int bandCorrection = 0;
+//    while( (i > qBound || j > rBound || local) && (!local || M[ i ][ j ] > 0)){
+    while( (i > qBound || j > rBound || local)){
+        bool equal = false;
+        if(j > 0 && i > 0)
+            equal = forward ? ref[offset.refB+j-1] == query[offset.queryB+i-1] : ref[offset.refE-j+1] == query[offset.queryE-i+1];
+        if( j > 0 && i > 0 && M[ i ][ j ] == M[ i-1 ][ j-1 ] + scores.match && equal){
             ss << '=';
             i-- ;  j-- ;
         }
@@ -659,12 +742,12 @@ int dynProg::dpTraceBackOptStatic(int& i, int& j, const dp_type& type, dp_output
             output.editDist++;
             i-- ;  j-- ;
         }
-        else if(j > 0 && j > i+bandCorrection - bandL && M[ i ][ j ] == M[ i ][ j-1 ] + scores.extendGap){
+        else if(j > 0 && j > i+bandCorrection - bandL && (M[ i ][ j ] == M[ i ][ j-1 ] + scores.extendGap || i==0)){
             ss << 'D';
             output.editDist++;
             j-- ;
         }
-        else if(i > 0 && j < i+bandCorrection + bandR && M[ i ][ j ] == M[ i-1 ][ j ] + scores.extendGap){
+        else if(i > 0 && j < i+bandCorrection + bandR && (M[ i ][ j ] == M[ i-1 ][ j ] + scores.extendGap || j==0)){
             ss << 'I';
             output.editDist++;
             i-- ;
@@ -1075,12 +1158,13 @@ int dynProg::dpBandStatic( const string&     ref,
         const dp_type&    type,
         const outputType& oType,
         dp_output&  output,
-        int bandS,
+        int minbandS,
+        int maxbandS,
         bool print)
 {
     L1 = offset.refE-offset.refB+1;
     L2 = offset.queryE-offset.queryB+1;
-    bandSize = bandS;
+    bandSize = minbandS;
     banded = true;
     assert(L1 >=0 && L2 >= 0 && bandSize >0);
     assert(!type.local);
@@ -1095,24 +1179,42 @@ int dynProg::dpBandStatic( const string&     ref,
             (type.freeRefB && !type.freeQueryB && L2 - bandSize > L1) ||
             (!(type.freeQueryB || type.freeRefB) && !type.freeRefE && L2 + bandSize < L1) ||
             (!(type.freeQueryB || type.freeRefB) && !type.freeQueryE && L2 - bandSize > L1)){
-        if(print) cerr << "possible end of alignment would lay beyond the dimensions of the matrix" << endl;
-        output.dpScore = scores.mismatch*query.length();
-        output.editDist = query.length();
-        return 1;
+        if(max(L2,L1) - min(L2,L1) < maxbandS){
+            bandSize = max(L2,L1) - min(L2,L1);
+            if(print) cerr << "adjusted bandSize to " << bandSize << endl;
+        }
+        else{
+            if(print) cerr << "possible end of alignment would lay beyond the dimensions of the matrix" << endl;
+            output.dpScore = scores.mismatch*query.length();
+            output.editDist = query.length();
+            return 1;
+        }
     }
+    bool backward = (type.freeQueryB || type.freeRefB) && !type.local;
     //build matrices
     updateMatrix(type, print);
     bool affine = scores.openGap != 0;
+    if(print)
+        cerr << "fill DP matrix" << endl;
     //dp
     if(affine)
-        dpFillStatic(ref, query, !type.freeQueryB && !type.freeRefB, offset, type);
+        dpFillStatic(ref, query, !backward, offset, type);
     else
-        dpFillOptStatic(ref, query, !type.freeQueryB && !type.freeRefB, offset, type);
+        dpFillOptStatic(ref, query, !backward, offset, type);
+    if(print){
+        //print_matrices(ref, query, offset, false);
+    }
     //traceback and output
     int        i = min(L2,L1+bandSize), j = min(L1,L2+bandSize);
+    if(print)
+        cerr << "find traceback position" << endl;
     //find beginPosition for traceBack and find dpScore
-    findTraceBackPosStatic((!type.freeQueryB && !type.freeRefB), &i,&j,type);
+    findTraceBackPosStatic(!backward, &i,&j,type);
+    if(print)
+        cerr << "tracebackpos is " << i << ", " << j << endl;
     output.dpScore = M[i][j];
+    if(print)
+        cerr << "dp score is " << output.dpScore << endl;
     //Next is for output only
     if(oType>DPSCORE){
         //Alter boundaries to return the new positions when free gaps were introduced.
@@ -1120,25 +1222,37 @@ int dynProg::dpBandStatic( const string&     ref,
             offset.queryE = offset.queryB+i-1;
         if(type.freeRefE && j < L1)
             offset.refE = offset.refB+j-1;
+        if(type.freeQueryB && i < L2)
+            offset.queryB = offset.queryE-i+1;
+        if(type.freeRefB && j < L1)
+            offset.refB = offset.refE-j+1;
         //traceBack
+        if(print)
+                cerr << "search trace" << endl;
         std::stringstream ss;
         if(affine)
-            dpTraceBackStatic(i, j, type, output, ss, offset, !type.freeQueryB && !type.freeRefB, ref, query);
+            dpTraceBackStatic(i, j, type, output, ss, offset, !backward, ref, query);
         else
-            dpTraceBackOptStatic(i, j, type, output, ss, offset, !type.freeQueryB && !type.freeRefB, ref, query);
-        //Edit Dist ouput
-        if( i > 0 && !type.freeQueryB)
-            output.editDist += i;
-        if(j > 0 && !type.freeRefB)
-            output.editDist += j;
+            dpTraceBackOptStatic(i, j, type, output, ss, offset, !backward, ref, query);
+        if(print)
+                cerr << "trace ended at position " << i << ", " << j << endl;
+        //Edit Dist ouput --> should not happen
+//        if( i > 0 && !type.freeQueryB)
+//            output.editDist += i;
+//        if(j > 0 && !type.freeRefB)
+//            output.editDist += j;
+        assert(j ==0 && i==0);
         //Errorstring output
         if(oType == ERRORSTRING || oType == ALL){
+            if(print)
+                cerr << "write errorstring to cigar vector" << endl;
             string errorString = ss.str();
-            if(i > 0 && !type.freeQueryB)
-                errorString.append(i,'I');
-            else if(j > 0 && !type.freeRefB)
-                errorString.append(j, 'D');
-            reverse( errorString.begin(), errorString.end() );
+//            if(i > 0 && !type.freeQueryB)
+//                errorString.append(i,'I');
+//            else if(j > 0 && !type.freeRefB)
+//                errorString.append(j, 'D');
+            if(!backward)
+                reverse( errorString.begin(), errorString.end() );
             //create output: errorString
             int iter = 0;
             int temp;
@@ -1154,10 +1268,12 @@ int dynProg::dpBandStatic( const string&     ref,
         }
     }
     //change boundaries for local and freeGap types to return changed free boundaries.
-    if(type.freeQueryB && i > 0)
-        offset.queryB = offset.queryB+i;
-    if(type.freeRefB && j > 0)
-        offset.refB = offset.refB+j;
+//    if(type.freeQueryB && i > 0)
+//        offset.queryB = offset.queryB+i;
+//    if(type.freeRefB && j > 0)
+//        offset.refB = offset.refB+j;
+    if(print)
+        cerr << "DP finished" << endl;
 
     return 0;
 }

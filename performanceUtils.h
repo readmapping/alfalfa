@@ -18,7 +18,6 @@
 #include <sstream>
 #include <cmath>
 #include "fasta.h"
-#include "dp.h"
 
 using namespace std;
 
@@ -421,9 +420,7 @@ static int pairedCompareSam(samRecord_t& query, samRecord_t& oracle, int range){
     //else incorrect
 }
 
-static int calculatedDPScore(dynProg * dp_, const string& S, vector<string> & refdescr, vector<long> & startpos, const string& queryLine, int allowedEditDist){
-    dp_type types;
-    dp_output output;
+static int calculatedDPScore(const string& S, vector<string> & refdescr, vector<long> & startpos, const string& queryLine){
     //read boundaries and sequence from SAM line
     int tabPos = 0;
     char delimeter = '\t';
@@ -441,7 +438,9 @@ static int calculatedDPScore(dynProg * dp_, const string& S, vector<string> & re
         chromStart = startpos[i];
     }
     else{
-        cerr << "query found in sequence " << rname << ". But this sequence is not found in reference string";
+        cerr << "query found in sequence " << rname << ". But this sequence is not found in reference string" << endl;
+        cerr << queryLine << endl;
+        cerr << "length of line: " << queryLine.length() << endl;
         exit(1);
     }
     //pos
@@ -451,31 +450,6 @@ static int calculatedDPScore(dynProg * dp_, const string& S, vector<string> & re
     nextField(queryLine, delimeter, tabPos).c_str();
     //skip CIGAR
     string cigar = nextField(queryLine, delimeter, tabPos);
-    int cigarPos = 0;
-    long refEnd = refStart;
-    while(cigarPos < cigar.length()){
-        int beginPos = cigarPos;
-        while(cigar[cigarPos] >= 48 && cigar[cigarPos] <= 57)//integer
-                cigarPos++;
-        //now cigar[cigarPos] is character
-        if(cigar[cigarPos] == 'M' || cigar[cigarPos] == 'D' || cigar[cigarPos] == 'X' || cigar[cigarPos] == '='){
-                long partsize = atoi(cigar.substr(beginPos,cigarPos-beginPos).c_str());
-                refEnd += partsize;
-        }
-        cigarPos++;
-    }
-    refEnd--;//true refEnd, not length
-    //query begin and query end: take into account soft clipping
-    cigarPos = 0;
-    long queryBegin = 0;
-    int beginPos = cigarPos;
-    while(cigar[cigarPos] >= 48 && cigar[cigarPos] <= 57)//integer
-            cigarPos++;
-    //now cigar[cigarPos] is character
-    if(cigar[cigarPos] == 'S' || cigar[cigarPos] == 'H'){
-            long partsize = atoi(cigar.substr(beginPos,cigarPos-beginPos).c_str());
-            queryBegin += partsize;
-    }
     //rnext
     nextField(queryLine, delimeter, tabPos);
     //pnext
@@ -484,21 +458,39 @@ static int calculatedDPScore(dynProg * dp_, const string& S, vector<string> & re
     nextField(queryLine, delimeter, tabPos);
     //seq
     string P = nextField(queryLine, delimeter, tabPos);
-    long queryEnd = P.length()-1;
-    //query begin and query end: take into account soft clipping
-    cigarPos = cigar.length()-1;
-    if(cigar[cigarPos] == 'S' || cigar[cigarPos] == 'H'){
-        cigarPos--;
-        while(cigar[cigarPos] >= 48 && cigar[cigarPos] <= 57)//integer
-            cigarPos--;
-        long partsize = atoi(cigar.substr(cigarPos+1,cigar.length()-1-(cigarPos+1)+1).c_str());
-        queryEnd -= partsize;
+    for(int i = 0; i < P.length(); i++){
+        P[i] = std::tolower(P[i]);
     }
-    //edit distance NM tag
-    //skip fields to make sure 
-    boundaries grenzen(refStart,refEnd,queryBegin,queryEnd);
-    dp_->dpBandStatic( S, P, grenzen, types, ERRORSTRING, output, allowedEditDist, false);
-    return output.editDist;
+    int cigarPos = 0;
+    long refEnd = refStart;
+    long qStart = 0;
+    int editDist = 0;
+    while(cigarPos < cigar.length()){
+        int beginPos = cigarPos;
+        while(cigar[cigarPos] >= 48 && cigar[cigarPos] <= 57)//integer
+                cigarPos++;
+        //now cigar[cigarPos] is character
+        long partsize = atoi(cigar.substr(beginPos,cigarPos-beginPos).c_str());
+        if(cigar[cigarPos] == 'D' || cigar[cigarPos] == 'X' || cigar[cigarPos] == 'I'){
+            editDist += partsize;
+            qStart += partsize;
+            refEnd += partsize;
+        }
+        else if(cigar[cigarPos] == 'S' || cigar[cigarPos] == 'H'){
+            qStart += partsize;
+        }
+        else if(cigar[cigarPos] == 'M'){
+            
+            for(int i= 0; i < partsize; i++){
+                if(P[qStart+i]!=S[refEnd+i])
+                    editDist++;
+            }
+            qStart += partsize;
+            refEnd += partsize;
+        }
+        cigarPos++;
+    }
+    return editDist;
 }
 
 static void checkOracle(samCheckOptions_t & opt){
@@ -507,8 +499,6 @@ static void checkOracle(samCheckOptions_t & opt){
     vector<string> refdescr;
     vector<long> startpos;
     load_fasta(opt.refString, ref, refdescr, startpos);
-    dp_scores scores(0, -1, 0, -1);
-    dynProg * dp = new dynProg(2048, scores.openGap!=0, scores);
     //fields: input
     samRecord_t oracleUp;
     samRecord_t oracleDown;
@@ -518,9 +508,9 @@ static void checkOracle(samCheckOptions_t & opt){
     string oracleLine = "";
     string queryLine = "";
     streampos oraclePos = oracleFile.tellg();
-    if(!oracleFile.eof())
+    if(oracleFile.good())
         getlijn2(oracleFile, oracleLine);
-    if(!queryFile.eof())
+    if(queryFile.good())
         getlijn2(queryFile,queryLine);
     //fields: output
     long readcnt = 0;
@@ -537,13 +527,13 @@ static void checkOracle(samCheckOptions_t & opt){
     cerr << "summary: checking accuracy of SAM file, using oracle SAM file containing the original simulated positions" << endl;
     //print header of both files
     cerr << "header of oracle SAM file: " << endl;
-    while(!oracleFile.eof() && !oracleLine.empty() && oracleLine[0]=='@'){
+    while(oracleFile.good() && !oracleLine.empty() && oracleLine[0]=='@'){
         cerr << oracleLine << endl;
         oraclePos = oracleFile.tellg();
         getlijn2(oracleFile,oracleLine);
     }
     cerr << "header of query SAM file: " << endl;
-    while(!queryFile.eof() && !queryLine.empty() && queryLine[0]=='@'){
+    while(queryFile.good() && !queryLine.empty() && queryLine[0]=='@'){
         cerr << queryLine << endl;
         getlijn2(queryFile,queryLine);
     }
@@ -564,7 +554,7 @@ static void checkOracle(samCheckOptions_t & opt){
         paired = tempOracle.flag.test(0);
         oracleFile.seekg(oraclePos);
         if(paired){
-            while(!oracleFile.eof()){//next reads
+            while(oracleFile.good()){//next reads
                 getlijn2(oracleFile, oracleLine);
                 readRecord(oracleLine, tempOracle,opt.otag);
                 tempOracle.flag.test(6) ? oracleUp = tempOracle : oracleDown = tempOracle;
@@ -573,20 +563,18 @@ static void checkOracle(samCheckOptions_t & opt){
                 tempOracle.flag.test(6) ? oracleUp = tempOracle : oracleDown = tempOracle;
                 mapped.clear();
                 //iterate over the SAM file. To work query should always be more advanced than oracle
-                while(!queryFile.eof() && tempQuery.qname.compare(oracleUp.qname)==0){
+                while(queryFile.good() && !queryLine.empty() && tempQuery.qname.compare(oracleUp.qname)==0){
                     //fill mappedUp
-                    if(tempQuery.edit<0){
-                        int allowedEditDist = tempQuery.flag.test(6) ? oracleUp.edit : oracleDown.edit;
-                        calculatedDPScore(dp, ref, refdescr, startpos, queryLine, allowedEditDist);
+                    if(tempQuery.edit<0 && tempQuery.rname.compare("*")!=0){
+                        tempQuery.edit = calculatedDPScore(ref, refdescr, startpos, queryLine);
                     }
                     mapped.push_back(tempQuery);
                     getlijn2(queryFile, queryLine);
                     readRecord(queryLine, tempQuery, opt.qtag); 
                 }
-                if(tempQuery.qname.compare(oracleUp.qname)==0){//add last query of file
-                    if(tempQuery.edit<0){
-                        int allowedEditDist = tempQuery.flag.test(6) ? oracleUp.edit : oracleDown.edit;
-                        calculatedDPScore(dp, ref, refdescr, startpos, queryLine, allowedEditDist);
+                if(!queryLine.empty() && tempQuery.qname.compare(oracleUp.qname)==0){//add last query of file
+                    if(tempQuery.edit<0 && tempQuery.rname.compare("*")!=0){
+                        tempQuery.edit = calculatedDPScore(ref, refdescr, startpos, queryLine);
                     }
                     mapped.push_back(tempQuery);
                 }
@@ -620,25 +608,23 @@ static void checkOracle(samCheckOptions_t & opt){
             }
         }
         else{
-            while(!oracleFile.eof()){//next reads
+            while(oracleFile.good()){//next reads
                 getlijn2(oracleFile, oracleLine);
                 readRecord(oracleLine, oracleUp,opt.otag);
                 mapped.clear();
                 //iterate over the SAM file. To work query should always be more advanced than oracle
-                while(!queryFile.eof() && tempQuery.qname.compare(oracleUp.qname)==0){
+                while(queryFile.good() && !queryLine.empty() && tempQuery.qname.compare(oracleUp.qname)==0){
                     //fill mappedUp
-                    if(tempQuery.edit<0){
-                        int allowedEditDist = oracleUp.edit;
-                        calculatedDPScore(dp, ref, refdescr, startpos, queryLine, allowedEditDist);
+                    if(tempQuery.edit<0 && tempQuery.rname.compare("*")!=0){
+                        tempQuery.edit = calculatedDPScore(ref, refdescr, startpos, queryLine);
                     }
                     mapped.push_back(tempQuery);
                     getlijn2(queryFile, queryLine);
                     readRecord(queryLine, tempQuery, opt.qtag); 
                 }
-                if(tempQuery.qname.compare(oracleUp.qname)==0){//add last query of file
-                    if(tempQuery.edit<0){
-                        int allowedEditDist = oracleUp.edit;
-                        calculatedDPScore(dp, ref, refdescr, startpos, queryLine, allowedEditDist);
+                if(!queryLine.empty() && tempQuery.qname.compare(oracleUp.qname)==0){//add last query of file
+                    if(tempQuery.edit<0 && tempQuery.rname.compare("*")!=0){
+                        tempQuery.edit = calculatedDPScore(ref, refdescr, startpos, queryLine);
                     }
                     mapped.push_back(tempQuery);
                 }
@@ -770,15 +756,13 @@ static void checkWgsim(samCheckOptions_t & opt){
     vector<string> refdescr;
     vector<long> startpos;
     load_fasta(opt.refString, ref, refdescr, startpos);
-    dp_scores scores(0, -1, 0, -1);
-    dynProg * dp = new dynProg(2048, scores.openGap!=0, scores);
     //should provide sorted query file to count query and check missing queries
     if(opt.print)
         cerr << "Warning current version does not take into account unmapped reads." << endl;
     //fields: input
     ifstream queryFile(opt.querySam.c_str());
     string queryLine = "";
-    if(!queryFile.eof())
+    if(queryFile.good())
         getlijn2(queryFile,queryLine);
     //fields: output
     long readcnt = 0;
@@ -795,7 +779,7 @@ static void checkWgsim(samCheckOptions_t & opt){
     cerr << "summary: checking accuracy of SAM file for reads produced by wgsim" << endl;
     //print header of SAM file
     cerr << "header of SAM file: " << endl;
-    while(!queryFile.eof() && !queryLine.empty() && queryLine[0]=='@'){
+    while(queryFile.good() && !queryLine.empty() && queryLine[0]=='@'){
         cerr << queryLine << endl;
         getlijn2(queryFile,queryLine);
     }
@@ -881,8 +865,7 @@ static void checkWgsim(samCheckOptions_t & opt){
         string editTag = opt.qtag+":i:";
         int NMpos = queryLine.find(editTag,tabPos);
         if(NMpos == -1 && !flag.test(2)){
-            int allowedEditDist = !flag.test(4) ? fwdEdit : revEdit;
-            edit = calculatedDPScore(dp, ref, refdescr, startpos, queryLine, allowedEditDist);
+            edit = calculatedDPScore(ref, refdescr, startpos, queryLine);
         }
         else if(NMpos>=tabPos){
             tabPos = queryLine.find(delimeter,NMpos);
@@ -939,7 +922,7 @@ static void checkWgsim(samCheckOptions_t & opt){
         }
         //read next line
         getlijn2(queryFile, queryLine);
-    } while(!queryFile.eof() && !queryLine.empty());
+    } while(queryFile.good() && !queryLine.empty());
     //if new query, finish previous
     if(prevQname != ""){
         //sumarize for read
@@ -1135,7 +1118,7 @@ static void checkSummary(samCheckOptions_t & opt){
     ifstream queryFile(opt.querySam.c_str());
     string queryLine = "";
     streampos queryPos = queryFile.tellg();
-    if(!queryFile.eof())
+    if(queryFile.good())
         getlijn2(queryFile,queryLine);//first line
     //fields: output
     int qualValCount = opt.qualityValues.size();
@@ -1143,7 +1126,7 @@ static void checkSummary(samCheckOptions_t & opt){
     cerr << "summary: summary of alignments found (including pairing info and mapped/mapping quality" << endl;
     //print header of both files
     cerr << "header of SAM file: " << endl;
-    while(!queryFile.eof() && !queryLine.empty() && queryLine[0]=='@'){
+    while(queryFile.good() && !queryLine.empty() && queryLine[0]=='@'){
         cerr << queryLine << endl;
         queryPos = queryFile.tellg();
         getlijn2(queryFile,queryLine);
@@ -1196,7 +1179,7 @@ static void checkSummary(samCheckOptions_t & opt){
                         results[2+i].addAlignment(flag, rnext.compare("*")!=0);
             }
             getlijn2(queryFile,queryLine);//next line
-        }while(!queryFile.eof());
+        }while(queryFile.good());
         if(!qnamePrev.empty()){
             if(results[0].tempAlnCount==1 || (opt.paired && results[0].tempAlnCount==2))
                 results[1].addAlignment(flagPrev, rnextPrev.compare("*")!=0);
@@ -1309,8 +1292,6 @@ static void checkCompare(samCheckOptions_t & opt){
     vector<string> refdescr;
     vector<long> startpos;
     load_fasta(opt.refString, ref, refdescr, startpos);
-    dp_scores scores(0, -1, 0, -1);
-    dynProg * dp = new dynProg(2048, scores.openGap!=0, scores);
     //fields: input
     int mapperCount = opt.compareFiles.size();
     ifstream inputFiles[mapperCount];
@@ -1318,7 +1299,7 @@ static void checkCompare(samCheckOptions_t & opt){
     for(int i=0; i < mapperCount; i++){
         inputFiles[i].open(opt.compareFiles[i].c_str());
         inputLines[i] = "";
-        if(!inputFiles[i].eof())
+        if(inputFiles[i].good())
             getlijn2(inputFiles[i],inputLines[i]);//first line
     }    
     //fields: output
@@ -1345,7 +1326,7 @@ static void checkCompare(samCheckOptions_t & opt){
     cerr << "header of SAM file: PG lines" << endl;
     for(int i = 0; i < mapperCount; i++){
         cerr << "File " << i << " with name " << opt.compareFiles[i] << endl;
-        while(!inputFiles[i].eof() && !inputLines[i].empty() && inputLines[i][0]=='@'){
+        while(inputFiles[i].good() && !inputLines[i].empty() && inputLines[i][0]=='@'){
             if(inputLines[i].substr(0, 3).compare("@PG")==0)
                 cerr << inputLines[i] << endl;
             getlijn2(inputFiles[i],inputLines[i]);
@@ -1366,12 +1347,11 @@ static void checkCompare(samCheckOptions_t & opt){
         records[i].clear();
         bool sameRead = true;
         readRecord(inputLines[i], currentRec, tag);
-        if(currentRec.edit<0){
-            int allowedEditDist = 10000000;//TODO: generic large number: change to max
-            calculatedDPScore(dp, ref, refdescr, startpos, inputLines[i], allowedEditDist);
+        if(currentRec.edit<0 && currentRec.rname.compare("*")!=0 && !inputLines[i].empty()){
+            currentRec.edit = calculatedDPScore(ref, refdescr, startpos, inputLines[i]);
         }
         records[i].push_back(currentRec);
-        if(!inputFiles[i].eof()){
+        if(inputFiles[i].good()){
             getlijn2(inputFiles[i],inputLines[i]);
         }
         else{
@@ -1379,13 +1359,12 @@ static void checkCompare(samCheckOptions_t & opt){
         }
         while(!inputLines[i].empty() && sameRead){
             readRecord(inputLines[i], currentRec, tag);
-            if(currentRec.edit<0){
-                int allowedEditDist = 10000000;//TODO: generic large number: change to max
-                calculatedDPScore(dp, ref, refdescr, startpos, inputLines[i], allowedEditDist);
+            if(currentRec.edit<0 && currentRec.rname.compare("*")!=0 && !inputLines[i].empty()){
+                currentRec.edit = calculatedDPScore(ref, refdescr, startpos, inputLines[i]);
             }
             if(records[i][0].qname.compare(currentRec.qname)==0){
                 records[i].push_back(currentRec);
-                if(!inputFiles[i].eof()){
+                if(inputFiles[i].good()){
                     getlijn2(inputFiles[i],inputLines[i]);
                 }
                 else{
@@ -1477,17 +1456,15 @@ static void checkCompare(samCheckOptions_t & opt){
                 if(!inputLines[i].empty()){
                     bool sameRead = true;
                     readRecord(inputLines[i], currentRec, tag);
-                    if(currentRec.edit<0){
-                        int allowedEditDist = 10000000;//TODO: generic large number: change to max
-                        calculatedDPScore(dp, ref, refdescr, startpos, inputLines[i], allowedEditDist);
+                    if(currentRec.edit<0 && currentRec.rname.compare("*")!=0 && !inputLines[i].empty()){
+                        currentRec.edit = calculatedDPScore(ref, refdescr, startpos, inputLines[i]);
                     }
                     records[i].push_back(currentRec);
-                    while(!inputFiles[i].eof() && !inputLines[i].empty() && sameRead){
+                    while(inputFiles[i].good() && !inputLines[i].empty() && sameRead){
                         getlijn2(inputFiles[i],inputLines[i]);
                         readRecord(inputLines[i], currentRec, tag);
-                        if(currentRec.edit<0){
-                            int allowedEditDist = 10000000;//TODO: generic large number: change to max
-                            calculatedDPScore(dp, ref, refdescr, startpos, inputLines[i], allowedEditDist);
+                        if(currentRec.edit<0 && currentRec.rname.compare("*")!=0 && !inputLines[i].empty()){
+                            currentRec.edit = calculatedDPScore(ref, refdescr, startpos, inputLines[i]);
                         }
                         if(currentRec.qname.compare(records[i][0].qname)==0){
                             records[i].push_back(currentRec);
@@ -1495,7 +1472,7 @@ static void checkCompare(samCheckOptions_t & opt){
                         else
                             sameRead = false;
                     }
-                    if(inputFiles[i].eof() && sameRead)
+                    if(!inputFiles[i].good() && sameRead)
                         inputLines[i].clear();
                 }
                 else{
