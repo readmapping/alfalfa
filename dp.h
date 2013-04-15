@@ -30,6 +30,34 @@
 
 using namespace std;
 
+static const unsigned int ORDVALUE[256] = { 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,//0-9
+                                         4, 4, 4, 4, 4, 4, 4, 4, 4, 4,//10-19
+                                         4, 4, 4, 4, 4, 4, 4, 4, 4, 4,//20-29
+                                         4, 4, 4, 4, 4, 4, 4, 4, 4, 4,//30-39
+                                         4, 4, 4, 4, 4, 4, 4, 4, 4, 4,//40-49
+                                         4, 4, 4, 4, 4, 4, 4, 4, 4, 4,//50-59
+                                         4, 4, 4, 4, 4, 0, 4, 1, 4, 4,//60-69 65:A, 67:C
+                                         4, 2, 4, 4, 4, 4, 4, 4, 4, 4,//70-79 71:G
+                                         4, 4, 4, 4, 3, 4, 4, 4, 4, 4,//80-89 84:T
+                                         4, 4, 4, 4, 4, 4, 4, 0, 4, 1,//90-99 97:a, 99: c
+                                         4, 4, 4, 2, 4, 4, 4, 4, 4, 4,//100-109 103:g
+                                         4, 4, 4, 4, 4, 4, 3, 4, 4, 4,//110-119 116:t
+                                         4, 4, 4, 4, 4, 4, 4, 4, 4, 4,//120-129
+                                         4, 4, 4, 4, 4, 4, 4, 4, 4, 4,//130-139
+                                         4, 4, 4, 4, 4, 4, 4, 4, 4, 4,//140-149
+                                         4, 4, 4, 4, 4, 4, 4, 4, 4, 4,//150-159
+                                         4, 4, 4, 4, 4, 4, 4, 4, 4, 4,//160-169
+                                         4, 4, 4, 4, 4, 4, 4, 4, 4, 4,//170-179
+                                         4, 4, 4, 4, 4, 4, 4, 4, 4, 4,//180-189
+                                         4, 4, 4, 4, 4, 4, 4, 4, 4, 4,//190-199
+                                         4, 4, 4, 4, 4, 4, 4, 4, 4, 4,//200-209
+                                         4, 4, 4, 4, 4, 4, 4, 4, 4, 4,//210-219
+                                         4, 4, 4, 4, 4, 4, 4, 4, 4, 4,//220-229
+                                         4, 4, 4, 4, 4, 4, 4, 4, 4, 4,//230-239
+                                         4, 4, 4, 4, 4, 4, 4, 4, 4, 4,//240-249
+                                         4, 4, 4, 4, 4, 4 };//250-255
+
+
 struct boundaries{
     boundaries(): refB(0), refE(0), queryB(0), queryE(0) {}
     boundaries(long refBegin, long refEnd, long queryBegin, long queryEnd): refB(refBegin), refE(refEnd), queryB(queryBegin), queryE(queryEnd){}
@@ -128,6 +156,9 @@ void  print_seq( const string& ref,const string& query, boundaries& offset );
 //        const outputType&, dp_output&, int bandSize, bool print = false);
 
 int dpBandStatic( const string&, const string&, boundaries&, 
+        const dp_type&, const outputType&, dp_output&, int minbandSize, int maxbandSize, bool print = false);
+
+int dpMyers( const string&, const string&, boundaries&, 
         const dp_type&, const outputType&, dp_output&, int minbandSize, int maxbandSize, bool print = false);
 
 int dpBandFull( const string&, const string&, boundaries&, 

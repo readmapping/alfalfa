@@ -26,6 +26,8 @@
 #include <sstream>
 #include <vector>
 #include <assert.h>
+#include <limits>
+#include <limits.h>
 
 #include "dp.h"
 
@@ -1192,6 +1194,252 @@ int dynProg::dpBandStatic( const string&     ref,
     }
     bool backward = (type.freeQueryB || type.freeRefB) && !type.local;
     //build matrices
+    updateMatrix(type, print);
+    bool affine = scores.openGap != 0;
+    if(print)
+        cerr << "fill DP matrix" << endl;
+    //dp
+    if(affine)
+        dpFillStatic(ref, query, !backward, offset, type);
+    else
+        dpFillOptStatic(ref, query, !backward, offset, type);
+    if(print){
+        //print_matrices(ref, query, offset, false);
+    }
+    //traceback and output
+    int        i = min(L2,L1+bandSize), j = min(L1,L2+bandSize);
+    if(print)
+        cerr << "find traceback position" << endl;
+    //find beginPosition for traceBack and find dpScore
+    findTraceBackPosStatic(!backward, &i,&j,type);
+    if(print)
+        cerr << "tracebackpos is " << i << ", " << j << endl;
+    output.dpScore = M[i][j];
+    if(print)
+        cerr << "dp score is " << output.dpScore << endl;
+    //Next is for output only
+    if(oType>DPSCORE){
+        //Alter boundaries to return the new positions when free gaps were introduced.
+        if(type.freeQueryE && i < L2)
+            offset.queryE = offset.queryB+i-1;
+        if(type.freeRefE && j < L1)
+            offset.refE = offset.refB+j-1;
+        if(type.freeQueryB && i < L2)
+            offset.queryB = offset.queryE-i+1;
+        if(type.freeRefB && j < L1)
+            offset.refB = offset.refE-j+1;
+        //traceBack
+        if(print)
+                cerr << "search trace" << endl;
+        std::stringstream ss;
+        if(affine)
+            dpTraceBackStatic(i, j, type, output, ss, offset, !backward, ref, query);
+        else
+            dpTraceBackOptStatic(i, j, type, output, ss, offset, !backward, ref, query);
+        if(print)
+                cerr << "trace ended at position " << i << ", " << j << endl;
+        //Edit Dist ouput --> should not happen
+//        if( i > 0 && !type.freeQueryB)
+//            output.editDist += i;
+//        if(j > 0 && !type.freeRefB)
+//            output.editDist += j;
+        assert(j ==0 && i==0);
+        //Errorstring output
+        if(oType == ERRORSTRING || oType == ALL){
+            if(print)
+                cerr << "write errorstring to cigar vector" << endl;
+            string errorString = ss.str();
+//            if(i > 0 && !type.freeQueryB)
+//                errorString.append(i,'I');
+//            else if(j > 0 && !type.freeRefB)
+//                errorString.append(j, 'D');
+            if(!backward)
+                reverse( errorString.begin(), errorString.end() );
+            //create output: errorString
+            int iter = 0;
+            int temp;
+            int errorStringLength = errorString.length();
+            while(iter < errorStringLength){
+                temp = iter;
+                while(iter+1 < errorStringLength && errorString[iter+1]==errorString[temp])
+                    iter++;
+                iter++;
+                output.cigarChars.push_back(errorString[temp]);
+                output.cigarLengths.push_back(iter-temp);
+            }
+        }
+    }
+    //change boundaries for local and freeGap types to return changed free boundaries.
+//    if(type.freeQueryB && i > 0)
+//        offset.queryB = offset.queryB+i;
+//    if(type.freeRefB && j > 0)
+//        offset.refB = offset.refB+j;
+    if(print)
+        cerr << "DP finished" << endl;
+
+    return 0;
+}
+
+//small pattern: no banded if band is as large as query
+
+int dynProg::dpMyers( const string&     ref,
+        const string&     query,
+        boundaries& offset,
+        const dp_type&    type,
+        const outputType& oType,
+        dp_output&  output,
+        int minbandS,
+        int maxbandS,
+        bool print)
+{
+    L1 = offset.refE-offset.refB+1;
+    L2 = offset.queryE-offset.queryB+1;
+    bandSize = minbandS;
+    banded = true;
+    assert(L1 >=0 && L2 >= 0 && bandSize >0);
+    assert(!type.local);
+    assert((!type.freeQueryB && !type.freeRefB) || (!type.freeQueryE && !type.freeRefE));
+    //IF no free start at begin:
+    //possible end of alignment should be accessible for traceback: 
+    //range of allowed traceback startpositions should have a non-empty intersection
+    //with the band, otherwise: give bad alignment and return
+    //ELSE IF free start at begin in cols or rows: (resulting in no free ending):
+    //check range of starting point (0,0) lies in range of band if rows or columns were not free
+    if((type.freeQueryB && !type.freeRefB && L2 + bandSize < L1) ||
+            (type.freeRefB && !type.freeQueryB && L2 - bandSize > L1) ||
+            (!(type.freeQueryB || type.freeRefB) && !type.freeRefE && L2 + bandSize < L1) ||
+            (!(type.freeQueryB || type.freeRefB) && !type.freeQueryE && L2 - bandSize > L1)){
+        if(max(L2,L1) - min(L2,L1) < maxbandS){
+            bandSize = max(L2,L1) - min(L2,L1);
+            if(print) cerr << "adjusted bandSize to " << bandSize << endl;
+        }
+        else{
+            if(print) cerr << "possible end of alignment would lay beyond the dimensions of the matrix" << endl;
+            output.dpScore = scores.mismatch*query.length();
+            output.editDist = query.length();
+            return 1;
+        }
+    }
+    bool backward = (type.freeQueryB || type.freeRefB) && !type.local;
+    //build matrices
+    
+    //MYERS STARTS HERE
+    // Use size of unsigned int as blocksize for bit-vectors.
+    const unsigned int BLOCK_SIZE = 32;//ulong size
+    unsigned int len_x = abs(L1);
+    unsigned int len_y = abs(L2);
+    
+    //PARAMETERS MASAI PAPER
+    //m = L2
+    //n = L1
+    unsigned int w = 2*bandSize+1;
+    unsigned int c = bandSize;
+    
+    unsigned int pos = 0;
+    int score = (-1)*len_y;//Set to c-parameter
+    unsigned int patternAlphabetSize = 5;
+    unsigned int blockCount = (len_y + BLOCK_SIZE - 1) / BLOCK_SIZE;
+    unsigned int scoreMask = 1 << ((len_y + BLOCK_SIZE -1)% BLOCK_SIZE);	// the mask with a bit set at the position of the last active cell
+    vector<unsigned int> VP;
+    VP.resize(blockCount, UINT_MAX);
+    vector<unsigned int> VN;
+    VN.resize(blockCount, 0);
+    vector<unsigned> bitMask;
+    bitMask.resize(patternAlphabetSize * blockCount, 0);
+    
+    // encoding the letters as bit-vectors
+    for (unsigned int j = 0; j < len_y; j++){
+            bitMask[blockCount * ORDVALUE[query[offset.queryB+j]] + j/BLOCK_SIZE] |= 1 << (j%BLOCK_SIZE);
+            bitMask[blockCount * 4 + j/BLOCK_SIZE] &= ~(1 << (j%BLOCK_SIZE));
+    }
+    
+    // compute score
+    unsigned int X, D0, HN, HP;
+    if(blockCount == 1){
+        while (pos < len_x) {
+            X = bitMask[ORDVALUE[ref[offset.refB+pos]]] | VN[0];
+
+            D0 = ((VP[0] + (X & VP[0])) ^ VP[0]) | X;
+            HN = VP[0] & D0;
+            HP = VN[0] | ~(VP[0] | D0);
+
+            // customized to compute edit distance
+            X = (HP << 1) | 1;
+            VN[0] = X & D0;
+            VP[0] = (HN << 1) | ~(X | D0);
+
+            if (HP & scoreMask)
+                    score--;
+            else if (HN & scoreMask)
+                    score++;
+
+            ++pos;
+        }
+    }// end compute score - short pattern
+    else{
+        unsigned int temp, shift, currentBlock;
+        unsigned int carryD0, carryHP, carryHN;
+        while (pos < len_x) {
+            // set vars
+            carryD0 = carryHP = carryHN = 0;
+            shift = blockCount * ORDVALUE[ref[offset.refB+pos]];
+            
+            // computing first the top most block
+            X = bitMask[shift] | VN[0];
+	
+            temp = VP[0] + (X & VP[0]);
+            carryD0 = temp < VP[0];
+
+            D0 = (temp ^ VP[0]) | X;
+            HN = VP[0] & D0;
+            HP = VN[0] | ~(VP[0] | D0);
+
+            // customized to compute edit distance
+            X = (HP << 1) | 1;
+            carryHP = HP >> (BLOCK_SIZE - 1);
+
+            VN[0] = X & D0;
+
+            temp = (HN << 1);
+            carryHN = HN >> (BLOCK_SIZE - 1);
+
+            VP[0] = temp | ~(X | D0);
+
+            // computing the necessary blocks, carries between blocks following one another are stored
+            for (currentBlock = 1; currentBlock < blockCount; currentBlock++) {
+                    X = bitMask[shift + currentBlock] | VN[currentBlock];
+
+                    temp = VP[currentBlock] + (X & VP[currentBlock]) + carryD0;
+
+                    carryD0 = ((carryD0) ? temp <= VP[currentBlock] : temp < VP[currentBlock]);
+
+                    D0 = (temp ^ VP[currentBlock]) | X;
+                    HN = VP[currentBlock] & D0;
+                    HP = VN[currentBlock] | ~(VP[currentBlock] | D0);
+
+                    X = (HP << 1) | carryHP;
+                    carryHP = HP >> (BLOCK_SIZE-1);
+
+                    VN[currentBlock] = X & D0;
+
+                    temp = (HN << 1) | carryHN;
+                    carryHN = HN >> (BLOCK_SIZE - 1);
+
+                    VP[currentBlock] = temp | ~(X | D0);
+            }
+
+            // update score with the HP and HN values of the last block the last block
+            if (HP & scoreMask)
+                    score--;
+            else if (HN & scoreMask)
+                    score++;
+            ++pos;
+        }
+
+    }// end compute score - long pattern
+    output.editDist = score;
+    return score;
+    
     updateMatrix(type, print);
     bool affine = scores.openGap != 0;
     if(print)

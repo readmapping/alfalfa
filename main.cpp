@@ -351,7 +351,7 @@ int main(int argc, char* argv[]){
                 cerr << "time for building index structure: " << cpu_time << endl;
             }
             //calculate skip parameter for MEMs
-            if(opt.alnOptions.memType == MEM){
+            if(opt.alnOptions.memType == MEM || opt.alnOptions.memType == SMAM){
                 int minLength = opt.alnOptions.minMemLength;
                 if (opt.K >= 4) sa->sparseMult = (int) (minLength - 10) / opt.K;
                 else sa->sparseMult = (int) (minLength - 12) / opt.K;

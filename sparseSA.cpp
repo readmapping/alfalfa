@@ -954,7 +954,7 @@ void sparseSA::findSMAM(long k, const string &P, vector<match_t> &matches, int m
   interval_t xmi(0,N/K-1,0); // max match interval
 
   // Right-most match used to terminate search.
-  int min_lenK = min_len - (K-1);
+  int min_lenK = min_len - (sparseMult*K-1);
 
   while( prefix <= (long)P.length() - (K-k)) {
     if(hasChild) 
@@ -962,7 +962,7 @@ void sparseSA::findSMAM(long k, const string &P, vector<match_t> &matches, int m
     else
         traverse(P, prefix, xmi, P.length(), -1);// Traverse until mismatch.
     if(xmi.depth <= 1) { xmi.reset(N/K-1); prefix += sparseMult*K; continue; }
-    if(xmi.depth >= min_lenK || xmi.size() <= sparseMult*maxCount) {//less restriction seems to give best results
+    if(xmi.depth >= min_lenK) {//less restriction seems to give best results
         collectSMAMs(P, prefix, mli, xmi, matches, min_len, sparseMult*maxCount); // Using LCP info to find MEM length.
         // When using ISA/LCP trick, depth = depth - K. prefix += K.
         prefix += sparseMult*K;

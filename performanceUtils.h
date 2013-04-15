@@ -557,103 +557,107 @@ static void checkOracle(samCheckOptions_t & opt){
             while(oracleFile.good()){//next reads
                 getlijn2(oracleFile, oracleLine);
                 readRecord(oracleLine, tempOracle,opt.otag);
-                tempOracle.flag.test(6) ? oracleUp = tempOracle : oracleDown = tempOracle;
-                getlijn2(oracleFile, oracleLine);
-                readRecord(oracleLine, tempOracle,opt.otag);
-                tempOracle.flag.test(6) ? oracleUp = tempOracle : oracleDown = tempOracle;
-                mapped.clear();
-                //iterate over the SAM file. To work query should always be more advanced than oracle
-                while(queryFile.good() && !queryLine.empty() && tempQuery.qname.compare(oracleUp.qname)==0){
-                    //fill mappedUp
-                    if(tempQuery.edit<0 && tempQuery.rname.compare("*")!=0){
-                        tempQuery.edit = calculatedDPScore(ref, refdescr, startpos, queryLine);
+                if(!tempOracle.qname.empty()){
+                    tempOracle.flag.test(6) ? oracleUp = tempOracle : oracleDown = tempOracle;
+                    getlijn2(oracleFile, oracleLine);
+                    readRecord(oracleLine, tempOracle,opt.otag);
+                    tempOracle.flag.test(6) ? oracleUp = tempOracle : oracleDown = tempOracle;
+                    mapped.clear();
+                    //iterate over the SAM file. To work query should always be more advanced than oracle
+                    while(queryFile.good() && !queryLine.empty() && tempQuery.qname.compare(oracleUp.qname)==0){
+                        //fill mappedUp
+                        if(tempQuery.edit<0 && tempQuery.rname.compare("*")!=0){
+                            tempQuery.edit = calculatedDPScore(ref, refdescr, startpos, queryLine);
+                        }
+                        mapped.push_back(tempQuery);
+                        getlijn2(queryFile, queryLine);
+                        readRecord(queryLine, tempQuery, opt.qtag); 
                     }
-                    mapped.push_back(tempQuery);
-                    getlijn2(queryFile, queryLine);
-                    readRecord(queryLine, tempQuery, opt.qtag); 
-                }
-                if(!queryLine.empty() && tempQuery.qname.compare(oracleUp.qname)==0){//add last query of file
-                    if(tempQuery.edit<0 && tempQuery.rname.compare("*")!=0){
-                        tempQuery.edit = calculatedDPScore(ref, refdescr, startpos, queryLine);
+                    if(!queryLine.empty() && tempQuery.qname.compare(oracleUp.qname)==0){//add last query of file
+                        if(tempQuery.edit<0 && tempQuery.rname.compare("*")!=0){
+                            tempQuery.edit = calculatedDPScore(ref, refdescr, startpos, queryLine);
+                        }
+                        mapped.push_back(tempQuery);
                     }
-                    mapped.push_back(tempQuery);
-                }
-                //process this read's alignments (paired and unpaired)
-                for(size_t i=0; i < mapped.size(); i++){
-                    samRecord_t& query = mapped[i];
-                    if(!query.flag.test(2)){
-                        for(size_t j=0; j < rangeCount; j++){
-                            int match = pairedCompareSam(query, query.flag.test(6) ? oracleUp : oracleDown, opt.correctRange[j]);
-                            //all
-                            results[j][0].addAlignment(match);
-                            //unique
-                            if(mapped.size()==2) results[j][1].addAlignment(match);
-                            //quality values
-                            for(size_t k=0; k < qualValCount; k++)
-                                if(query.mapq >= opt.qualityValues[k])
-                                    results[j][2+k].addAlignment(match);
+                    //process this read's alignments (paired and unpaired)
+                    for(size_t i=0; i < mapped.size(); i++){
+                        samRecord_t& query = mapped[i];
+                        if(!query.flag.test(2)){
+                            for(size_t j=0; j < rangeCount; j++){
+                                int match = pairedCompareSam(query, query.flag.test(6) ? oracleUp : oracleDown, opt.correctRange[j]);
+                                //all
+                                results[j][0].addAlignment(match);
+                                //unique
+                                if(mapped.size()==2) results[j][1].addAlignment(match);
+                                //quality values
+                                for(size_t k=0; k < qualValCount; k++)
+                                    if(query.mapq >= opt.qualityValues[k])
+                                        results[j][2+k].addAlignment(match);
+                            }
                         }
                     }
+                    //sumarize for read
+                    for(size_t j=0; j < rangeCount; j++){
+                        if(opt.print)
+                            cerr << oracleUp.qname << "\t" << (results[j][0].tempReadResult==0 ? 0 : 1) << endl;
+                        results[j][0].finishRead();
+                        results[j][1].finishRead();
+                        for(size_t k=0; k < qualValCount; k++)
+                            results[j][2+k].finishRead();
+                    }
+                    readcnt++;//update readcnt
                 }
-                //sumarize for read
-                for(size_t j=0; j < rangeCount; j++){
-                    if(opt.print)
-                        cerr << oracleUp.qname << "\t" << (results[j][0].tempReadResult==0 ? 0 : 1) << endl;
-                    results[j][0].finishRead();
-                    results[j][1].finishRead();
-                    for(size_t k=0; k < qualValCount; k++)
-                        results[j][2+k].finishRead();
-                }
-                readcnt++;//update readcnt
             }
         }
         else{
             while(oracleFile.good()){//next reads
                 getlijn2(oracleFile, oracleLine);
                 readRecord(oracleLine, oracleUp,opt.otag);
-                mapped.clear();
-                //iterate over the SAM file. To work query should always be more advanced than oracle
-                while(queryFile.good() && !queryLine.empty() && tempQuery.qname.compare(oracleUp.qname)==0){
-                    //fill mappedUp
-                    if(tempQuery.edit<0 && tempQuery.rname.compare("*")!=0){
-                        tempQuery.edit = calculatedDPScore(ref, refdescr, startpos, queryLine);
+                if(!oracleUp.qname.empty()){
+                    mapped.clear();
+                    //iterate over the SAM file. To work query should always be more advanced than oracle
+                    while(queryFile.good() && !queryLine.empty() && tempQuery.qname.compare(oracleUp.qname)==0){
+                        //fill mappedUp
+                        if(tempQuery.edit<0 && tempQuery.rname.compare("*")!=0){
+                            tempQuery.edit = calculatedDPScore(ref, refdescr, startpos, queryLine);
+                        }
+                        mapped.push_back(tempQuery);
+                        getlijn2(queryFile, queryLine);
+                        readRecord(queryLine, tempQuery, opt.qtag); 
                     }
-                    mapped.push_back(tempQuery);
-                    getlijn2(queryFile, queryLine);
-                    readRecord(queryLine, tempQuery, opt.qtag); 
-                }
-                if(!queryLine.empty() && tempQuery.qname.compare(oracleUp.qname)==0){//add last query of file
-                    if(tempQuery.edit<0 && tempQuery.rname.compare("*")!=0){
-                        tempQuery.edit = calculatedDPScore(ref, refdescr, startpos, queryLine);
+                    if(!queryLine.empty() && tempQuery.qname.compare(oracleUp.qname)==0){//add last query of file
+                        if(tempQuery.edit<0 && tempQuery.rname.compare("*")!=0){
+                            tempQuery.edit = calculatedDPScore(ref, refdescr, startpos, queryLine);
+                        }
+                        mapped.push_back(tempQuery);
                     }
-                    mapped.push_back(tempQuery);
-                }
-                //process this read's alignments
-                for(size_t i=0; i < mapped.size(); i++){
-                    if(!mapped[i].flag.test(2)){
-                        for(size_t j=0; j < rangeCount; j++){
-                            int match = unpairedCompareSam(mapped[i], oracleUp, opt.correctRange[j]);
-                            //all
-                            results[j][0].addAlignment(match);
-                            //unique
-                            if(mapped.size()==1) results[j][1].addAlignment(match);
-                            //quality values
-                            for(size_t k=0; k < qualValCount; k++)
-                                if(mapped[i].mapq >= opt.qualityValues[k])
-                                    results[j][2+k].addAlignment(match);
+                    //process this read's alignments
+                    for(size_t i=0; i < mapped.size(); i++){
+                        if(!mapped[i].flag.test(2)){
+                            for(size_t j=0; j < rangeCount; j++){
+                                int match = unpairedCompareSam(mapped[i], oracleUp, opt.correctRange[j]);
+                                //all
+                                results[j][0].addAlignment(match);
+                                //unique
+                                if(mapped.size()==1) results[j][1].addAlignment(match);
+                                //quality values
+                                for(size_t k=0; k < qualValCount; k++)
+                                    if(mapped[i].mapq >= opt.qualityValues[k])
+                                        results[j][2+k].addAlignment(match);
+                            }
                         }
                     }
+                    //sumarize for read
+                    for(size_t j=0; j < rangeCount; j++){
+                        if(opt.print)
+                            cerr << oracleUp.qname << "\t" << (results[j][0].tempReadResult==0 ? 0 : 1) << endl;
+                        results[j][0].finishRead();
+                        results[j][1].finishRead();
+                        for(size_t k=0; k < qualValCount; k++)
+                            results[j][2+k].finishRead();
+                    }
+                    readcnt++;//update readcnt
                 }
-                //sumarize for read
-                for(size_t j=0; j < rangeCount; j++){
-                    if(opt.print)
-                        cerr << oracleUp.qname << "\t" << (results[j][0].tempReadResult==0 ? 0 : 1) << endl;
-                    results[j][0].finishRead();
-                    results[j][1].finishRead();
-                    for(size_t k=0; k < qualValCount; k++)
-                        results[j][2+k].finishRead();
-                }
-                readcnt++;//update readcnt
             }
         }
     }
@@ -789,96 +793,146 @@ static void checkWgsim(samCheckOptions_t & opt){
     cerr << "checking accuracy of alignments: ..." << endl;
     //if at least one record can be found
     string prevQname = "";
+    string qname = "";
     int curAln=0;
     char delimeter = '\t';
     if(opt.print)
         cerr << "reads that failed to align correctly: " << endl;
-    do{
-        //read in all fields for this line
-        int tabPos = 0;
-        //qname
-        string qname = nextField(queryLine, delimeter, tabPos);
-        int namePos=qname.size()-1;
-        previousField(qname, '_', namePos);//counter
-        int revEdit = atoi(previousField(qname, ':', namePos).c_str());
-        revEdit += atoi(previousField(qname, ':', namePos).c_str());
-        revEdit += atoi(previousField(qname, '_', namePos).c_str());
-        int fwdEdit = atoi(previousField(qname, ':', namePos).c_str());
-        fwdEdit += atoi(previousField(qname, ':', namePos).c_str());
-        fwdEdit += atoi(previousField(qname, '_', namePos).c_str());
-        long revPos = atoi(previousField(qname, '_', namePos).c_str());
-        long fwdPos = atoi(previousField(qname, '_', namePos).c_str());
-        string realchrom = qname.substr(0, namePos+1);
-        //flag
-        bitset<11> flag = bitset<11>((ulong) atoi(nextField(queryLine, delimeter, tabPos).c_str()));
-        //rname
-        string chrom = nextField(queryLine, delimeter, tabPos);
-        //pos
-        long leftpos = atoi(nextField(queryLine, delimeter, tabPos).c_str());
-        long rightpos = leftpos;
-        //mapq
-        int mapq = atoi(nextField(queryLine, delimeter, tabPos).c_str());
-        //CIGAR
-        string cigar = nextField(queryLine, delimeter, tabPos);
-        //determine left and right pos using cigar
-        int cigarPos = 0;
-        int cigarlength = cigar.size();
-        while(cigarPos < cigarlength){
-            int beginPos = cigarPos;
+    if(queryFile.good() && !queryLine.empty()){
+        do{
+            //read in all fields for this line
+            int tabPos = 0;
+            //qname
+            qname = nextField(queryLine, delimeter, tabPos);
+            int namePos=qname.size()-1;
+            previousField(qname, '_', namePos);//counter
+            int revEdit = atoi(previousField(qname, ':', namePos).c_str());
+            revEdit += atoi(previousField(qname, ':', namePos).c_str());
+            revEdit += atoi(previousField(qname, '_', namePos).c_str());
+            int fwdEdit = atoi(previousField(qname, ':', namePos).c_str());
+            fwdEdit += atoi(previousField(qname, ':', namePos).c_str());
+            fwdEdit += atoi(previousField(qname, '_', namePos).c_str());
+            long revPos = atoi(previousField(qname, '_', namePos).c_str());
+            long fwdPos = atoi(previousField(qname, '_', namePos).c_str());
+            string realchrom = qname.substr(0, namePos+1);
+            //flag
+            bitset<11> flag = bitset<11>((ulong) atoi(nextField(queryLine, delimeter, tabPos).c_str()));
+            //rname
+            string chrom = nextField(queryLine, delimeter, tabPos);
+            //pos
+            long leftpos = atoi(nextField(queryLine, delimeter, tabPos).c_str());
+            long rightpos = leftpos;
+            //mapq
+            int mapq = atoi(nextField(queryLine, delimeter, tabPos).c_str());
+            //CIGAR
+            string cigar = nextField(queryLine, delimeter, tabPos);
+            //determine left and right pos using cigar
+            int cigarPos = 0;
+            int cigarlength = cigar.size();
+            while(cigarPos < cigarlength){
+                int beginPos = cigarPos;
+                while(cigar[cigarPos] >= 48 && cigar[cigarPos] <= 57)//integer
+                    cigarPos++;
+                //now cigar[cigarPos] is character
+                if(cigar[cigarPos] == 'M' || cigar[cigarPos] == 'N' || cigar[cigarPos] == 'D')
+                    rightpos += atoi(cigar.substr(beginPos,cigarPos-beginPos).c_str());
+                cigarPos++;
+            }
+            rightpos--;
+            //correct left and right pos for clipping
+            long leftpos0 = leftpos;
+            long rightpos0 = rightpos;
+            cigarPos = 0;
             while(cigar[cigarPos] >= 48 && cigar[cigarPos] <= 57)//integer
                 cigarPos++;
-            //now cigar[cigarPos] is character
-            if(cigar[cigarPos] == 'M' || cigar[cigarPos] == 'N' || cigar[cigarPos] == 'D')
-                rightpos += atoi(cigar.substr(beginPos,cigarPos-beginPos).c_str());
-            cigarPos++;
-        }
-        rightpos--;
-        //correct left and right pos for clipping
-        long leftpos0 = leftpos;
-        long rightpos0 = rightpos;
-        cigarPos = 0;
-        while(cigar[cigarPos] >= 48 && cigar[cigarPos] <= 57)//integer
-            cigarPos++;
-            //now cigar[cigarPos] is character
-        if(cigar[cigarPos] == 'S' || cigar[cigarPos] == 'H'){
-            leftpos -= atoi(cigar.substr(0,cigarPos).c_str());
-            rightpos0 += atoi(cigar.substr(0,cigarPos).c_str());
-        }
-        if(cigar[cigar.size()-1] == 'S' || cigar[cigar.size()-1] == 'H'){
-            cigarPos = cigar.size()-2;
-            while(cigarPos >= 0 && cigar[cigarPos] >= 48 && cigar[cigarPos] <= 57)//integer
-                cigarPos--;
-            rightpos += atoi(cigar.substr(cigarPos+1,cigar.size()-1-cigarPos).c_str());
-            leftpos0 -= atoi(cigar.substr(cigarPos+1,cigar.size()-1-cigarPos).c_str());
-        }
-        //rnext
-        nextField(queryLine, delimeter, tabPos);
-        //pnext
-        nextField(queryLine, delimeter, tabPos);
-        //edit distance NM tag
-        int edit = 0;
-        //skip fields to make sure 
-        tabPos = queryLine.find(delimeter,tabPos)+1;
-        tabPos = queryLine.find(delimeter,tabPos)+1;
-        tabPos = queryLine.find(delimeter,tabPos)+1;
-        //now passed qual
-        string editTag = opt.qtag+":i:";
-        int NMpos = queryLine.find(editTag,tabPos);
-        if(NMpos == -1 && !flag.test(2)){
-            edit = calculatedDPScore(ref, refdescr, startpos, queryLine);
-        }
-        else if(NMpos>=tabPos){
-            tabPos = queryLine.find(delimeter,NMpos);
-            if(tabPos == -1)
-                tabPos = queryLine.length();
-            edit = atoi(queryLine.substr(NMpos+5,tabPos-NMpos-5).c_str());
-        }
+                //now cigar[cigarPos] is character
+            if(cigar[cigarPos] == 'S' || cigar[cigarPos] == 'H'){
+                leftpos -= atoi(cigar.substr(0,cigarPos).c_str());
+                rightpos0 += atoi(cigar.substr(0,cigarPos).c_str());
+            }
+            if(cigar[cigar.size()-1] == 'S' || cigar[cigar.size()-1] == 'H'){
+                cigarPos = cigar.size()-2;
+                while(cigarPos >= 0 && cigar[cigarPos] >= 48 && cigar[cigarPos] <= 57)//integer
+                    cigarPos--;
+                rightpos += atoi(cigar.substr(cigarPos+1,cigar.size()-1-cigarPos).c_str());
+                leftpos0 -= atoi(cigar.substr(cigarPos+1,cigar.size()-1-cigarPos).c_str());
+            }
+            //rnext
+            nextField(queryLine, delimeter, tabPos);
+            //pnext
+            nextField(queryLine, delimeter, tabPos);
+            //edit distance NM tag
+            int edit = 0;
+            //skip fields to make sure 
+            tabPos = queryLine.find(delimeter,tabPos)+1;
+            tabPos = queryLine.find(delimeter,tabPos)+1;
+            tabPos = queryLine.find(delimeter,tabPos)+1;
+            //now passed qual
+            string editTag = opt.qtag+":i:";
+            int NMpos = queryLine.find(editTag,tabPos);
+            if(NMpos == -1 && !flag.test(2)){
+                edit = calculatedDPScore(ref, refdescr, startpos, queryLine);
+            }
+            else if(NMpos>=tabPos){
+                tabPos = queryLine.find(delimeter,NMpos);
+                if(tabPos == -1)
+                    tabPos = queryLine.length();
+                edit = atoi(queryLine.substr(NMpos+5,tabPos-NMpos-5).c_str());
+            }
+            //if new query, finish previous
+            if(prevQname != "" && prevQname.compare(qname) != 0){
+                //sumarize for read
+                for(size_t j=0; j < rangeCount; j++){
+                    if(curAln <= 2)
+                        results[j][1].addAlignment(results[j][0].tempReadResult);
+                    if(opt.print && results[j][0].tempReadResult==0)
+                        cerr << prevQname << endl;
+                    results[j][0].finishRead();
+                    results[j][1].finishRead();
+                    for(size_t k=0; k < qualValCount; k++)
+                        results[j][2+k].finishRead();
+                }
+                curAln=0;
+                readcnt++;//update readcnt
+            }
+            prevQname = qname;
+            //add alignment
+            if(!flag.test(2)){
+                curAln++;
+                for(size_t j=0; j < rangeCount; j++){
+                    //decide if current alignment is a match
+                    int match = 0;
+                    if(!flag.test(4)){//fwd read
+                        if(realchrom.compare(chrom)==0 && 
+                                    (abs(fwdPos-leftpos) <= opt.correctRange[j] || abs(fwdPos-leftpos0) <= opt.correctRange[j])){
+                            match = 2;
+                        }
+                        else if(edit <= fwdEdit)
+                            match = 1;
+                    }
+                    else{//reverse read
+                        if(realchrom.compare(chrom)==0 && 
+                                    (abs(revPos-rightpos) <= opt.correctRange[j] || abs(revPos-rightpos0) <= opt.correctRange[j])){
+                            match = 2;
+                        }
+                        else if(edit <= revEdit)
+                            match = 1;
+                    }
+                    //all
+                    results[j][0].addAlignment(match);
+                    //quality values
+                    for(size_t k=0; k < qualValCount; k++)
+                        if(mapq >= opt.qualityValues[k])
+                            results[j][2+k].addAlignment(match);
+                }
+            }
+            //read next line
+            getlijn2(queryFile, queryLine);
+        } while(queryFile.good() && !queryLine.empty());
         //if new query, finish previous
         if(prevQname != "" && prevQname.compare(qname) != 0){
             //sumarize for read
             for(size_t j=0; j < rangeCount; j++){
-                if(curAln <= 2)
-                    results[j][1].addAlignment(results[j][0].tempReadResult);
                 if(opt.print && results[j][0].tempReadResult==0)
                     cerr << prevQname << endl;
                 results[j][0].finishRead();
@@ -886,55 +940,8 @@ static void checkWgsim(samCheckOptions_t & opt){
                 for(size_t k=0; k < qualValCount; k++)
                     results[j][2+k].finishRead();
             }
-            curAln=0;
             readcnt++;//update readcnt
         }
-        prevQname = qname;
-        //add alignment
-        if(!flag.test(2)){
-            curAln++;
-            for(size_t j=0; j < rangeCount; j++){
-                //decide if current alignment is a match
-                int match = 0;
-                if(!flag.test(4)){//fwd read
-                    if(realchrom.compare(chrom)==0 && 
-                                (abs(fwdPos-leftpos) <= opt.correctRange[j] || abs(fwdPos-leftpos0) <= opt.correctRange[j])){
-                        match = 2;
-                    }
-                    else if(edit <= fwdEdit)
-                        match = 1;
-                }
-                else{//reverse read
-                    if(realchrom.compare(chrom)==0 && 
-                                (abs(revPos-rightpos) <= opt.correctRange[j] || abs(revPos-rightpos0) <= opt.correctRange[j])){
-                        match = 2;
-                    }
-                    else if(edit <= revEdit)
-                        match = 1;
-                }
-                //all
-                results[j][0].addAlignment(match);
-                //quality values
-                for(size_t k=0; k < qualValCount; k++)
-                    if(mapq >= opt.qualityValues[k])
-                        results[j][2+k].addAlignment(match);
-            }
-        }
-        //read next line
-        getlijn2(queryFile, queryLine);
-    } while(queryFile.good() && !queryLine.empty());
-    //if new query, finish previous
-    if(prevQname != ""){
-        //sumarize for read
-        for(size_t j=0; j < rangeCount; j++){
-            if(opt.print && results[j][0].tempReadResult==0)
-                cerr << prevQname << endl;
-            results[j][0].finishRead();
-            results[j][1].finishRead();
-            for(size_t k=0; k < qualValCount; k++)
-                results[j][2+k].finishRead();
-        }
-        readcnt++;//update readcnt
     }
     cerr << "checking accuracy of alignments: done" << endl;
     queryFile.close();
@@ -1097,11 +1104,11 @@ struct summaryLine_t {
         else{
             ss << "~~~\t num_mapped\t percent_mapped\t num_unmapped\t /"
                     "percent_unmapped\t num_second_aligned\t count" << endl;
-            ss << "alignments\t " << mappedAln << "\t " << (mappedAln*100)/alignmentCnt;
-            ss << "\t " << (alignmentCnt-mappedAln) << "\t " << ((alignmentCnt-mappedAln)*100)/alignmentCnt;
+            ss << "alignments\t " << mappedAln << "\t " << (mappedAln*100)/(alignmentCnt > 0 ? alignmentCnt: 1 );
+            ss << "\t " << (alignmentCnt-mappedAln) << "\t " << ((alignmentCnt-mappedAln)*100)/(alignmentCnt > 0 ? alignmentCnt: 1);
             ss << "\t " << secondAln << "\t " << alignmentCnt << endl;
-            ss << "reads\t " << readMapped << "\t " << (readMapped*100)/readcnt;
-            ss << "\t " << (readcnt-readMapped) << "\t " << ((readcnt-readMapped)*100)/readcnt;
+            ss << "reads\t " << readMapped << "\t " << (readMapped*100)/(readcnt>0?readcnt:1);
+            ss << "\t " << (readcnt-readMapped) << "\t " << ((readcnt-readMapped)*100)/(readcnt>0?readcnt:1);
             ss << "\t " << "N.A." << "\t " << readcnt << endl;
         }
         ss << endl;

@@ -203,7 +203,7 @@ static struct option long_options[] = {
     {(char*)"nofw",             no_argument,       0,            ARG_NOFW},
     {(char*)"norc",             no_argument,       0,            ARG_NORC},
     {(char*)"wildcards",        no_argument,       0,            'N'},
-    {(char*)"softclipping",     no_argument,       0,            ARG_CLIP},
+    {(char*)"bwa-sw-like",     no_argument,       0,            ARG_CLIP},
     {(char*)"match",            required_argument, 0,            'm'},
     {(char*)"mismatch",         required_argument, 0,            'u'},
     {(char*)"gapopen",          required_argument, 0,            'o'},
@@ -288,7 +288,7 @@ static void usageAln(const string prog) {
   cerr << "--nofw                     do not compute forward matches" << endl;
   cerr << "--norc                     do not compute reverse complement matches" << endl;
   cerr << "-n/--wildcards             treat Ns as wildcard characters" << endl;
-  cerr << "--softclipping          allow soft clipping at the beginning and end of an alignment" << endl;
+  cerr << "--bwa-sw-like          allow soft clipping at the beginning and end of an alignment" << endl;
   cerr << endl;
   cerr << "DYNAMIC PROGRAMMING OPTIONS " << endl;
   cerr << "-m/--match (int)           match bonus [0]" << endl;
