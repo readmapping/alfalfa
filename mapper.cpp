@@ -282,24 +282,24 @@ alignment_t * extendAlignmentBWASWLike(dynProg& dp_, const string& S, const stri
                 alignment->cigarChars.push_back('D');
                 alignment->cigarChars.push_back('=');
                 alignment->cigarLengths.push_back(minRefDist-1);
-                alignment->cigarLengths.push_back(match.len - 1 + minQDist);
-                alignment->alignmentScore += dp_.scores.match*(match.len - 1 + minQDist) + dp_.scores.openGap + dp_.scores.extendGap*(minRefDist-1);
+                alignment->cigarLengths.push_back(match.len);
+                alignment->alignmentScore += dp_.scores.match*(match.len) + dp_.scores.openGap + dp_.scores.extendGap*(minRefDist-1);
                 curEditDist += minRefDist-1; //boundary of ref sequences is passed
                 if(print) cerr << "added deletion of size " << minRefDist-1 << endl;
             } else if (minRefDist == 1) {
                 alignment->cigarChars.push_back('I');
                 alignment->cigarChars.push_back('=');
                 alignment->cigarLengths.push_back(minQDist-1);
-                alignment->cigarLengths.push_back(match.len - 1 + minRefDist);
-                alignment->alignmentScore += dp_.scores.match*(match.len - 1 + minRefDist) + dp_.scores.openGap + dp_.scores.extendGap*(minQDist-1);
+                alignment->cigarLengths.push_back(match.len);
+                alignment->alignmentScore += dp_.scores.match*(match.len) + dp_.scores.openGap + dp_.scores.extendGap*(minQDist-1);
                 curEditDist += minQDist-1;
                 if(print) cerr << "added insertion of size " << minQDist-1 << endl;
             } else if (minRefDist == 2 && minQDist==2) {
                 alignment->cigarChars.push_back('X');
                 alignment->cigarChars.push_back('=');
                 alignment->cigarLengths.push_back(1);
-                alignment->cigarLengths.push_back(match.len - 1 + minRefDist);
-                alignment->alignmentScore += dp_.scores.match*(match.len - 1 + minRefDist) + dp_.scores.mismatch;
+                alignment->cigarLengths.push_back(match.len);
+                alignment->alignmentScore += dp_.scores.match*(match.len) + dp_.scores.mismatch;
                 curEditDist += 1;
                 if(print) cerr << "added mutation" << endl;
             } else {//both distances are positive and not equal to (1,1)
@@ -524,24 +524,24 @@ alignment_t * extendAlignment(dynProg& dp_, const string& S, const string& P,
                 alignment->cigarChars.push_back('D');
                 alignment->cigarChars.push_back('=');
                 alignment->cigarLengths.push_back(minRefDist-1);
-                alignment->cigarLengths.push_back(match.len - 1 + minQDist);
-                alignment->alignmentScore += dp_.scores.match*(match.len - 1 + minQDist) + dp_.scores.openGap + dp_.scores.extendGap*(minRefDist-1);
+                alignment->cigarLengths.push_back(match.len);
+                alignment->alignmentScore += dp_.scores.match*(match.len) + dp_.scores.openGap + dp_.scores.extendGap*(minRefDist-1);
                 curEditDist += minRefDist-1; //boundary of ref sequences is passed
                 if(print) cerr << "added deletion of size " << minRefDist-1 << endl;
             } else if (minRefDist == 1) {
                 alignment->cigarChars.push_back('I');
                 alignment->cigarChars.push_back('=');
                 alignment->cigarLengths.push_back(minQDist-1);
-                alignment->cigarLengths.push_back(match.len - 1 + minRefDist);
-                alignment->alignmentScore += dp_.scores.match*(match.len - 1 + minRefDist) + dp_.scores.openGap + dp_.scores.extendGap*(minQDist-1);
+                alignment->cigarLengths.push_back(match.len);
+                alignment->alignmentScore += dp_.scores.match*(match.len) + dp_.scores.openGap + dp_.scores.extendGap*(minQDist-1);
                 curEditDist += minQDist-1;
                 if(print) cerr << "added insertion of size " << minQDist-1 << endl;
             } else if (minRefDist == 2 && minQDist==2) {
                 alignment->cigarChars.push_back('X');
                 alignment->cigarChars.push_back('=');
                 alignment->cigarLengths.push_back(1);
-                alignment->cigarLengths.push_back(match.len - 1 + minRefDist);
-                alignment->alignmentScore += dp_.scores.match*(match.len - 1 + minRefDist) + dp_.scores.mismatch;
+                alignment->cigarLengths.push_back(match.len);
+                alignment->alignmentScore += dp_.scores.match*(match.len) + dp_.scores.mismatch;
                 curEditDist += 1;
                 if(print) cerr << "added mutation" << endl;
             } else {//both distances are positive and not equal to (1,1), otherwise seeds would not be maximal!
