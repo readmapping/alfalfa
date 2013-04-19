@@ -27,6 +27,9 @@
 
 #include "mapper.h"
 
+static const long MIN_SEED_LENGTH = 20;
+static const int MAX_BAND_SIZE = 100;
+
 bool compMatches(const match_t & i, const match_t & j){
     return (i.ref < j.ref || (i.ref == j.ref && i.query < j.query));
     //return (i.query < j.query || (i.query == j.query && i.ref < j.ref));
@@ -39,6 +42,10 @@ bool compMatchesQuery(const match_t & i,const match_t & j){
 
 bool compIntervals(const lis_t & i,const lis_t & j){
     return (i.len > j.len || (i.len == j.len && i.begin < j.begin));
+}
+
+bool compIntervalsPointer(const lis_t * i,const lis_t * j){
+    return (i->len > j->len || (i->len == j->len && i->begin < j->begin));
 }
 
 bool compIntervalsRef(const lis_t & i,const lis_t & j){
@@ -74,19 +81,24 @@ void postProcess(vector<match_t> &matches){
 
 void calculateSeeds(const sparseSA& sa, const string& P, int min_len, int maxBranchWidth, vector<match_t>& matches, bool tryHarder, mum_t memType){
     if(memType == SMAM)
-        sa.SMAM(P, matches, min_len, maxBranchWidth);
+        sa.SMAM(P, matches, min_len, maxBranchWidth, sa.sparseMult);
     else if(memType == MEM)
-        sa.MEM(P, matches, min_len, maxBranchWidth);
+        sa.MEM(P, matches, min_len, maxBranchWidth, sa.sparseMult);
     else if(memType == MAM)
         sa.MAM(P, matches, min_len, maxBranchWidth);
     else if(memType == MUM)
         sa.MUM(P, matches, min_len, maxBranchWidth);
     if(tryHarder){//TODO: change try-harder to recalculate only after forward + reverse has been tried
         //easy solution: try reverse and if found: skip
-        if(matches.empty())
-            sa.SMAM(P, matches, min_len, 1000);
-        if(matches.empty())
-            sa.SMAM(P, matches, 20, 1000);
+        int minLength = max(MIN_SEED_LENGTH, sa.K+10);//requires some difference with sparseness
+        if(matches.empty() && min_len > minLength){
+            minLength = (min_len+minLength)/2;
+            sa.SMAM(P, matches, minLength, 1, (int) (minLength - 10) / sa.K);
+        }
+        int minLength2 = max(MIN_SEED_LENGTH, sa.K+10);
+        if(matches.empty() && minLength > minLength2){
+            sa.SMAM(P, matches, minLength2, 1, (int) (minLength2 - 10) / sa.K);
+        }
     }
     postProcess(matches);
 }
@@ -137,20 +149,10 @@ alignment_t * extendAlignmentBWASWLike(dynProg& dp_, const string& S, const stri
     long curEditDist = 0;
     
     //BWA-SW PARAMETERS (currently hard-coded)
-    //reset scorematrix
-    int matchScore = dp_.scores.match;
-    int mismatchScore = dp_.scores.mismatch;
-    int gapopenScore = dp_.scores.openGap;
-    int gapextendScore = dp_.scores.extendGap;
-    dp_.scores.match = 1;
-    dp_.scores.mismatch = -3;
-    dp_.scores.openGap = -5;
-    dp_.scores.extendGap = -2;
-    dp_.scores.updateScoreMatrixDna();
-    int minBandSize = 33;
-    int maxBandSize = 100;
-    int Threshold = 37; //T parameter
-    double coverage = 5.5;//c parameter
+    int minBandSize = alnOptions.fixedBandSize;
+    int maxBandSize = MAX_BAND_SIZE;
+    int Threshold = alnOptions.minScoreFixed; //T parameter
+    double coverage = alnOptions.minScoreLength;//c parameter
     long Plength = P.length();
     int logPlength = 0;
     while (Plength >>= 1) ++logPlength;
@@ -276,6 +278,30 @@ alignment_t * extendAlignmentBWASWLike(dynProg& dp_, const string& S, const stri
                 alignment->alignmentScore += dp_.scores.match*(match.len - 1 + minRefDist) + dp_.scores.openGap + dp_.scores.extendGap*minQDist;
                 curEditDist += minQDist;
                 if(print) cerr << "added insertion of size " << minQDist << endl;
+            } else if (minQDist == 1) {
+                alignment->cigarChars.push_back('D');
+                alignment->cigarChars.push_back('=');
+                alignment->cigarLengths.push_back(minRefDist-1);
+                alignment->cigarLengths.push_back(match.len - 1 + minQDist);
+                alignment->alignmentScore += dp_.scores.match*(match.len - 1 + minQDist) + dp_.scores.openGap + dp_.scores.extendGap*(minRefDist-1);
+                curEditDist += minRefDist-1; //boundary of ref sequences is passed
+                if(print) cerr << "added deletion of size " << minRefDist-1 << endl;
+            } else if (minRefDist == 1) {
+                alignment->cigarChars.push_back('I');
+                alignment->cigarChars.push_back('=');
+                alignment->cigarLengths.push_back(minQDist-1);
+                alignment->cigarLengths.push_back(match.len - 1 + minRefDist);
+                alignment->alignmentScore += dp_.scores.match*(match.len - 1 + minRefDist) + dp_.scores.openGap + dp_.scores.extendGap*(minQDist-1);
+                curEditDist += minQDist-1;
+                if(print) cerr << "added insertion of size " << minQDist-1 << endl;
+            } else if (minRefDist == 2 && minQDist==2) {
+                alignment->cigarChars.push_back('X');
+                alignment->cigarChars.push_back('=');
+                alignment->cigarLengths.push_back(1);
+                alignment->cigarLengths.push_back(match.len - 1 + minRefDist);
+                alignment->alignmentScore += dp_.scores.match*(match.len - 1 + minRefDist) + dp_.scores.mismatch;
+                curEditDist += 1;
+                if(print) cerr << "added mutation" << endl;
             } else {//both distances are positive and not equal to (1,1)
                 boundaries grenzen(refstrRB + 1L, refstrRB + minRefDist - 1L, queryRB + 1, queryRB + minQDist - 1);
                 dp_type types;
@@ -341,11 +367,6 @@ alignment_t * extendAlignmentBWASWLike(dynProg& dp_, const string& S, const stri
         alignment->cigarLengths.push_back(P.length() - queryRB - 1);
     }
     if(print) cerr << "current score is " << alignment->alignmentScore << endl;
-    dp_.scores.match = matchScore;
-    dp_.scores.mismatch = mismatchScore;
-    dp_.scores.openGap = gapopenScore;
-    dp_.scores.extendGap = gapextendScore;
-    dp_.scores.updateScoreMatrixDna();
     //TODO: check for possible optimizations (static initialisations
     //TODO: reorder matches according to best hits
     if(alignment->alignmentScore >= minScore){
@@ -499,7 +520,31 @@ alignment_t * extendAlignment(dynProg& dp_, const string& S, const string& P,
                 alignment->alignmentScore += dp_.scores.match*(match.len - 1 + minRefDist) + dp_.scores.openGap + dp_.scores.extendGap*minQDist;
                 curEditDist += minQDist;
                 if(print) cerr << "added insertion of size " << minQDist << endl;
-            } else {//both distances are positive and not equal to (1,1)
+            } else if (minQDist == 1) {
+                alignment->cigarChars.push_back('D');
+                alignment->cigarChars.push_back('=');
+                alignment->cigarLengths.push_back(minRefDist-1);
+                alignment->cigarLengths.push_back(match.len - 1 + minQDist);
+                alignment->alignmentScore += dp_.scores.match*(match.len - 1 + minQDist) + dp_.scores.openGap + dp_.scores.extendGap*(minRefDist-1);
+                curEditDist += minRefDist-1; //boundary of ref sequences is passed
+                if(print) cerr << "added deletion of size " << minRefDist-1 << endl;
+            } else if (minRefDist == 1) {
+                alignment->cigarChars.push_back('I');
+                alignment->cigarChars.push_back('=');
+                alignment->cigarLengths.push_back(minQDist-1);
+                alignment->cigarLengths.push_back(match.len - 1 + minRefDist);
+                alignment->alignmentScore += dp_.scores.match*(match.len - 1 + minRefDist) + dp_.scores.openGap + dp_.scores.extendGap*(minQDist-1);
+                curEditDist += minQDist-1;
+                if(print) cerr << "added insertion of size " << minQDist-1 << endl;
+            } else if (minRefDist == 2 && minQDist==2) {
+                alignment->cigarChars.push_back('X');
+                alignment->cigarChars.push_back('=');
+                alignment->cigarLengths.push_back(1);
+                alignment->cigarLengths.push_back(match.len - 1 + minRefDist);
+                alignment->alignmentScore += dp_.scores.match*(match.len - 1 + minRefDist) + dp_.scores.mismatch;
+                curEditDist += 1;
+                if(print) cerr << "added mutation" << endl;
+            } else {//both distances are positive and not equal to (1,1), otherwise seeds would not be maximal!
                 boundaries grenzen(refstrRB + 1L, refstrRB + minRefDist - 1L, queryRB + 1, queryRB + minQDist - 1);
                 dp_type types;
                 if(print) cerr << "dp called with dimension " << (grenzen.queryE-grenzen.queryB+1) << "x" << (grenzen.refE-grenzen.refB+1) << endl;
@@ -1394,6 +1439,7 @@ void matchStrandOfPair(const sparseSA& sa,
             lis_t & lis1 = lisIntervalsFM1[lisIndex];
             int state = 0;
             int j = 0;
+            vector<lis_t *> possibleMateMatches;
             while(j < lisIntervalsFM2.size() && concordant < alnOptions.alignmentCount && state < 2){
                 lis_t & lis2 = lisIntervalsFM2[j];
                 if(print) cerr << "try cluster " << j << " which is extended (0/1) " << lis2.extended << endl;
@@ -1408,25 +1454,30 @@ void matchStrandOfPair(const sparseSA& sa,
                 }
                 else if(!lis2.extended && isConcordantAlnToLis(lis1.alignment, lis2, mate1isFirst, editDistM2, M2length, pairedOpt)){
                     state=1;
-                    if(alignFromLIS(sa, dp_, mate2, lis2, editDistM2, alnOptions)){
-                        if(isConcordant(mate1isFirst ? lis1.alignment : lis2.alignment, 
-                                mate1isFirst ? lis2.alignment : lis1.alignment, pairedOpt)){//concordant
-                            concordant++;
-                            if(print) cerr << "concordant alignment found" << endl;
-                            mate1isFirst ? setPaired(lis1.alignment,lis2.alignment,mate1,mate2 , true) : 
-                                setPaired(lis2.alignment,lis1.alignment,mate2,mate1 , true);
-                        }
-                        else if(pairedOpt.discordant){
-                            discordant++;
-                            if(print) cerr << "discordant alignment found" << endl;
-                            mate1isFirst ? setPaired(lis1.alignment,lis2.alignment,mate1,mate2 , false) : 
-                                setPaired(lis2.alignment,lis1.alignment,mate2,mate1 , false);
-                        }
-                    }
+                    possibleMateMatches.push_back(&lis2);
                 }
                 else if(state==1)//discordant, move on
                     state++;
                 j++;
+            }
+            sort(possibleMateMatches.begin(),possibleMateMatches.end(), compIntervalsPointer);
+            for(int i=0; i < possibleMateMatches.size(); i++){
+                lis_t & lis2 = *possibleMateMatches[i];
+                if(alignFromLIS(sa, dp_, mate2, lis2, editDistM2, alnOptions)){
+                    if(isConcordant(mate1isFirst ? lis1.alignment : lis2.alignment, 
+                            mate1isFirst ? lis2.alignment : lis1.alignment, pairedOpt)){//concordant
+                        concordant++;
+                        if(print) cerr << "concordant alignment found" << endl;
+                        mate1isFirst ? setPaired(lis1.alignment,lis2.alignment,mate1,mate2 , true) : 
+                            setPaired(lis2.alignment,lis1.alignment,mate2,mate1 , true);
+                    }
+                    else if(pairedOpt.discordant){
+                        discordant++;
+                        if(print) cerr << "discordant alignment found" << endl;
+                        mate1isFirst ? setPaired(lis1.alignment,lis2.alignment,mate1,mate2 , false) : 
+                            setPaired(lis2.alignment,lis1.alignment,mate2,mate1 , false);
+                    }
+                }
             }
             if(print){
                 cerr << "stopped searching for matching alignment because ";

@@ -730,7 +730,7 @@ bool sparseSA::suffixlink(interval_t &m) const {
 }
 
 // For a given offset in the prefix k, find all MEMs.
-void sparseSA::findMEM(long k, const string &P, vector<match_t> &matches, int min_len, int maxCount) const {
+void sparseSA::findMEM(long k, const string &P, vector<match_t> &matches, int min_len, int maxCount, int sparseQ) const {
   if(k < 0 || k >= K) { cerr << "Invalid k." << endl; return; }
   // Offset all intervals at different start points.
   long prefix = k;
@@ -738,7 +738,7 @@ void sparseSA::findMEM(long k, const string &P, vector<match_t> &matches, int mi
   interval_t xmi(0,N/K-1,0); // max match interval
 
   // Right-most match used to terminate search.
-  int min_lenK = min_len - (sparseMult * K - 1);
+  int min_lenK = min_len - (sparseQ * K - 1);
 
   while( prefix <= (long)P.length() - (K-k)) {
     if (hasChild)
@@ -746,16 +746,16 @@ void sparseSA::findMEM(long k, const string &P, vector<match_t> &matches, int mi
     else
         traverse(P, prefix, mli, min_lenK, -1);    // Traverse until minimum length matched.
     if(mli.depth > xmi.depth) xmi = mli;
-    if(mli.depth <= 1) { mli.reset(N/K-1); xmi.reset(N/K-1); prefix += sparseMult*K; continue; }
+    if(mli.depth <= 1) { mli.reset(N/K-1); xmi.reset(N/K-1); prefix += sparseQ*K; continue; }
 
     if(mli.depth >= min_lenK) {
       if (hasChild)
           traverse_faster(P, prefix, xmi, P.length(), -1); // Traverse until mismatch.
       else
           traverse(P, prefix, xmi, P.length(), -1); // Traverse until mismatch.
-      collectMEMs(P, prefix, mli, xmi, matches, min_len, sparseMult*maxCount); // Using LCP info to find MEM length.
+      collectMEMs(P, prefix, mli, xmi, matches, min_len, sparseQ*maxCount, sparseQ*K); // Using LCP info to find MEM length.
       // When using ISA/LCP trick, depth = depth - K. prefix += K.
-      prefix += sparseMult*K;
+      prefix += sparseQ*K;
       if (!hasSufLink) {
         mli.reset(N / K - 1);
         xmi.reset(N / K - 1);
@@ -764,7 +764,7 @@ void sparseSA::findMEM(long k, const string &P, vector<match_t> &matches, int mi
       else{
         int i = 0;
         bool succes = true;
-        while (i < sparseMult && (succes = suffixlink(mli))) {
+        while (i < sparseQ && (succes = suffixlink(mli))) {
             suffixlink(xmi);
             i++;
         }
@@ -777,7 +777,7 @@ void sparseSA::findMEM(long k, const string &P, vector<match_t> &matches, int mi
     }
     else {
         // When using ISA/LCP trick, depth = depth - K. prefix += K.
-        prefix += sparseMult*K;
+        prefix += sparseQ*K;
         if (!hasSufLink) {
             mli.reset(N / K - 1);
             xmi.reset(N / K - 1);
@@ -785,7 +785,7 @@ void sparseSA::findMEM(long k, const string &P, vector<match_t> &matches, int mi
         } else {
             int i = 0;
             bool succes = true;
-            while (i < sparseMult && (succes = suffixlink(mli))) {
+            while (i < sparseQ && (succes = suffixlink(mli))) {
                 i++;
             }
             if (!succes) {
@@ -803,10 +803,10 @@ void sparseSA::findMEM(long k, const string &P, vector<match_t> &matches, int mi
 // Use LCP information to locate right maximal matches. Test each for
 // left maximality.
 void sparseSA::collectMEMs(const string &P, long prefix, const interval_t mli,
-        interval_t xmi, vector<match_t> &matches, int min_len, int maxCount) const {
+        interval_t xmi, vector<match_t> &matches, int min_len, int maxCount, int maxLeft) const {
   // All of the suffixes in xmi's interval are right maximal.
   long xmiEnd = min(xmi.end,xmi.start+maxCount-1);
-  for(long i = xmi.start; i <= xmiEnd; i++) find_Lmaximal(P, prefix, SA[i], xmi.depth, matches, min_len);
+  for(long i = xmi.start; i <= xmiEnd; i++) find_Lmaximal(P, prefix, SA[i], xmi.depth, matches, min_len, maxLeft);
 
   if(mli.start == xmi.start && mli.end == xmi.end) return;
   long allowedCount = maxCount - xmi.size();
@@ -821,13 +821,13 @@ void sparseSA::collectMEMs(const string &P, long prefix, const interval_t mli,
       while(LCP[xmi.start] >= xmi.depth && allowedCount>0) {
 	xmi.start--;
         allowedCount--;
-	find_Lmaximal(P, prefix, SA[xmi.start], xmi.depth, matches, min_len);
+	find_Lmaximal(P, prefix, SA[xmi.start], xmi.depth, matches, min_len, maxLeft);
       }
       // Find RMEMs to the right, check their left maximality.
       while(xmi.end+1 < N/K && LCP[xmi.end+1] >= xmi.depth && allowedCount>0) {
 	xmi.end++;
         allowedCount--;
-	find_Lmaximal(P, prefix, SA[xmi.end], xmi.depth, matches, min_len);
+	find_Lmaximal(P, prefix, SA[xmi.end], xmi.depth, matches, min_len, maxLeft);
       }
     }
   }
@@ -836,9 +836,9 @@ void sparseSA::collectMEMs(const string &P, long prefix, const interval_t mli,
 
 // Finds left maximal matches given a right maximal match at position i.
 void sparseSA::find_Lmaximal(const string &P, long prefix, long i,
-        long len, vector<match_t> &matches, int min_len) const {
+        long len, vector<match_t> &matches, int min_len, int border) const {
   // Advance to the left up to K steps.
-  for(long k = 0; k < sparseMult * K; k++) {
+  for(long k = 0; k < border; k++) {
     // If we reach the end and the match is long enough, print.
     if(prefix == 0 || i == 0) {
 	matches.push_back(match_t(i, prefix, len));
@@ -932,21 +932,21 @@ void sparseSA::MUM(const string &P, vector<match_t> &unique, int min_len, int ma
 
 }
 
-void sparseSA::MEM(const string &P, vector<match_t> &matches, int min_len, int maxCount) const {
+void sparseSA::MEM(const string &P, vector<match_t> &matches, int min_len, int maxCount, int sparseQ) const {
   if(min_len < K) return;
-  for(int k = 0; k < K; k++) { findMEM(k, P, matches, min_len, maxCount); }
+  for(int k = 0; k < K; k++) { findMEM(k, P, matches, min_len, maxCount, sparseQ); }
 }
 // Use LCP information to locate right maximal matches. Test each for
 // left maximality.
 void sparseSA::collectSMAMs(const string &P, long prefix,
-        const interval_t mli, interval_t xmi, vector<match_t> &matches, int min_len, int maxCount) const {
+        const interval_t mli, interval_t xmi, vector<match_t> &matches, int min_len, int maxCount, int maxLeft) const {
   // All of the suffixes in xmi's interval are right maximal.
   long upperLimit = xmi.size() < (long) maxCount ? xmi.end : xmi.start + (long) maxCount-1;
-  for(long i = xmi.start; i <= upperLimit; i++) find_Lmaximal(P, prefix, SA[i], xmi.depth, matches, min_len);
+  for(long i = xmi.start; i <= upperLimit; i++) find_Lmaximal(P, prefix, SA[i], xmi.depth, matches, min_len, maxLeft);
 }
 
 // For a given offset in the prefix k, find all MEMs.
-void sparseSA::findSMAM(long k, const string &P, vector<match_t> &matches, int min_len, int maxCount) const {
+void sparseSA::findSMAM(long k, const string &P, vector<match_t> &matches, int min_len, int maxCount, int sparseQ) const {
   if(k < 0 || k >= K) { cerr << "Invalid k." << endl; return; }
   // Offset all intervals at different start points.
   long prefix = k;
@@ -954,25 +954,25 @@ void sparseSA::findSMAM(long k, const string &P, vector<match_t> &matches, int m
   interval_t xmi(0,N/K-1,0); // max match interval
 
   // Right-most match used to terminate search.
-  int min_lenK = min_len - (sparseMult*K-1);
+  int min_lenK = min_len - (sparseQ*K-1);
 
   while( prefix <= (long)P.length() - (K-k)) {
     if(hasChild) 
         traverse_faster(P, prefix, xmi, P.length(), -1);
     else
         traverse(P, prefix, xmi, P.length(), -1);// Traverse until mismatch.
-    if(xmi.depth <= 1) { xmi.reset(N/K-1); prefix += sparseMult*K; continue; }
+    if(xmi.depth <= 1) { xmi.reset(N/K-1); prefix += sparseQ*K; continue; }
     if(xmi.depth >= min_lenK) {//less restriction seems to give best results
-        collectSMAMs(P, prefix, mli, xmi, matches, min_len, sparseMult*maxCount); // Using LCP info to find MEM length.
+        collectSMAMs(P, prefix, mli, xmi, matches, min_len, sparseQ*maxCount, sparseQ*K); // Using LCP info to find MEM length.
         // When using ISA/LCP trick, depth = depth - K. prefix += K.
-        prefix += sparseMult*K;
+        prefix += sparseQ*K;
         if (!hasSufLink) {
             xmi.reset(N / K - 1);
             continue;
         } else {
             int i = 0;
             bool succes = true;
-            while (i < sparseMult && (succes = suffixlink(xmi)))
+            while (i < sparseQ && (succes = suffixlink(xmi)))
                 i++;
             if (!succes) {
                 xmi.reset(N / K - 1);
@@ -982,14 +982,14 @@ void sparseSA::findSMAM(long k, const string &P, vector<match_t> &matches, int m
     }
     else {
       // When using ISA/LCP trick, depth = depth - K. prefix += K.
-      prefix += sparseMult*K;
+      prefix += sparseQ*K;
       if (!hasSufLink) {
             xmi.reset(N / K - 1);
             continue;
       } else {
         int i = 0;
         bool succes = true;
-        while (i < sparseMult && (succes = suffixlink(xmi)))
+        while (i < sparseQ && (succes = suffixlink(xmi)))
             i++;
         if (!succes) {
             xmi.reset(N / K - 1);
@@ -1000,7 +1000,7 @@ void sparseSA::findSMAM(long k, const string &P, vector<match_t> &matches, int m
   }
 }
 
-void sparseSA::SMAM(const string &P, vector<match_t> &matches, int min_len, int maxCount) const {
+void sparseSA::SMAM(const string &P, vector<match_t> &matches, int min_len, int maxCount, int sparseQ) const {
   if(min_len < K) return;
-  for(long k = 0; k < K; k++) { findSMAM(k, P, matches, min_len, maxCount); }
+  for(long k = 0; k < K; k++) { findSMAM(k, P, matches, min_len, maxCount, sparseQ); }
 }

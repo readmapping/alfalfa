@@ -1,8 +1,20 @@
-/* 
- * File:   options.h
- * Author: mvyvermn
+/*
+ * Copyright 2012, Michael Vyverman <michael.vyverman@ugent.be>
  *
- * Created on 2 augustus 2012, 16:19
+ * This file is part of ALFALFA.
+ *
+ * ALFALFA is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * ALFALFA is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with ALFALFA.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #ifndef OPTIONS_H
@@ -22,6 +34,7 @@ enum orientation_t { PAIR_FR, PAIR_RF, PAIR_FF};
 //match options
 struct align_opt {
     dp_scores scores;
+    bool scoresSetByUser;
     bool noClipping;
     double errorPercent;
     int minMemLength;
@@ -36,6 +49,10 @@ struct align_opt {
     int print;
     mum_t memType;
     int sparseMult;
+    //next parameters are currently only used for local alignment
+    int fixedBandSize;
+    int minScoreFixed;
+    double minScoreLength;
 };
 
 struct paired_opt {
@@ -55,7 +72,7 @@ struct mapOptions_t{//commentary + sort + constructor
     void initOptions(){
         K = 1; query_threads = 1;
         nucleotidesOnly = false;
-        alnOptions.minMemLength = 20;
+        alnOptions.minMemLength = 40;
         alnOptions.memType = MEM;
         alnOptions.sparseMult = 1;
         alnOptions.noFW = alnOptions.noRC = false;
@@ -66,17 +83,21 @@ struct mapOptions_t{//commentary + sort + constructor
         alnOptions.scores.openGap = 0;
         alnOptions.scores.extendGap = -2;
         alnOptions.noClipping = true;
-        alnOptions.alignmentCount = 100;
-        alnOptions.maxTrial = 10;
-        alnOptions.minCoverage = 25;
-        alnOptions.tryHarder = false;
+        alnOptions.alignmentCount = 4;
+        alnOptions.maxTrial = 5;
+        alnOptions.minCoverage = 10;
+        alnOptions.tryHarder = true;
         alnOptions.unique = false;
         alnOptions.maxSeedCandidates = -1;
+        alnOptions.scoresSetByUser = false;
+        alnOptions.fixedBandSize = 33;
+        alnOptions.minScoreFixed = 37;
+        alnOptions.minScoreLength = 5.5;
         pairedOpt.contain = true;
         pairedOpt.discordant = true;
         pairedOpt.dovetail = false;
-        pairedOpt.maxInsert = 500;//return to default!//
-        pairedOpt.minInsert = 0;//return to default!//
+        pairedOpt.maxInsert = 3300;//return to default!//
+        pairedOpt.minInsert = 2700;//return to default!//
         pairedOpt.mixed = true;
         pairedOpt.orientation = PAIR_FR;
         pairedOpt.overlap = true;
@@ -116,7 +137,11 @@ struct mapOptions_t{//commentary + sort + constructor
         cerr << "#alignments\t\t\t" << alnOptions.alignmentCount << endl;
         cerr << "#try and error\t\t\t" << alnOptions.maxTrial << endl;
         cerr << "min query coverage\t\t" << alnOptions.minCoverage << endl;
-        cerr << "use clipping\t\t\t" << (alnOptions.noClipping ? "no" : "yes") << endl;
+        cerr << "use local alignment?\t\t\t" << (alnOptions.noClipping ? "no" : "yes") << endl;
+        if(!alnOptions.noClipping){
+            cerr << "use band size\t\t\t" << alnOptions.fixedBandSize << endl;
+            cerr << "use minimum score\t\t\t max(" << alnOptions.minScoreFixed << ",log(readlength)*" << alnOptions.minScoreLength << ")" << endl;
+        }
         cerr << "verbosity level\t\t\t" << alnOptions.print << endl;
         cerr << "calculate forward\t\t\t" << (alnOptions.noFW ? "no" : "yes") << endl;
         cerr << "calculate reverse\t\t\t" << (alnOptions.noRC ? "no" : "yes") << endl;
@@ -186,7 +211,9 @@ enum {
     ARG_CHILD,           //--child
     ARG_SUFLINK,         //--suflink
     ARG_KMER,            //--kmer
-    ARG_VVERBOSE         //--vverbose
+    ARG_VVERBOSE,        //--vverbose
+    ARG_FIXEDBAND,       //--bandsize
+    ARG_MINSCORE         //--minscore
 };
 
 static struct option long_options[] = {
@@ -228,6 +255,8 @@ static struct option long_options[] = {
     {(char*)"suflink",          required_argument, 0,            ARG_SUFLINK},
     {(char*)"kmer",             required_argument, 0,            ARG_KMER},
     {(char*)"seedmaxcand",      required_argument, 0,            'M'},
+    {(char*)"bandsize",         required_argument, 0,            ARG_FIXEDBAND},
+    {(char*)"minscore",         required_argument, 0,            ARG_MINSCORE},
     {(char*)0, 0, 0, 0} // terminator
 };
 
@@ -280,15 +309,17 @@ static void usageAln(const string prog) {
   cerr << "-d/--errors (double)       percentage of errors allowed according to the edit distance [0.08]" << endl;
   cerr << "-L/--seedminlength (int)   minimum length of the seeds used [INT_MAX because seedmaxcand is used]" << endl;
   cerr << "-M/--seedmaxcand (int)     max number of right max matches per query index [max(-k,20)]" << endl;
-  cerr << "--seedtype (string)        type of seeds used, choice of MEM,MAM,MUM,SMAM [SMAM]." << endl;
-  cerr << "-k/--alignments (int)      expected number of alignments required per strand per read [50]" << endl;
-  cerr << "-T/--trials (int)          maximum number of times alignment is attempted before we give up [10]" << endl;
-  cerr << "-C/--mincoverage (int)     minimum percent of bases of read the seeds have to cover [25]" << endl;
-  cerr << "--tryharder                enable: 'try harder': when no seeds have been found, search using less stringent parameters" << endl;
+  cerr << "--seedtype (string)        type of seeds used, choice of MEM,MAM,MUM,SMAM [MEM]." << endl;
+  cerr << "-k/--alignments (int)      expected number of alignments required per strand per read [4]" << endl;
+  cerr << "-T/--trials (int)          maximum number of times alignment is attempted before we give up [5]" << endl;
+  cerr << "-C/--mincoverage (int)     minimum percent of bases of read the seeds have to cover [10]" << endl;
+  cerr << "--tryharder                disable: 'try harder': when no seeds have been found, do not search using less stringent parameters" << endl;
   cerr << "--nofw                     do not compute forward matches" << endl;
   cerr << "--norc                     do not compute reverse complement matches" << endl;
-  cerr << "-n/--wildcards             treat Ns as wildcard characters" << endl;
-  cerr << "--bwa-sw-like          allow soft clipping at the beginning and end of an alignment" << endl;
+//  cerr << "-n/--wildcards             treat Ns as wildcard characters" << endl;
+  cerr << "--bwa-sw-like              allow soft clipping at the beginning and end of an alignment" << endl;
+  cerr << "--bandsize (int)           provide bandsize for local alignment [33]" << endl;
+  cerr << "--minscore (int,double)    provide score function for local alignment [37,5.5]" << endl;
   cerr << endl;
   cerr << "DYNAMIC PROGRAMMING OPTIONS " << endl;
   cerr << "-m/--match (int)           match bonus [0]" << endl;
@@ -297,8 +328,8 @@ static void usageAln(const string prog) {
   cerr << "-e/--gapextend (int)       gap extension penalty [-2]" << endl;
   cerr << endl;
   cerr << "PAIRED END OPTIONS " << endl;
-  cerr << "-I/--minins (int)          minimum insert size [0]" << endl;
-  cerr << "-X/--maxins (int)          maximum insert sier [500]" << endl;
+  cerr << "-I/--minins (int)          minimum insert size [2700]" << endl;
+  cerr << "-X/--maxins (int)          maximum insert sier [3300]" << endl;
   cerr << "--fr/--rf/--ff             orientation of the mates: fr means forward upstream mate 1" << endl; 
   cerr << "                           and reverse complement downstream mate 2, or vise versa. rf and ff are similar [fr]" << endl;
   cerr << "--no-mixed                 never search single mate alignments" << endl;
@@ -326,6 +357,14 @@ static mum_t parseSeedType(string type){
         return SMAM;
     else
         return SMAM;
+}
+
+inline void parseMinScore(align_opt & opt, string optarg){
+    int beginPos = 0;
+    int commaPos = optarg.find(',',beginPos);
+    opt.minScoreFixed = atoi(optarg.substr(beginPos,commaPos-beginPos).c_str());
+    beginPos = commaPos+1;
+    opt.minScoreLength = atof(optarg.substr(beginPos).c_str());
 }
 
 //move process Command to main, 
@@ -372,14 +411,14 @@ inline void processParameters(int argc, char* argv[], mapOptions_t& opt, const s
                 case ARG_VVERBOSE: opt.alnOptions.print = 2; break;
                 case ARG_CLIP: opt.alnOptions.noClipping = false; break;
                 case 'q': opt.query_threads = atoi(optarg); break;
-                case 'm': opt.alnOptions.scores.match = atoi(optarg); break;
-                case 'u': opt.alnOptions.scores.mismatch = atoi(optarg); break;
-                case 'o': opt.alnOptions.scores.openGap = atoi(optarg); break;
-                case 'e': opt.alnOptions.scores.extendGap = atoi(optarg); break;
+                case 'm': opt.alnOptions.scores.match = atoi(optarg); opt.alnOptions.scoresSetByUser = true; break;
+                case 'u': opt.alnOptions.scores.mismatch = atoi(optarg); opt.alnOptions.scoresSetByUser = true; break;
+                case 'o': opt.alnOptions.scores.openGap = atoi(optarg); opt.alnOptions.scoresSetByUser = true; break;
+                case 'e': opt.alnOptions.scores.extendGap = atoi(optarg); opt.alnOptions.scoresSetByUser = true; break;
                 case 'd': opt.alnOptions.errorPercent = atof(optarg); break;
                 case 'T': opt.alnOptions.maxTrial = atoi(optarg); break;
                 case 'C': opt.alnOptions.minCoverage = atoi(optarg); break;
-                case ARG_TRY_HARDER: opt.alnOptions.tryHarder = true; break;
+                case ARG_TRY_HARDER: opt.alnOptions.tryHarder = false; break;
                 case 'h': opt.command == INDEX ? usageIndex(program) : usageAln(program); break;
                 case 'I': opt.pairedOpt.minInsert = atoi(optarg); break;
                 case 'X': opt.pairedOpt.maxInsert = atoi(optarg); break;
@@ -399,6 +438,8 @@ inline void processParameters(int argc, char* argv[], mapOptions_t& opt, const s
                 case ARG_SUFLINK: opt.hasSuflink = atoi(optarg); break;
                 case ARG_KMER: opt.hasKmer = atoi(optarg); break;
                 case ARG_SEEDTYPE: opt.alnOptions.memType = parseSeedType(optarg); break;
+                case ARG_FIXEDBAND: opt.alnOptions.fixedBandSize = atoi(optarg); break;
+                case ARG_MINSCORE: parseMinScore(opt.alnOptions, optarg); break;
                 case -1: /* Done with options. */
                 break;
                 case 0: if (long_options[option_index].flag != 0) break;
@@ -435,6 +476,13 @@ inline void processParameters(int argc, char* argv[], mapOptions_t& opt, const s
         if(opt.K > 1 && (opt.alnOptions.memType == MAM || opt.alnOptions.memType == MUM)){
                 fprintf(stderr, "MAM and MUM seeds are not supported with s>1\n");
                 exit(1);
+        }
+        if(!opt.alnOptions.noClipping && !opt.alnOptions.scoresSetByUser){
+            //local alignment and scores not set: BWA-SW defaults
+            opt.alnOptions.scores.match = 1;
+            opt.alnOptions.scores.mismatch = -3;
+            opt.alnOptions.scores.openGap = -5;
+            opt.alnOptions.scores.extendGap = -2;
         }
         if(opt.alnOptions.print > 0)
             opt.printOptions();

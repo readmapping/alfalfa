@@ -48,7 +48,7 @@ using namespace std;
 //mapper options
 static const string PROG = "ALFALFA";
 static const string SAM_VERSION = "1.3";
-static const string PROG_VERSION = "0.6.3.4";
+static const string PROG_VERSION = "0.7.0";
 static const string NOT_AVAILABLE = "*";
 static const long INIT_DP_DIMENSION = 2048;
 

@@ -257,21 +257,21 @@ struct sparseSA {
 
   // Given a position i in S, finds a left maximal match of minimum
   // length within K steps.
-  inline void find_Lmaximal(const string &P, long prefix, long i, long len, vector<match_t> &matches, int min_len) const;
+  inline void find_Lmaximal(const string &P, long prefix, long i, long len, vector<match_t> &matches, int min_len, int border) const;
 
   // Given an interval where the given prefix is matched up to a
   // mismatch, find all MEMs up to a minimum match depth.
   void collectMEMs(const string &P, long prefix, const interval_t mli, 
-  interval_t xmi, vector<match_t> &matches, int min_len, int maxCount) const;
+  interval_t xmi, vector<match_t> &matches, int min_len, int maxCount, int maxLeft) const;
 
   void collectSMAMs(const string &P, long prefix, const interval_t mli, 
-  interval_t xmi, vector<match_t> &matches, int min_len, int maxCount) const;
+  interval_t xmi, vector<match_t> &matches, int min_len, int maxCount, int maxLeft) const;
 
   // Find all MEMs given a prefix pattern offset k.
-  void findMEM(long k, const string &P, vector<match_t> &matches, int min_len, int maxCount) const;
+  void findMEM(long k, const string &P, vector<match_t> &matches, int min_len, int maxCount, int sparseQ) const;
 
   // Find all MEMs given a prefix pattern offset k.
-  void findSMAM(long k, const string &P, vector<match_t> &matches, int min_len, int maxCount) const;
+  void findSMAM(long k, const string &P, vector<match_t> &matches, int min_len, int maxCount, int sparseQ) const;
 
   // NOTE: min_len must be > 1
   void findMAM(const string &P, vector<match_t> &matches, int min_len, int maxCount) const;
@@ -288,10 +288,10 @@ struct sparseSA {
   }
 
   // Find Maximal Exact Matches (MEMs)
-  void MEM(const string &P, vector<match_t> &matches, int min_len, int maxCount) const;
+  void MEM(const string &P, vector<match_t> &matches, int min_len, int maxCount, int sparseQ) const;
 
   // Find Maximal Exact Matches (MEMs)
-  void SMAM(const string &P, vector<match_t> &matches, int min_len, int maxCount) const;
+  void SMAM(const string &P, vector<match_t> &matches, int min_len, int maxCount, int sparseQ) const;
 
   // Maximal Unique Match (MUM)
   void MUM(const string &P, vector<match_t> &unique, int min_len, int maxCount) const;
