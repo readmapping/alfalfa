@@ -306,7 +306,7 @@ int main(int argc, char* argv[]){
             clock_t end = clock();
             double cpu_time = (double)( end - start ) /CLOCKS_PER_SEC;
             cerr << "time for building index structure: " << cpu_time << endl;
-
+            cerr << "INDEX SIZE IN BYTES: " << sa->index_size_in_bytes() << endl;
             delete sa;
         }
         else if(opt.command == ALN){
