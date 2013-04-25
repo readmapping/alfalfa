@@ -70,7 +70,7 @@ struct paired_opt {
 struct mapOptions_t{//commentary + sort + constructor
     mapOptions_t(){ initOptions(); }
     void initOptions(){
-        K = 1; query_threads = 1;
+        K = 4; query_threads = 1;
         nucleotidesOnly = false;
         alnOptions.minMemLength = 40;
         alnOptions.memType = MEM;
@@ -107,7 +107,7 @@ struct mapOptions_t{//commentary + sort + constructor
         saveIndex = false;
         hasChild = true;
         hasSuflink = false;
-        hasKmer = false;
+        hasKmer = true;
         index_prefix = indexLocation = "";
     }
     void printOptions(){
@@ -278,12 +278,12 @@ static void usageIndex(const string prog) {
   cerr << endl;
   cerr << "OPTIONS " << endl;
   cerr << "-s/--sparsityfactor (int)  the sparsity factor of the sparse suffix array index. "
-          << "Note that the value needs to be lower than -L parameter in the ALN command[1]." << endl;
+          << "Note that the value needs to be lower than -L parameter in the ALN command[4]." << endl;
   cerr << "-p/--prefix (string/path)  prefix of the index names [reference-file name]" << endl;
   cerr << "--save (0 or 1)            save index to disk or not [1]" << endl;
   cerr << "--child (0 or 1)           use sparse child array (useful for s>=3 and for MEMs)[1]" << endl;
-  cerr << "--suflink (0 or 1)         use suffix links (useful for s<=3 for MAM and SMAM)[1]" << endl;
-  cerr << "--kmer (0 or 1)            use a kmer table for the first 10 characters of the seed (speed-up?) [0]" << endl;
+  cerr << "--suflink (0 or 1)         use suffix links (useful for s<=3 for MAM and SMAM)[0]" << endl;
+  cerr << "--kmer (0 or 1)            use a kmer table for the first 10 characters of the seed (speed-up?) [1]" << endl;
   exit(1);
 }
 
