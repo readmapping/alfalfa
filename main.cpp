@@ -46,7 +46,7 @@
 using namespace std;
 
 //mapper options
-static const string PROG = "ALFALFA";
+static const string PROG = "alfalfa";
 static const string SAM_VERSION = "1.3";
 static const string PROG_VERSION = "0.7.0";
 static const string NOT_AVAILABLE = "*";
@@ -114,8 +114,11 @@ void *unpaired_thread(void *arg_) {
           if(seq_cnt%10000==0)
               cerr << ".";
           read.init(arg->opt->nucleotidesOnly);
+          if(arg->opt->alnOptions.print>0) cerr << "match " << read.qname << endl;
           unpairedMatch(*sa, *arg->dp, read, arg->opt->alnOptions);
+          if(arg->opt->alnOptions.print>0) cerr << "post process read alignments" << endl;
           read.postprocess(arg->opt->alnOptions.scores, *sa);
+          if(arg->opt->alnOptions.print>0) cerr << "read " << read.qname << " has " << read.alignmentCount() << " alignments" << endl;
           //Ouput
           pthread_mutex_lock(arg->writeLock);
           stringstream * ss = new stringstream;
@@ -260,11 +263,11 @@ void *paired_thread1(void *arg_) {
 
 int main(int argc, char* argv[]){
     cerr << "@PG\tID:" << PROG << "\tVN:" << PROG_VERSION << endl;
-    if(argc < 2 ){
-        usage(PROG);
+    if(argc < 2 || strcmp(argv[1], "-h")==0 || strcmp(argv[1], "--help")==0){
+        usage();
         exit(1);
     }
-    if(strcmp(argv[1], "check") == 0){
+    if(strcmp(argv[1], "evaluate") == 0){
         samCheckOptions_t opt;
         opt.initOptions();
         processCheckParameters(argc-1, argv+1, opt, PROG );
@@ -273,8 +276,6 @@ int main(int argc, char* argv[]){
             checkOracle(opt);
         else if(opt.subcommand == SUMMARY)
             checkSummary(opt);
-        else if(opt.subcommand == COMPARE)
-            checkCompare(opt);
         else if(opt.subcommand == WGSIM)
             checkWgsim(opt);
     }
@@ -316,28 +317,6 @@ int main(int argc, char* argv[]){
                 //TODO: set choice for kmer: situation yes or no
                 cerr << "building index with s = " << opt.K  << " ... "<< endl;
                 //adjust data structure to seed choice and sparseness
-                if((opt.alnOptions.memType == MAM || opt.alnOptions.memType == MUM) && opt.K>3){
-                    opt.hasChild = sa->hasChild = false;
-                    opt.hasSuflink = sa->hasSufLink = true;
-                    cerr << "because of MAM or MUM seeds, ESSA has suffix links and no child array" << endl;
-                }
-                else if(opt.alnOptions.memType == SMAM){
-                    if(opt.K >= 3){
-                        opt.hasChild = sa->hasChild = true;
-                        opt.hasSuflink = sa->hasSufLink = false;
-                        cerr << "because of SMAM seeds and s= " << opt.K << ", ESSA has child array and no suffix links" << endl;
-                    }
-                    else{
-                        opt.hasChild = sa->hasChild = true;
-                        opt.hasSuflink = sa->hasSufLink = false;
-                        cerr << "because of SMAM seeds and s= " << opt.K << ", ESSA has suffix links and no child array" << endl;
-                    }
-                }
-                else if(opt.alnOptions.memType == MEM){
-                    opt.hasChild = sa->hasChild = true;
-                    opt.hasSuflink = sa->hasSufLink = false;
-                    cerr << "because of MEM seeds, ESSA has child array and no suffix links" << endl;
-                }
                 clock_t start = clock();
                 sa->construct();
                 cerr << "building index: done" << endl;
@@ -350,25 +329,17 @@ int main(int argc, char* argv[]){
                 double cpu_time = (double)( end - start ) /CLOCKS_PER_SEC;
                 cerr << "time for building index structure: " << cpu_time << endl;
             }
-            //calculate skip parameter for MEMs
-            if(opt.alnOptions.memType == MEM || opt.alnOptions.memType == SMAM){
-                int minLength = opt.alnOptions.minMemLength;
-                if (opt.K >= 4) sa->sparseMult = (int) (minLength - 10) / opt.K;
-                else sa->sparseMult = (int) (minLength - 12) / opt.K;
-                opt.alnOptions.sparseMult = sa->sparseMult;
-                if(opt.alnOptions.print) cerr << "skip factor was set to " << opt.alnOptions.sparseMult << endl;
+            else{
+                opt.K = sa->K;
+                opt.hasChild = sa->hasChild;
+                opt.hasSuflink = sa->hasSufLink;
+                opt.hasKmer = sa->hasKmer;
             }
             if(opt.alnOptions.print>0){
                 cerr << "index has sparseness " << opt.K << endl;
                 cerr << "index uses suffix links? " << (sa->hasSufLink ? "yes" : "no") << endl;
                 cerr << "index uses child array? " << (sa->hasChild ? "yes" : "no") << endl;
-                cerr << "skip factor is set to " << sa->sparseMult << endl;
                 cerr << "INDEX SIZE IN BYTES: " << sa->index_size_in_bytes() << endl;
-            }
-            if(opt.outputName.empty()){
-                opt.outputName = opt.ref_fasta.substr().append(".sam");
-                if(opt.alnOptions.print>0)
-                    cerr << "output name changed to " << opt.outputName << endl;
             }
             //Print SAM Header, require refdescre, startpos and argc/argv
             output.createHeader(argc, argv, ref.length());
@@ -398,7 +369,7 @@ int main(int argc, char* argv[]){
                 }
                 // Create joinable threads to find MEMs.
                 for(int i = 0; i < opt.query_threads; i++)
-                    pthread_create(&thread_ids[i], &attr, query_thread, (void *)&args[i]);
+                    pthread_create(&thread_ids[i], &attr, unpaired_thread, (void *)&args[i]);
                 // Wait for all threads to terminate.
                 for(int i = 0; i < opt.query_threads; i++)
                     pthread_join(thread_ids[i], NULL);

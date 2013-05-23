@@ -1,86 +1,107 @@
-ALFALFA v0.6.2
--------------------
-  
-Installing: 
-	ALFALFA comes with 2 distributions: 1 compiled under Ubuntu Linux and the other under Cygwin-Windows
-  
-Usage:  
-	./alfalfa  COMMAND [options] -x <reference-file> [-U <query-file>] [-1 <upstream mates> -2 <downstream mates>] [-S ouput-file]
-  
-Command should be one of the following: " << endl;
-    index                       build the index for given <reference-file> and save to disk
-                                this command is not necessairy for mapping, as aln can first construct the index
-    aln                         map the reads to the index build for <reference-file>
+Rapid evolutions in sequencing technology force read mappers into flexible adaptation to longer reads, changing error models, memory barriers and novel applications. The long read mapper ALFALFA achieves high performance in accurately mapping long (>500bp) single-end and paired-end reads to gigabase-scale reference genomes, while remaining competitive for mapping shorter (>100bp) reads. Its seed-and-extend workflow is underpinned by fast retrieval of super-maximal exact matches from an enhanced sparse suffix array, with flexible parameter tuning to balance performance, memory footprint and accuracy.
 
-call alfalfa COMMAND --help [or -h] for more detailed information
+# Downloads:
 
-index COMMAND
--------------
--------------
-./alfalfa  index [options] -x <reference-file>
+[ALFALFA v0.7.0](https://github.ugent.be/ComputationalBiology/alfalfa/blob/master/alfalfa.tgz?raw=true)
 
-OPTIONS
--------
--s/--sparsityfactor (int)  the sparsity factor of the sparse suffix array index.
-			   Note that the value needs to be lower than -L parameter in the ALN command[1].
--p/--prefix (string/path)  prefix of the index names [reference-file name]
---save (0 or 1)            save index to disk or not [1]"
+# Installation:
+
+* unpack using `tar xvzf alfalfa.tgz`  
+* change into the folder alfalfa  
+* type `make`
+
+# Usage: 
+
+Usage and command line parameter information can be found on the [wiki](https://github.ugent.be/ComputationalBiology/alfalfa/wiki).
+
+# Version history:  
 
 
-aln COMMAND
--------------
--------------
+* Version 0.7.0 update (May 23, 2013)  
+  1. Changed parameter names and defaults.  
+  2. Removed deprecated code.  
+  3. Improved paired-end mode 4.  
+* Version 0.7.0 (Apr 19, 2013)  
+  1. General improvements to the code.  
+  2. Small bug fixes.  
+  3. Added more debug information to verbose mode.   
+  4. Evaluate command can now calculate edit distance of alignments using reference genome and CIGAR string.  
+  5. Added local alignment option.  
+  6. Improved SMEM calculation.  
+* Version 0.6.4 (Mar 04, 2013)  
+  1. Introduction of essaMEM features.  
+  2. Introduction of a k-mer array to speed up seed-finding.  
+  3. Bug fixes.  
+  4. Fixed some typos.  
+  5. General improvements to the code and removal of deprecated code.  
+* Version 0.6.3 (Feb 21, 2013)  
+  1. General improvements to the code.  
+  2. Added verbose mode for debugging purposes.  
+* Version 0.6.2 (Jan 23, 2013)  
+  1. Fixed bugs introduced by previous version.  
+  2. Added wgsim subcommand to evaluate command.  
+* Version 0.6.1 (Jan 14, 2013)  
+  1. Artifacts indicating mate origin at the end of paired-end reads (/0/1/2)  are now removed from read name.  
+  2. Bug fixes in evaluate command.  
+* Version 0.6.0 (Nov 16, 2012)  
+  1. Added option to store index to disk.  
+  2. Bug fixes in evaluate command.  
+* Version 0.6.0 (Nov 16, 2012)  
+  1. Added option to store index to disk.  
+  2. Bug fixes in evaluate command.  
+* Version 0.5.4 (Oct 09, 2012)  
+  1. Added evaluate command to check accuracy of mapping on simulated reads.  
+* Version 0.5.3 (Sep 27, 2012)  
+  1. Bug fixes for paired-end mapping.  
+  2. Memory leak fixed that was introduced in previous version.  
+  3. Memory usage decreased for index.  
+* Version 0.5.2 (Sep 24, 2012)  
+  1. Bug fixes for paired-end mapping.  
+  2. Decreased memory usage of dynamic programming matrix.  
+* Version 0.5.1 (Sep 13, 2012)  
+  1. Bug fixes for paired-end mapping.  
+  2. Bug fixes for reference genomes larger than 2Gbp.  
+* Version 0.5.0 (Sep 03, 2012)  
+  1. Major reordering of source code. 
+  2. Many bug fixes.  
+  3. Added new behavior for single-end read alignment that finds seeds for both strands first, followed by prioritzed extension of candidate regions, instead of aligning both srands separately.  
+  4. Changed command line parameters and default parameter values.  
+  5. Added support for paired-end reads.  
+  6. Added many parameters for paired-end read mapping.  
+  7. Added different algorithms for paired-end read mapping.  
+  8. Added banded dynamic programming with non-symmetrical band.  
+* Version 0.3.5 (Jul 03, 2012)  
+  1. Dynamic programming matrix is now semi-static, decreasing computation time.  
+  2. Trace calculation of dynamic programming without trace matrix.  
+* Version 0.3.4 (Jun 29, 2012)  
+  1. Changed from normal dynamic programming to banded dynamic programming.  
+  2. Score matrix added for dynamic programming (internal).  
+* Version 0.3.3 (Jun 26, 2012)  
+  1. Enhanced sparse suffix array with sparse child array.  
+* Version 0.3.2 (Jun 08, 2012)  
+  1. Multithreading support added.  
+  2. Minor improvements in the code.  
+* Version 0.3.1 (May 31, 2012)  
+  1. Optimized dynamic programming when no affine gap penalties are used.  
+  2. Changes to default parameters.  
+* Version 0.3.0 (May 31, 2012)  
+  1. First Github release.  
+* Version 0.2.0 (March 19, 2012)  
+  1. Allow multiple alignments to be returned per read. Added parameter to set the maximum number of alignments returned per read.  
+  2. Added algorithm to select multiple candidate regions.  
+  3. Added some heuristics to speed up mapping time.  
+* Version 0.1.0 (March 15, 2012)  
+  1. Changed MAM seeds to SMEM seeds.  
+  2. Added parameter to limit number of seeds per query offset.
+  3. Bugfixes for local alignment, mapping quality calculation and CIGAR string calculation.  
+  4. Dynamic programming at boundaries now takes into account current edit distance of alignment in the gaps between seeds.  
+* Version 0.0.0 (March 01, 2012)  
+  1. First release of ALFALFA.  
 
-I/O OPTIONS
------------
--x (string)                reference sequence in mult-fasta
--i/--index (string)        prefix or path of the index to load, if not set, index will first be calculated
--1                         query file with first mates (fasta or fastq)
--2                         query file with second mates (fasta or fastq)
--U                         query file with unpaired reads (fasta or fastq)
--S                         output file name (will be sam) [referenceName.sam]
---save (0 or 1)            if --index is not set, save index to disk [0]
--p                         prefix of index that will be saved [reference sequence name]
+# Links:
 
-PERFORMANCE OPTIONS 
--------------------
--s/--sparsityfactor (int)  the sparsity factor of the sparse suffix array index if it is not yet constructed [1].
--q/--threads (int)    	   number of threads [1]
+[essaMEM project](https://github.ugent.be/ComputationalBiology/essaMEM)
 
-ALIGNMENT OPTIONS 
------------------
--d/--errors (double)       percentage of errors allowed according to the edit distance [0.08]
--L/--seedminlength (int)   minimum length of the seeds used [depending on errorPercent and read length [20]
--k/--alignments (int)      expected number of alignments required per strand per read [100]
--T/--trials (int)          maximum number of times alignment is attempted before we give up [10]
--C/--mincoverage (int)     minimum percent of bases of read the seeds have to cover [25]
---tryharder                enable: 'try harder': when no seeds have been found, search using less stringent parameters
---nofw                     do not compute forward matches
---norc                     do not compute reverse complement matches
--n/--wildcards             treat Ns as wildcard characters
---softclipping             allow soft clipping at the beginning and end of an alignment
+# Contact: 
 
-DYNAMIC PROGRAMMING OPTIONS 
----------------------------
--m/--match (int)           match bonus [0]
--u/--mismatch (int)        mismatch penalty [-2]
--o/--gapopen (int)         gap open penalty (set 0 for non-affine gap-penalties) [0]
--e/--gapextend (int)       gap extension penalty [-2]
-
-PAIRED END OPTIONS 
-------------------
--I/--minins (int)          minimum insert size [0]
--X/--maxins (int)          maximum insert sier [500]
---fr/--rf/--ff             orientation of the mates: fr means forward upstream mate 1 
-                           and reverse complement downstream mate 2, or vise versa. rf and ff are similar [fr]
---no-mixed                 never search single mate alignments
---no-discordant            never discordant alignments
---dovetail                 allow reads to dovetail (changing up- and downstream of reads)
---no-contain               disallow a mate to be fully contained in the other
---no-overlap               disallow a mate to overlap with the other
---paired-mode (int)        choose algorithm to calculate paired-end reads 1,2,3,4 [1]
-
-MISC OPTIONS 
-------------
---verbose                  enable verbose mode (not by default)
--h/--help                  print this statement
+Don't hesitate to contact us at michael.vyverman[at]ugent.be if you have any further questions or suggestions. 

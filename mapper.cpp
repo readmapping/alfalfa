@@ -80,10 +80,16 @@ void postProcess(vector<match_t> &matches){
 }
 
 void calculateSeeds(const sparseSA& sa, const string& P, int min_len, int maxBranchWidth, vector<match_t>& matches, bool tryHarder, mum_t memType){
+    int sparseSkip = 1;
+    //calculate skip parameter for MEMs
+    if(memType == MEM || memType == SMAM){
+        if (sa.K >= 4) sparseSkip = max((min_len - 10) / (int)sa.K,1);
+        else sparseSkip = max((min_len - 12) / (int)sa.K,1);
+    }
     if(memType == SMAM)
-        sa.SMAM(P, matches, min_len, maxBranchWidth, sa.sparseMult);
+        sa.SMAM(P, matches, min_len, maxBranchWidth, sparseSkip);
     else if(memType == MEM)
-        sa.MEM(P, matches, min_len, maxBranchWidth, sa.sparseMult);
+        sa.MEM(P, matches, min_len, maxBranchWidth, sparseSkip);
     else if(memType == MAM)
         sa.MAM(P, matches, min_len, maxBranchWidth);
     else if(memType == MUM)
@@ -177,7 +183,7 @@ alignment_t * extendAlignmentBWASWLike(dynProg& dp_, const string& S, const stri
         types.freeRefB = true;
         types.freeQueryB = true;
         if(print) cerr << "dp called with dimension " << (grenzen.queryE-grenzen.queryB+1) << "x" << (grenzen.refE-grenzen.refB+1) << endl;
-        if(dp_.dpBandStatic( S, P, grenzen, types, ERRORSTRING, output, minBandSize, maxBandSize, print>1)==0){//required if dp_ returns fail or too high editDist (output may not be initialized
+        if(dp_.dpBandStatic( S, P, grenzen, types, ERRORSTRING, output, min(minBandSize,(int)editDist), min(maxBandSize,(int)editDist), print>1)==0){//required if dp_ returns fail or too high editDist (output may not be initialized
             queryLB = grenzen.queryB;
             if(grenzen.queryB> 0){
                 alignment->cigarChars.push_back('S');
@@ -306,7 +312,7 @@ alignment_t * extendAlignmentBWASWLike(dynProg& dp_, const string& S, const stri
                 boundaries grenzen(refstrRB + 1L, refstrRB + minRefDist - 1L, queryRB + 1, queryRB + minQDist - 1);
                 dp_type types;
                 if(print) cerr << "dp called with dimension " << (grenzen.queryE-grenzen.queryB+1) << "x" << (grenzen.refE-grenzen.refB+1) << endl;
-                if(dp_.dpBandStatic( S, P, grenzen, types, ERRORSTRING, output, minBandSize, maxBandSize, print>1)==0){
+                if(dp_.dpBandStatic( S, P, grenzen, types, ERRORSTRING, output, min(minBandSize,(int)editDist), min(maxBandSize,(int)editDist), print>1)==0){
                     alignment->cigarChars.insert(alignment->cigarChars.end(), output.cigarChars.begin(), output.cigarChars.end());
                     alignment->cigarLengths.insert(alignment->cigarLengths.end(), output.cigarLengths.begin(), output.cigarLengths.end());
                     alignment->cigarChars.push_back('=');
@@ -346,7 +352,7 @@ alignment_t * extendAlignmentBWASWLike(dynProg& dp_, const string& S, const stri
         types.freeRefE = true;
         types.freeQueryE = true;
         if(print) cerr << "END dp called with dimension " << (grenzen.queryE-grenzen.queryB+1) << "x" << (grenzen.refE-grenzen.refB+1) << endl;
-        if(dp_.dpBandStatic( S, P, grenzen, types, ERRORSTRING, output, minBandSize, maxBandSize, print>1)==0){
+        if(dp_.dpBandStatic( S, P, grenzen, types, ERRORSTRING, output, min(minBandSize,(int)editDist), min(maxBandSize,(int)editDist), print>1)==0){
             if(grenzen.queryE > queryRB){
                 int addToLength = grenzen.queryE-queryRB;
                 alignment->refLength += addToLength;
@@ -636,7 +642,11 @@ void inexactMatch(const sparseSA& sa, dynProg& dp_, read_t & read,const align_op
     if(!fwStrand)
         P = read.rcSequence;
     int min_len = alnOptions.minMemLength;
-    if(Plength/editDist > min_len){
+    if(!alnOptions.fixedMinLength && Plength >= 1000L){
+        min_len += (20*((int)(Plength/500L)))/((int)100*alnOptions.errorPercent);
+        if(print) cerr << "min length automatically adjusted to " << min_len << endl;
+    }
+    if(alnOptions.fixedMinLength && Plength/editDist > min_len){
         min_len = Plength/editDist;
         if(print) cerr << "min length adjusted to " << min_len << endl;
     }
@@ -672,7 +682,7 @@ void inexactMatch(const sparseSA& sa, dynProg& dp_, read_t & read,const align_op
         //////////////////////
         while(alnCount < max(1,alnOptions.alignmentCount/2) &&
                 lisIndex < lisIntervals.size() &&
-                lisIntervals[lisIndex].len > (Plength*alnOptions.minCoverage)/100 &&
+                lisIntervals[lisIndex].len > (Plength*alnOptions.minCoverage) &&
                 trial < alnOptions.maxTrial){
             //sort matches in this interval according to query position
             int begin = lisIntervals[lisIndex].begin;
@@ -700,7 +710,7 @@ void inexactMatch(const sparseSA& sa, dynProg& dp_, read_t & read,const align_op
             cerr << "stopped matching because "; 
             if(alnCount >= max(1,alnOptions.alignmentCount/2)) cerr << " enough alignments were found."<< endl;
             else if(lisIndex >= lisIntervals.size()) cerr << " no more clusters are available."<< endl;
-            else if(lisIntervals[lisIndex].len <= (Plength*alnOptions.minCoverage)/100) cerr << " no new clusters reach minimum query coverage."<< endl;
+            else if(lisIntervals[lisIndex].len <= (Plength*alnOptions.minCoverage)) cerr << " no new clusters reach minimum query coverage."<< endl;
             else if(trial >= alnOptions.maxTrial) cerr << " max number of extensions without result have been reached."<< endl;
             if(lisIndex < lisIntervals.size()){
                 cerr << "remaining clusters map approx to:" << endl;
@@ -725,7 +735,11 @@ void unpairedMatch(const sparseSA& sa, dynProg& dp_, read_t & read,const align_o
     long Plength = (long) P.length();
     long editDist = (long)(alnOptions.errorPercent*Plength)+1;
     int min_len = alnOptions.minMemLength;
-    if(Plength/editDist > min_len){
+    if(!alnOptions.fixedMinLength && Plength >= 1000L){
+        min_len += (20*((int)(Plength/500L)))/((int)100*alnOptions.errorPercent);
+        if(print) cerr << "min length automatically adjusted to " << min_len << endl;
+    }
+    if(alnOptions.fixedMinLength && Plength/editDist > min_len){
         min_len = Plength/editDist;
         if(print) cerr << "min length adjusted to " << min_len << endl;
     }
@@ -764,7 +778,7 @@ void unpairedMatch(const sparseSA& sa, dynProg& dp_, read_t & read,const align_o
         //////////////////////
         while(alnCount < alnOptions.alignmentCount &&
                 lisIndex < lisIntervals.size() &&
-                lisIntervals[lisIndex].len > (Plength*alnOptions.minCoverage)/100 &&
+                lisIntervals[lisIndex].len > (Plength*alnOptions.minCoverage) &&
                 trial < alnOptions.maxTrial){
             //sort matches in this interval according to query position
             int begin = lisIntervals[lisIndex].begin;
@@ -790,7 +804,7 @@ void unpairedMatch(const sparseSA& sa, dynProg& dp_, read_t & read,const align_o
             cerr << "stopped matching because "; 
             if(alnCount >= max(1,alnOptions.alignmentCount)) cerr << " enough alignments were found."<< endl;
             else if(lisIndex >= lisIntervals.size()) cerr << " no more clusters are available."<< endl;
-            else if(lisIntervals[lisIndex].len <= (Plength*alnOptions.minCoverage)/100) cerr << " no new clusters reach minimum query coverage."<< endl;
+            else if(lisIntervals[lisIndex].len <= (Plength*alnOptions.minCoverage)) cerr << " no new clusters reach minimum query coverage."<< endl;
             else if(trial >= alnOptions.maxTrial) cerr << " max number of extensions without result have been reached."<< endl;
             if(lisIndex < lisIntervals.size()){
                 cerr << "remaining clusters map approx to:" << endl;
@@ -1136,7 +1150,7 @@ void unpairedMatchFromLIS(const sparseSA& sa, dynProg& dp_, read_t & read, vecto
     if(print) cerr << "start extending clusters" << endl;
     while(alnCount < alnOptions.alignmentCount &&
             lisIndex < lisIntervals.size() &&
-            lisIntervals[lisIndex].len > (read.sequence.size()*alnOptions.minCoverage)/100 &&
+            lisIntervals[lisIndex].len > (read.sequence.size()*alnOptions.minCoverage) &&
             trial < alnOptions.maxTrial){
         //sort matches in this interval according to query position
         int begin = lisIntervals[lisIndex].begin;
@@ -1167,7 +1181,7 @@ void unpairedMatchFromLIS(const sparseSA& sa, dynProg& dp_, read_t & read, vecto
         cerr << "stopped extending clusters because ";
         if(alnCount >= alnOptions.alignmentCount) cerr << " enough alignments were found."<< endl;
         else if(lisIndex >= lisIntervals.size()) cerr << " no more clusters are available."<< endl;
-        else if(lisIntervals[lisIndex].len <= (read.sequence.size()*alnOptions.minCoverage)/100) cerr << " no new clusters reach minimum query coverage."<< endl;
+        else if(lisIntervals[lisIndex].len <= (read.sequence.size()*alnOptions.minCoverage)) cerr << " no new clusters reach minimum query coverage."<< endl;
         else if(trial >= alnOptions.maxTrial) cerr << " max number of extensions without result have been reached."<< endl;
         if(lisIndex < lisIntervals.size()){
             cerr << "remaining clusters map approx to:" << endl;
@@ -1190,7 +1204,12 @@ void pairedMatch3(const sparseSA& sa, dynProg& dp_, read_t & mate1, read_t & mat
     bool print = alnOptions.print>0;
     int concordant = 0;
     int discordant = 0;
+    long Plength = min(mate1.sequence.length(),mate2.sequence.length());
     int min_len = alnOptions.minMemLength;
+    if(!alnOptions.fixedMinLength && Plength >= 1000L){
+        min_len += (20*((int)(Plength/500L)))/((int)100*alnOptions.errorPercent);
+        if(print) cerr << "min length automatically adjusted to " << min_len << endl;
+    }
     if((alnOptions.noFW || alnOptions.noRC))
         return;//no possible alignments
     //fields
@@ -1404,7 +1423,7 @@ void matchStrandOfPair(const sparseSA& sa,
     if(print) cerr << "start extension loop" << endl;
     while(concordant < alnOptions.alignmentCount && 
             lisIndex < lisIntervalsFM1.size() && 
-            lisIntervalsFM1[lisIndex].len > (M1length*alnOptions.minCoverage)/100 && 
+            lisIntervalsFM1[lisIndex].len > (M1length*alnOptions.minCoverage) && 
             trial < alnOptions.maxTrial){
         //Alignment of mate1
         if(print) cerr << "try cluster " << lisIndex << endl;
@@ -1493,7 +1512,7 @@ void matchStrandOfPair(const sparseSA& sa,
         cerr << "stopped extending clusters because ";
         if(concordant >= alnOptions.alignmentCount) cerr << " enough alignments were found."<< endl;
         else if(lisIndex >= lisIntervalsFM1.size()) cerr << " no more clusters are available."<< endl;
-        else if(lisIntervalsFM1[lisIndex].len <= (M1length*alnOptions.minCoverage)/100) cerr << " no new clusters reach minimum query coverage."<< endl;
+        else if(lisIntervalsFM1[lisIndex].len <= (M1length*alnOptions.minCoverage)) cerr << " no new clusters reach minimum query coverage."<< endl;
         else if(trial >= alnOptions.maxTrial) cerr << " max number of extensions without result have been reached."<< endl;
         if(lisIndex < lisIntervalsFM1.size()){
             cerr << "remaining clusters map approx to:" << endl;
@@ -1516,7 +1535,12 @@ void pairedMatch4(const sparseSA& sa, dynProg& dp_, read_t & mate1, read_t & mat
     bool print = alnOptions.print>0;
     int concordant = 0;
     int discordant = 0;
+    long Plength = min(mate1.sequence.length(),mate2.sequence.length());
     int min_len = alnOptions.minMemLength;
+    if(!alnOptions.fixedMinLength && Plength >= 1000L){
+        min_len += (20*((int)(Plength/500L)))/((int)100*alnOptions.errorPercent);
+        if(print) cerr << "min length automatically adjusted to " << min_len << endl;
+    }
     if((alnOptions.noFW || alnOptions.noRC))
         return;//no possible alignments
     //fields
@@ -1743,6 +1767,10 @@ void pairedBowtie2(const sparseSA& sa,
     long editDistBase = (long)(alnOptions.errorPercent*Plength)+1;
     long editDistOther = (long)(alnOptions.errorPercent*Olength)+1;
     int min_len = alnOptions.minMemLength;
+    if(!alnOptions.fixedMinLength && Plength >= 1000L){
+        min_len += (20*((int)(Plength/500L)))/((int)100*alnOptions.errorPercent);
+        if(print) cerr << "min length automatically adjusted to " << min_len << endl;
+    }
     if(Plength/editDistBase > min_len)
         min_len = Plength/editDistBase;
     vector<match_t> matches;
@@ -1761,7 +1789,7 @@ void pairedBowtie2(const sparseSA& sa,
         if(print) cerr << "try to extend clusters ..." << endl;
         while(concordant < alnOptions.alignmentCount &&
                 lisIndex < lisIntervals.size() &&
-                lisIntervals[lisIndex].len > (Plength*alnOptions.minCoverage)/100 &&
+                lisIntervals[lisIndex].len > (Plength*alnOptions.minCoverage) &&
                 trial < alnOptions.maxTrial){
             if(print) cerr << "try cluster " << lisIndex << endl;
             //try to find out if we already aligned this LIS-interval when pairing the other mate
@@ -1835,7 +1863,7 @@ void pairedBowtie2(const sparseSA& sa,
             cerr << "stopped extending clusters because ";
             if(concordant >= alnOptions.alignmentCount) cerr << " enough alignments were found."<< endl;
             else if(lisIndex >= lisIntervals.size()) cerr << " no more clusters are available."<< endl;
-            else if(lisIntervals[lisIndex].len <= (Plength*alnOptions.minCoverage)/100) cerr << " no new clusters reach minimum query coverage."<< endl;
+            else if(lisIntervals[lisIndex].len <= (Plength*alnOptions.minCoverage)) cerr << " no new clusters reach minimum query coverage."<< endl;
             else if(trial >= alnOptions.maxTrial) cerr << " max number of extensions without result have been reached."<< endl;
             if(lisIndex < lisIntervals.size()){
                 cerr << "remaining clusters map approx to:" << endl;

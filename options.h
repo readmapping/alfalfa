@@ -38,10 +38,11 @@ struct align_opt {
     bool noClipping;
     double errorPercent;
     int minMemLength;
+    bool fixedMinLength;
     int maxSeedCandidates;
     int alignmentCount;
     int maxTrial;
-    int minCoverage;
+    double minCoverage;
     bool tryHarder;
     bool unique;
     bool noFW; 
@@ -70,10 +71,11 @@ struct paired_opt {
 struct mapOptions_t{//commentary + sort + constructor
     mapOptions_t(){ initOptions(); }
     void initOptions(){
-        K = 4; query_threads = 1;
+        K = 12; query_threads = 1;
         nucleotidesOnly = false;
         alnOptions.minMemLength = 40;
-        alnOptions.memType = MEM;
+        alnOptions.fixedMinLength = false;
+        alnOptions.memType = SMAM;
         alnOptions.sparseMult = 1;
         alnOptions.noFW = alnOptions.noRC = false;
         alnOptions.errorPercent = 0.08;
@@ -85,10 +87,10 @@ struct mapOptions_t{//commentary + sort + constructor
         alnOptions.noClipping = true;
         alnOptions.alignmentCount = 4;
         alnOptions.maxTrial = 5;
-        alnOptions.minCoverage = 10;
+        alnOptions.minCoverage = 0.10;
         alnOptions.tryHarder = true;
         alnOptions.unique = false;
-        alnOptions.maxSeedCandidates = -1;
+        alnOptions.maxSeedCandidates = 1;
         alnOptions.scoresSetByUser = false;
         alnOptions.fixedBandSize = 33;
         alnOptions.minScoreFixed = 37;
@@ -96,8 +98,8 @@ struct mapOptions_t{//commentary + sort + constructor
         pairedOpt.contain = true;
         pairedOpt.discordant = true;
         pairedOpt.dovetail = false;
-        pairedOpt.maxInsert = 3300;//return to default!//
-        pairedOpt.minInsert = 2700;//return to default!//
+        pairedOpt.maxInsert = 1000;//return to default!//
+        pairedOpt.minInsert = 0;//return to default!//
         pairedOpt.mixed = true;
         pairedOpt.orientation = PAIR_FR;
         pairedOpt.overlap = true;
@@ -121,19 +123,19 @@ struct mapOptions_t{//commentary + sort + constructor
             cerr << "index prefix\t\t\t" << index_prefix << endl;
         cerr << "save index \t\t\t" << (saveIndex ? "yes" : "no") << endl;
         if(!unpairedQ.empty())
-            cerr << "unpaired reads\t\t\t" << unpairedQ << endl;
+            cerr << "single-end reads\t\t\t" << unpairedQ << endl;
         if(!pair1.empty() && !pair2.empty()){
             cerr << "mate 1   \t\t\t" << pair1 << endl;
             cerr << "mate 2   \t\t\t" << pair2 << endl;
         }
         cerr << "sparseness \t\t\t" << K << endl;
         cerr << "threads  \t\t\t" << query_threads << endl;
-        cerr << "errors   \t\t\t" << alnOptions.errorPercent << endl;
+        cerr << "edit distance   \t\t\t" << alnOptions.errorPercent << endl;
         cerr << "min seed length\t\t\t" << alnOptions.minMemLength << endl;
+        cerr << "auto seed length\t\t\t" << (alnOptions.fixedMinLength ? "no" : "yes") << endl;
         cerr << "max seed candidates\t\t\t" << alnOptions.maxSeedCandidates << endl;
         cerr << "type of seeds\t\t\t" << alnOptions.memType << endl;
         cerr << "save seed finding\t\t\t" << (alnOptions.tryHarder ? "yes" : "no") << endl;
-        cerr << "use other characters too\t\t" << (nucleotidesOnly ? "no" : "yes") << endl;
         cerr << "#alignments\t\t\t" << alnOptions.alignmentCount << endl;
         cerr << "#try and error\t\t\t" << alnOptions.maxTrial << endl;
         cerr << "min query coverage\t\t" << alnOptions.minCoverage << endl;
@@ -187,19 +189,16 @@ struct mapOptions_t{//commentary + sort + constructor
     paired_opt pairedOpt;
 };
 
-static const char * short_options = "i:s:k:L:np:q:d:m:u:o:e:C:T:hx:U:1:2:S:I:X:M:";
+static const char * short_options = "r:s:p:i:0:1:2:o:a:e:t:l:m:f:c:b:A:B:M:U:O:E:I:X:v:h";
 
 //Reads from - to ; trim ; phred quals
 enum {
     ARG_ZERO_OPT = 255,          //not found
-    ARG_TRY_HARDER,      //--tryharder
-    ARG_NOFW,            //--noFw
-    ARG_NORC,            //--noRc
-    ARG_CLIP,            //--softclipping
-    ARG_VERBOSE,         //--verbose
-    ARG_FR,              //--fr
-    ARG_RF,              //--rf
-    ARG_FF,              //--ff
+    ARG_TRY_HARDER,      //--no-rescue
+    ARG_NOFW,            //--no-forward
+    ARG_NORC,            //--no-reverse
+    ARG_CLIP,            //--local
+    ARG_ORIENTATION,     //--orientation
     ARG_NO_MIXED,        //--no-mixed
     ARG_NO_DISCORDANT,   //--no-discordant
     ARG_DOVETAIL,        //--dovetail
@@ -207,142 +206,140 @@ enum {
     ARG_NO_OVERLAP,      //--no-overlap
     ARG_PAIR_MODE,       //--paired-mode
     ARG_SAVE_INDEX,      //--save
-    ARG_SEEDTYPE,        //--seedtype
-    ARG_CHILD,           //--child
+    ARG_SEEDTYPE,        //--seed
+    ARG_CHILD,           //--no-child
     ARG_SUFLINK,         //--suflink
-    ARG_KMER,            //--kmer
-    ARG_VVERBOSE,        //--vverbose
-    ARG_FIXEDBAND,       //--bandsize
-    ARG_MINSCORE         //--minscore
+    ARG_KMER,            //--no-kmer
 };
 
 static struct option long_options[] = {
-    {(char*)"sparsityfactor",   required_argument, 0,            's'},
-    {(char*)"threads",          required_argument, 0,            'q'},
-    {(char*)"verbose",          no_argument,       0,            ARG_VERBOSE},
-    {(char*)"vverbose",         no_argument,       0,            ARG_VVERBOSE},
-    {(char*)"seedminlength",    required_argument, 0,            'L'},
-    {(char*)"alignments",       required_argument, 0,            'k'},
-    {(char*)"trials",           required_argument, 0,            'T'},
-    {(char*)"mincoverage",      required_argument, 0,            'C'},
-    {(char*)"errors",           required_argument, 0,            'd'},
-    {(char*)"tryharder",        no_argument,       0,            ARG_TRY_HARDER},
-    {(char*)"nofw",             no_argument,       0,            ARG_NOFW},
-    {(char*)"norc",             no_argument,       0,            ARG_NORC},
-    {(char*)"wildcards",        no_argument,       0,            'N'},
-    {(char*)"bwa-sw-like",     no_argument,       0,            ARG_CLIP},
-    {(char*)"match",            required_argument, 0,            'm'},
-    {(char*)"mismatch",         required_argument, 0,            'u'},
-    {(char*)"gapopen",          required_argument, 0,            'o'},
-    {(char*)"gapextend",        required_argument, 0,            'e'},
-    {(char*)"minins",           required_argument, 0,            'I'},
-    {(char*)"maxins",           required_argument, 0,            'X'},
-    {(char*)"help",             no_argument,       0,            'h'},
-    {(char*)"fr",               no_argument,       0,            ARG_FR},
-    {(char*)"rf",               no_argument,       0,            ARG_RF},
-    {(char*)"ff",               no_argument,       0,            ARG_FF},
+    {(char*)"reference",        required_argument, 0,            'r'},
+    {(char*)"sparseness",       required_argument, 0,            's'},
+    {(char*)"prefix",           required_argument, 0,            'p'},
+    {(char*)"no-child",         no_argument,       0,            ARG_CHILD},
+    {(char*)"suflink",          no_argument,       0,            ARG_SUFLINK},
+    {(char*)"no-kmer",          no_argument,       0,            ARG_KMER},
+    {(char*)"index",            required_argument, 0,            'i'},
+    {(char*)"save",             no_argument,       0,            ARG_SAVE_INDEX},
+    {(char*)"single",           required_argument, 0,            '0'},
+    {(char*)"mates1",           required_argument, 0,            '1'},
+    {(char*)"mates2",           required_argument, 0,            '2'},
+    {(char*)"output",           required_argument, 0,            'o'},
+    {(char*)"alignments",       required_argument, 0,            'a'},
+    {(char*)"no-forward",       no_argument,       0,            ARG_NOFW},
+    {(char*)"no-reverse",       no_argument,       0,            ARG_NORC},
+    {(char*)"edit-distance",    required_argument, 0,            'e'},
+    {(char*)"threads",          required_argument, 0,            't'},
+    {(char*)"seed",             required_argument, 0,            ARG_SEEDTYPE},
+    {(char*)"min-length",       required_argument, 0,            'l'},
+    {(char*)"max-seeds",        required_argument, 0,            'm'},
+    {(char*)"no-rescue",        no_argument,       0,            ARG_TRY_HARDER},
+    {(char*)"max-failures",     required_argument, 0,            'f'},
+    {(char*)"min-coverage",     required_argument, 0,            'c'},
+    {(char*)"local",            no_argument,       0,            ARG_CLIP},
+    {(char*)"bandwidth",        required_argument, 0,            'b'},
+    {(char*)"alpha",            required_argument, 0,            'A'},
+    {(char*)"beta",             required_argument, 0,            'B'},
+    {(char*)"match",            required_argument, 0,            'M'},
+    {(char*)"mismatch",         required_argument, 0,            'U'},
+    {(char*)"gap-open",         required_argument, 0,            'O'},
+    {(char*)"gap-extend",       required_argument, 0,            'E'},
+    {(char*)"min-insert",       required_argument, 0,            'I'},
+    {(char*)"max-insert",       required_argument, 0,            'X'},
+    {(char*)"orientation",      required_argument, 0,            ARG_ORIENTATION},
     {(char*)"no-mixed",         no_argument,       0,            ARG_NO_MIXED},
     {(char*)"no-discordant",    no_argument,       0,            ARG_NO_DISCORDANT},
     {(char*)"dovetail",         no_argument,       0,            ARG_DOVETAIL},
     {(char*)"no-contain",       no_argument,       0,            ARG_NO_CONTAIN},
     {(char*)"no-overlap",       no_argument,       0,            ARG_NO_OVERLAP},
     {(char*)"paired-mode",      required_argument, 0,            ARG_PAIR_MODE},
-    {(char*)"index",            required_argument, 0,            'i'},
-    {(char*)"prefix",           required_argument, 0,            'p'},
-    {(char*)"seedtype",         required_argument, 0,            ARG_SEEDTYPE},
-    {(char*)"save",             required_argument, 0,            ARG_SAVE_INDEX},
-    {(char*)"child",            required_argument, 0,            ARG_CHILD},
-    {(char*)"suflink",          required_argument, 0,            ARG_SUFLINK},
-    {(char*)"kmer",             required_argument, 0,            ARG_KMER},
-    {(char*)"seedmaxcand",      required_argument, 0,            'M'},
-    {(char*)"bandsize",         required_argument, 0,            ARG_FIXEDBAND},
-    {(char*)"minscore",         required_argument, 0,            ARG_MINSCORE},
+    {(char*)"verbose",          required_argument, 0,            'v'},
+    {(char*)"help",             no_argument,       0,            'h'},
     {(char*)0, 0, 0, 0} // terminator
 };
 
-static void usage(const string prog) {
-  cerr << "Usage: " << prog << " COMMAND [options]" << endl;
-  cerr << "Command should be one of the following: " << endl;
-  cerr << "index                      build the index for given <reference-file> and save to disk" << endl;
-  cerr << "                           this command is not necessairy for mapping, as aln can first construct the index" << endl;
-  cerr << "aln                        map the reads to the index build for <reference-file>" << endl;
-  cerr << "check                      contains several commands for summarizing the accuracy of an output SAM file" << endl;
+static void usage() {
+  cerr << "Usage: " << "alfalfa <command> [<subcommand>] [option...]" << endl;
+  cerr << "Command should be index, align or evaluate" << endl;
+  cerr << "Subcommand is only required for the evaluate command" << endl;
   cerr << endl;
-  cerr << "call " << prog << " COMMAND --help [or -h] for more detailed information" << endl;
+  cerr << "commands:" << endl;
+  cerr << "index is used to construct the data structures for indexing a given reference genome" << endl;
+  cerr << "align is used for mapping and aligning a read set onto a reference genome" << endl;
+  cerr << "evaluate is used for evaluating the accuracy of simulated reads and summarizing statistics from the SAM-formatted alignments reported by a read mapper" << endl;
+  cerr << endl;
+  cerr << "call " << "alfalfa <command> -h/--help for more detailed information on the specific commands" << endl;
   exit(1);
 }
 
 static void usageIndex(const string prog) {
-  cerr << "Usage: " << prog << " index [options] -x <reference-file>" << endl;
-  cerr << "build the index for given <reference-file> and save to disk" << endl;
+  cerr << "Usage: alfalfa index [option...]" << endl;
+  cerr << "index is used to construct the data structures for indexing a given reference genome" << endl;
   cerr << endl;
-  cerr << "OPTIONS " << endl;
-  cerr << "-s/--sparsityfactor (int)  the sparsity factor of the sparse suffix array index. "
-          << "Note that the value needs to be lower than -L parameter in the ALN command[4]." << endl;
-  cerr << "-p/--prefix (string/path)  prefix of the index names [reference-file name]" << endl;
-  cerr << "--save (0 or 1)            save index to disk or not [1]" << endl;
-  cerr << "--child (0 or 1)           use sparse child array (useful for s>=3 and for MEMs)[1]" << endl;
-  cerr << "--suflink (0 or 1)         use suffix links (useful for s<=3 for MAM and SMAM)[0]" << endl;
-  cerr << "--kmer (0 or 1)            use a kmer table for the first 10 characters of the seed (speed-up?) [1]" << endl;
+  cerr << "options " << endl;
+  cerr << "-r/--reference (file). Specifies the location of a file that contains the reference genome in multi-fasta format." << endl;
+  cerr << "-s/--sparseness (int, 12). Specifies the sparseness of the index structure as a way to control part of the speed-memory trade-off." << endl;
+  cerr << "-p/--prefix (string, filename passed to the -r option). Specifies the prefix that will be used to name all generated index files. The same prefix has to be passed to the -i option of the align command to load the index structure when mapping reads." << endl;
+  cerr << "--no-child. By default, a sparse child array is constructed and stored in an index file with extension .child. The construction of this sparse child array is skipped when the --no-child option is set. This data structure speeds up seed-finding at the cost of (4/s) bytes per base in the reference genome. As the data structure provides a major speed-up, it is advised to have it constructed." << endl;
+  cerr << "--suflink. Suffix link support is disabled by default. Suffix link support is enabled when the --suflink option is set, resulting in an index file with extension .isa to be generated. This data structure speeds up seed-finding at the cost of (4/s) bytes per base. It is only useful when sparseness is less than four and minimum seed length is very low (less than 10), because it conflicts with skipping suffixes in matching the read. In practice, this is rarely the case." << endl;
+  cerr << "--no-kmer. By default, a 10-mer lookup table is constructed that contains the suffix array interval positions to depth 10 in the virtual suffix tree. It is stored in an index file with extension .kmer and required only 8MB of memory. The construction of this lookup table is skipped when the --no-kmer option is set. The lookup table stores intervals for sequences of length 10 that only contain {A,C,G,T}. This data structure speeds up seed-finding if the minimum seed length is greater than 10." << endl;
+  cerr << "-h/--help. Prints to standard error the version number, usage description and an overview of the options that can be used to customize the software package." << endl;
   exit(1);
 }
 
 static void usageAln(const string prog) {
-  cerr << "Usage: " << prog << " aln [options]" << endl;
-  cerr << "the options are ordered by functionality: " << endl;
+  cerr << "Usage: alfalfa align [option...]" << endl;
+  cerr << "index is used for mapping and aligning a read set onto a reference genome" << endl;
   cerr << endl;
-  cerr << "I/O OPTIONS " << endl;
-  cerr << "-x (string)                reference sequence in multi-fasta" << endl;
-  cerr << "-i/--index (string)        prefix or path of the index to load. If not set, index will first be calculated" << endl;
-  cerr << "-1                         query file with first mates (fasta or fastq)" << endl;
-  cerr << "-2                         query file with second mates (fasta or fastq)" << endl;
-  cerr << "-U                         query file with unpaired reads (fasta or fastq)" << endl;
-  cerr << "-S                         output file name (will be sam) [referenceName.sam]" << endl;
-  cerr << "--save (0 or 1)            if --index is not set, save index to disk [0]" << endl;
-  cerr << "-p                         prefix of index that will be saved [reference sequence name]" << endl;
+  cerr << "options" << endl;
+  cerr << "I/O options" << endl;
+  cerr << "r/--reference (file). Specifies the location of a file that contains the reference genome in multi-fasta format." << endl;
+  cerr << "i/--index (string). Specifies the prefix used to name all generated index files. If this option is not set explicitly, an index will be computed from the reference genome according to the settings of the options that also apply to the index command." << endl;
+  cerr << "-save. Specifies that if an index is constructed by the align command itself, it will be stored to disk. This option is ignored if the index is loaded from disk (option -i)." << endl;
+  cerr << "0/--single (file). Specifies the location of a file that contains single-end reads. Both fasta and fastQ formats are accepted. If both single-end and paired-end reads are specified, single-end reads are processed first." << endl;
+  cerr << "1/--mates1 (file). Specifies the location of a file that contains the first mates of paired-end reads. Both fasta and fastQ formats are accepted." << endl;
+  cerr << "2/--mates2 (file). Specifies the location of a file that contains the second mates of paired-end reads. Both fasta and fastQ formats are accepted." << endl;
+  cerr << "o/--output (file, filename passed to the -r option with additional .sam extension). Specifies the location of the generated SAM output file containing the results of read mapping and alignment." << endl;
   cerr << endl;
-  cerr << "PERFORMANCE OPTIONS " << endl;
-  cerr << "-s/--sparsityfactor (int)  the sparsity factor of the sparse suffix array index if it is not yet constructed [1]." << endl;
-  cerr << "-q/--threads (int)    number of threads [1]" << endl;
+  cerr << "Alignment options" << endl;
+  cerr << "a/--alignments (int, 4). Specifies the maximum number of alignments reported per read." << endl;
+  cerr << "-no-forward. Do not compute alignments on the forward strand." << endl;
+  cerr << "-no-reverse. Do not compute alignments on the reverse complement strand." << endl;
+  cerr << "e/--edit-distance (float, 0.08). Specifies the maximum percentage of errors allowed in accepting alignments. For global alignment, this value is taken as a fixed boundary to decide upon accepting alignments. For local alignment, a scoring function is used instead." << endl;
+  cerr << "t/--threads (int, 1). Number of threads used during read mapping. Using more than one thread results in reporting read alignments in a different order compared to the order in which they are read from the input file(s)." << endl;
   cerr << endl;
-  cerr << "ALIGNMENT OPTIONS " << endl;
-  cerr << "-d/--errors (double)       percentage of errors allowed according to the edit distance [0.08]" << endl;
-  cerr << "-L/--seedminlength (int)   minimum length of the seeds used [INT_MAX because seedmaxcand is used]" << endl;
-  cerr << "-M/--seedmaxcand (int)     max number of right max matches per query index [max(-k,20)]" << endl;
-  cerr << "--seedtype (string)        type of seeds used, choice of MEM,MAM,MUM,SMAM [MEM]." << endl;
-  cerr << "-k/--alignments (int)      expected number of alignments required per strand per read [4]" << endl;
-  cerr << "-T/--trials (int)          maximum number of times alignment is attempted before we give up [5]" << endl;
-  cerr << "-C/--mincoverage (int)     minimum percent of bases of read the seeds have to cover [10]" << endl;
-  cerr << "--tryharder                disable: 'try harder': when no seeds have been found, do not search using less stringent parameters" << endl;
-  cerr << "--nofw                     do not compute forward matches" << endl;
-  cerr << "--norc                     do not compute reverse complement matches" << endl;
-//  cerr << "-n/--wildcards             treat Ns as wildcard characters" << endl;
-  cerr << "--bwa-sw-like              allow soft clipping at the beginning and end of an alignment" << endl;
-  cerr << "--bandsize (int)           provide bandsize for local alignment [33]" << endl;
-  cerr << "--minscore (int,double)    provide score function for local alignment [37,5.5]" << endl;
+  cerr << "Seed options" << endl;
+  cerr << "--seed (MEM or SMEM, SMEM). Specifies the type of seeds used for read mapping. Possible values are MEM for maximal exact matches and SMEM for super-maximal exact matches. The use of SMEMs generally boosts performance without having a negative impact on accuracy compared to the use of MEMs. On the other hand, there are usually many more MEMs than SMEMs, in general resulting in a higher number of candidate genomic regions. The latter might be useful if reporting more candidate mapping locations is preferred." << endl;
+  cerr << "l/--min-length (int, auto). Specifies the minimum seed length. This value must be greater than the sparseness value used to build the index (option -s). By default, the value of this option is computed automatically using the following procedure. A value of 40 is used for reads shorter than 1kbp. The value is incremented by 20 for every 500bp above 1kbp, with the total increment being divided by the maximum percentage of errors allowed in accepting alignments (option -e)." << endl;
+  cerr << "m/--max-seeds (int, 1). Specifies the maximum number of seeds that will be selected per starting position in the read sequence. The value passed to this option is multiplied by the automatically computed skip factor that determines sparse matching of sampled suffixes from the read sequence. As a result, the actual number of seeds per starting position in the read might still vary. Higher values of this option result in higher numbers of seeds, increasing in turn the number of candidate genomic regions." << endl;
+  cerr << "-no-rescue. If ALFALFA finds no seeds having the minimum seed length specified (option -l), it attempts to find gradually shorter seeds. This behaviour is disabled when specifying the --no-rescue option, which is handy in rare cases where the rescue procedure results in a significant performance drop." << endl;
   cerr << endl;
-  cerr << "DYNAMIC PROGRAMMING OPTIONS " << endl;
-  cerr << "-m/--match (int)           match bonus [0]" << endl;
-  cerr << "-u/--mismatch (int)        mismatch penalty [-2]" << endl;
-  cerr << "-o/--gapopen (int)         gap open penalty (set 0 for non-affine gap-penalties) [0]" << endl;
-  cerr << "-e/--gapextend (int)       gap extension penalty [-2]" << endl;
+  cerr << "Extend options" << endl;
+  cerr << "f/--max-failures (int, 5). Specifies the maximum number of successive candidate regions that are investigated without success before ALFALFA stops extending the seeds of a read." << endl;
+  cerr << "c/--min-coverage (float, 0.10). Specifies the minimum percentage of the read length that seeds within a candidate region need to cover before extension of the candidate region is taken into consideration." << endl;
+  cerr << "-local. By default, ALFALFA uses global alignment during the last phase of the mapping process. Global alignment in essence is end-to-end alignment, as it entirely covers the read but only covers the reference genome in part. Local alignment is used during the last phase of the mapping process if the --local option is set, which may result in soft clipping of the read. This option determines both the type of dynamic programming and the default scoring function that will be used." << endl;
+  cerr << "b/--bandwidth (int, 33). Specifies the fixed bandwidth that is used by the banded local alignment algorithm. This option is ignored if the --local option is not set, as the bandwidth used by the global alignment algorithm is automatically inferred from the specification of the maximum percentage of errors allowed in accepting alignments (option -e)." << endl;
+  cerr << "A/--alpha (int, 37). Specifies the alpha constant used in calculating the threshold of the scoring function that decides upon accepting alignments when local alignment is used (option --local). For read length L and constants alpha and beta, the minimum score is computed as s*max(alpha, beta*log(L)). The value s is the score given to a match in the alignment." << endl;
+  cerr << "B/--beta (float, 5.5). Specifies the beta constant used in calculating the threshold of the scoring function that decides upon accepting alignments when local alignment is used(option --local). For read length L and constants alpha and beta, the minimum score is computed as s*max(alpha, beta*log(L)). The value s is the score given to a match in the alignment." << endl;
+  cerr << "M/--match (int, 0 for global alignment and 1 for local alignment). Specifies the positive score assigned to matches in the dynamic programming extension phase." << endl;
+  cerr << "U/--mismatch (int, -2 for global alignment and -3 for local alignment). Specifies the penalty assigned to mismatches in the dynamic programming extension phase." << endl;
+  cerr << "O/--gap-open (int, 0 for global alignment and -5 for local alignment). Specifies the penalty O for opening a gap (insertion or deletion) in the dynamic programming extension phase. The total penalty for a gap of length L equals O + L*E. The use of affine gap penalties can be disabled by setting this value to zero." << endl;
+  cerr << "E/--gap-extend (int, -2 for global alignment and -2 for local alignment). Specifies the penalty E for extending a gap (insertion or deletion) in the dynamic programming extension phase. The total penalty for a gap of length L equals O + L*E." << endl;
   cerr << endl;
-  cerr << "PAIRED END OPTIONS " << endl;
-  cerr << "-I/--minins (int)          minimum insert size [2700]" << endl;
-  cerr << "-X/--maxins (int)          maximum insert sier [3300]" << endl;
-  cerr << "--fr/--rf/--ff             orientation of the mates: fr means forward upstream mate 1" << endl; 
-  cerr << "                           and reverse complement downstream mate 2, or vise versa. rf and ff are similar [fr]" << endl;
-  cerr << "--no-mixed                 never search single mate alignments" << endl;
-  cerr << "--no-discordant            never discordant alignments" << endl;
-  cerr << "--dovetail                 allow reads to dovetail (changing up- and downstream of reads)" << endl;
-  cerr << "--no-contain               disallow a mate to be fully contained in the other" << endl;
-  cerr << "--no-overlap               disallow a mate to overlap with the other" << endl;
-  cerr << "--paired-mode (int)        choose algorithm to calculate paired-end reads" << endl;
+  cerr << "Paired-end mapping options" << endl;
+  cerr << "I/--min-insert (int, 0). Specifies the minimum insert size." << endl;
+  cerr << "X/--max-insert (int, 1000). Specifies the maximum insert size." << endl;
+  cerr << "-orientation (fr | rf | ff, fr). Specifies the orientation of mates. fr means a forward upstream first mate and reverse complemented downstream second mate or vice versa. rf means a reverse complemented upstream first mate and forward downstream second mate or vice versa. ff means a forward upstream first mate and forward downstream second mate or vice versa. Note that these definitions are literally taken over from Bowtie 2." << endl;
+  cerr << "-no-mixed. Disables searching for unpaired alignments." << endl;
+  cerr << "-no-discordant. Disables searching for discordant alignments." << endl;
+  cerr << "-dovetail. Allows switching between upstream and downstream mates in the definition of their orientation (option --orientation)." << endl;
+  cerr << "-no-contain. Disallows concordant mates to be fully contained within each other." << endl;
+  cerr << "-no-overlap. Disallows concordant mates to overlap each other." << endl;
+  cerr << "-paired-mode (1 | 2 | 3 | 4, 1). Specifies the algorithm used to align paired-end reads. The four possible algorithms are discussed in detail in the Online Methods. Algorithm 1 maps both mates independently and pairs the mapped reads afterwards. For every alignment of one mate, algorithm 2 performs full dynamic programming across a window defined by the insert size restrictions (options --min-insert and --max-insert) to search for a bridging alignment reaching the other mate. Algorithm 3 independently searches candidate regions for both mates, pairs them and only performs the extension phase for paired candidate regions. The hybrid algorithm 4 proceeds as algorithm 2 but uses the normal extension phase for all candidate regions across the window defined by the insert size restrictions (options --min-insert and --max-insert), instead of full dynamic programming." << endl;
   cerr << endl;
-  cerr << "MISC OPTIONS " << endl;
-  cerr << "--verbose                  enable verbose mode (not by default)" << endl;
-  cerr << "--vverbose                 enable very verbose mode (not by default)" << endl;
-  cerr << "-h/--help                  print this statement" << endl;
+  cerr << "Miscellaneous  options" << endl;
+  cerr << "v/--verbose (int, 0). Turns on lots of progress reporting about the alignment process. Higher numbers give more verbose output. Information is printed to standard error and is useful for debugging purposes. The default value 0 disables progress reporting. The maximum verbosity level is 2." << endl;
+  cerr << "h/--help. Prints to standard error the version number, usage description and an overview of the options that can be used to customize the software package." << endl;
   exit(1);
 }
 
@@ -353,39 +350,41 @@ static mum_t parseSeedType(string type){
         return MAM;
     else if(type.compare("MUM")==0)
         return MUM;
-    else if(type.compare("SMAM")==0)
+    else if(type.compare("SMEM")==0)
         return SMAM;
-    else
+    else{
+        cerr << "WARNING: unrecognized seed type. SMEMs are used instead." << endl;
         return SMAM;
+    }
 }
 
-inline void parseMinScore(align_opt & opt, string optarg){
-    int beginPos = 0;
-    int commaPos = optarg.find(',',beginPos);
-    opt.minScoreFixed = atoi(optarg.substr(beginPos,commaPos-beginPos).c_str());
-    beginPos = commaPos+1;
-    opt.minScoreLength = atof(optarg.substr(beginPos).c_str());
+static orientation_t parseOrientation(string type){
+    if(type.compare("fr")==0)
+        return PAIR_FR;
+    else if(type.compare("rf")==0)
+        return PAIR_RF;
+    else if(type.compare("ff")==0)
+        return PAIR_FF;
+    else{
+        cerr << "WARNING: unrecognized orientation. fr is used instead." << endl;
+        return PAIR_FR;
+    }
 }
 
 //move process Command to main, 
 inline void processParameters(int argc, char* argv[], mapOptions_t& opt, const string program){
     if(argc < MINOPTIONCOUNT)
-        usage(program);
+        usage();
     else{
         //parse the command
         if(strcmp(argv[1], "index") == 0){ 
             opt.command = INDEX;
             opt.saveIndex = true;
         }
-        else if(strcmp(argv[1], "mem") == 0){
-        opt.command = MATCHES;
-            printf("This command is not yet supported\n");
-            exit(1);
-        }
-        else if(strcmp(argv[1], "aln") == 0) opt.command = ALN;
+        else if(strcmp(argv[1], "align") == 0) opt.command = ALN;
         else{
             fprintf(stderr, "[main] unrecognized command '%s'\n", argv[1]);
-            usage(program);
+            usage();
         }
         cerr << "COMMAND: " << argv[1] << endl;
         cerr << "parsing options: ..." << endl;
@@ -395,51 +394,48 @@ inline void processParameters(int argc, char* argv[], mapOptions_t& opt, const s
         argc-1, argv+1,
         short_options, long_options, &option_index)) != -1) {//memType cannot be chosen
             switch (c) {
-                case 'x': opt.ref_fasta = optarg; break;
-                case 'U': opt.unpairedQ = optarg; break;
+                case 'r': opt.ref_fasta = optarg; break;
+                case 's': opt.K = atoi(optarg); break;
+                case 'p': opt.index_prefix = optarg; break;
+                case ARG_CHILD: opt.hasChild = false; break;
+                case ARG_SUFLINK: opt.hasSuflink = true; break;
+                case ARG_KMER: opt.hasKmer = false; break;
+                case 'i': opt.indexLocation = optarg; break;
+                case ARG_SAVE_INDEX: opt.saveIndex = true; break;
+                case '0': opt.unpairedQ = optarg; break;
                 case '1': opt.pair1 = optarg; break;
                 case '2': opt.pair2 = optarg; break;
-                case 'S': opt.outputName = optarg; break;
-                case 's': opt.K = atoi(optarg); break;
-                case 'k': opt.alnOptions.alignmentCount = atoi(optarg); break;
-                case 'L': opt.alnOptions.minMemLength = atoi(optarg); break;
-                case 'M': opt.alnOptions.maxSeedCandidates = atoi(optarg); break;
+                case 'o': opt.outputName = optarg; break;
+                case 'a': opt.alnOptions.alignmentCount = atoi(optarg); break;
                 case ARG_NOFW: opt.alnOptions.noFW = 1; break;
                 case ARG_NORC: opt.alnOptions.noRC = 1; break;
-                case 'n': opt.nucleotidesOnly = 1; break;
-                case ARG_VERBOSE: opt.alnOptions.print = 1; break;
-                case ARG_VVERBOSE: opt.alnOptions.print = 2; break;
-                case ARG_CLIP: opt.alnOptions.noClipping = false; break;
-                case 'q': opt.query_threads = atoi(optarg); break;
-                case 'm': opt.alnOptions.scores.match = atoi(optarg); opt.alnOptions.scoresSetByUser = true; break;
-                case 'u': opt.alnOptions.scores.mismatch = atoi(optarg); opt.alnOptions.scoresSetByUser = true; break;
-                case 'o': opt.alnOptions.scores.openGap = atoi(optarg); opt.alnOptions.scoresSetByUser = true; break;
-                case 'e': opt.alnOptions.scores.extendGap = atoi(optarg); opt.alnOptions.scoresSetByUser = true; break;
-                case 'd': opt.alnOptions.errorPercent = atof(optarg); break;
-                case 'T': opt.alnOptions.maxTrial = atoi(optarg); break;
-                case 'C': opt.alnOptions.minCoverage = atoi(optarg); break;
+                case 'e': opt.alnOptions.errorPercent = atof(optarg); break;
+                case 't': opt.query_threads = atoi(optarg); break;
+                case ARG_SEEDTYPE: opt.alnOptions.memType = parseSeedType(optarg); break;
+                case 'l': opt.alnOptions.minMemLength = atoi(optarg); opt.alnOptions.fixedMinLength = true; break;
+                case 'm': opt.alnOptions.maxSeedCandidates = atoi(optarg); break;
                 case ARG_TRY_HARDER: opt.alnOptions.tryHarder = false; break;
-                case 'h': opt.command == INDEX ? usageIndex(program) : usageAln(program); break;
+                case 'f': opt.alnOptions.maxTrial = atoi(optarg); break;
+                case 'c': opt.alnOptions.minCoverage = atof(optarg); break;
+                case ARG_CLIP: opt.alnOptions.noClipping = false; break;
+                case 'b': opt.alnOptions.fixedBandSize = atoi(optarg); break;
+                case 'A': opt.alnOptions.minScoreFixed = atoi(optarg); break;
+                case 'B': opt.alnOptions.minScoreLength = atof(optarg); break;
+                case 'M': opt.alnOptions.scores.match = atoi(optarg); opt.alnOptions.scoresSetByUser = true; break;
+                case 'U': opt.alnOptions.scores.mismatch = atoi(optarg); opt.alnOptions.scoresSetByUser = true; break;
+                case 'O': opt.alnOptions.scores.openGap = atoi(optarg); opt.alnOptions.scoresSetByUser = true; break;
+                case 'E': opt.alnOptions.scores.extendGap = atoi(optarg); opt.alnOptions.scoresSetByUser = true; break;
                 case 'I': opt.pairedOpt.minInsert = atoi(optarg); break;
                 case 'X': opt.pairedOpt.maxInsert = atoi(optarg); break;
-                case ARG_FR: opt.pairedOpt.orientation = PAIR_FR; break;
-                case ARG_RF: opt.pairedOpt.orientation = PAIR_RF; break;
-                case ARG_FF: opt.pairedOpt.orientation = PAIR_FF; break;
+                case ARG_ORIENTATION: opt.pairedOpt.orientation = parseOrientation(optarg); break;
                 case ARG_NO_MIXED: opt.pairedOpt.mixed = false; break;
                 case ARG_NO_DISCORDANT: opt.pairedOpt.discordant = false; break;
                 case ARG_DOVETAIL: opt.pairedOpt.dovetail = true; break;
                 case ARG_NO_CONTAIN: opt.pairedOpt.contain = false; break;
                 case ARG_NO_OVERLAP: opt.pairedOpt.overlap = false; break;
                 case ARG_PAIR_MODE: opt.pairedOpt.mode = atoi(optarg); break;
-                case 'i': opt.indexLocation = optarg; break;
-                case 'p': opt.index_prefix = optarg; break;
-                case ARG_SAVE_INDEX: opt.saveIndex = atoi(optarg); break;
-                case ARG_CHILD: opt.hasChild = atoi(optarg); break;
-                case ARG_SUFLINK: opt.hasSuflink = atoi(optarg); break;
-                case ARG_KMER: opt.hasKmer = atoi(optarg); break;
-                case ARG_SEEDTYPE: opt.alnOptions.memType = parseSeedType(optarg); break;
-                case ARG_FIXEDBAND: opt.alnOptions.fixedBandSize = atoi(optarg); break;
-                case ARG_MINSCORE: parseMinScore(opt.alnOptions, optarg); break;
+                case 'v': opt.alnOptions.print = atoi(optarg); break;
+                case 'h': opt.command == INDEX ? usageIndex(program) : usageAln(program); break;
                 case -1: /* Done with options. */
                 break;
                 case 0: if (long_options[option_index].flag != 0) break;
@@ -447,42 +443,59 @@ inline void processParameters(int argc, char* argv[], mapOptions_t& opt, const s
                 throw 1;
             }
         }
-        if(opt.alnOptions.maxSeedCandidates == -1){
-           opt.alnOptions.maxSeedCandidates = max(opt.alnOptions.alignmentCount,5);
-        }
-        if(opt.alnOptions.alignmentCount < 1){
-            opt.alnOptions.alignmentCount = 1;
-            opt.alnOptions.unique = true;
-        }
-        //add the reference query and output files
+        //setting defaults and checking necessary parameters. Checking correctness parameters + giving warnings
         if(opt.ref_fasta.empty()){
-            fprintf(stderr, "ALFALFA requires input reference file \n");
+            cerr << "ERROR: no reference file given. Specify reference file with -r option." << endl;
             exit(1);
         }
         if(opt.command == INDEX){
-            if(opt.saveIndex == false)
-                fprintf(stderr, "Warning, index will not be saved to memory! \n");
-            if(opt.hasChild && opt.hasSuflink)
-                fprintf(stderr, "Warning, having both child array and suffix link support is marginally useful and requires more memory! \n");
-            if(!opt.hasChild && opt.K>=3)
-                fprintf(stderr, "Warning no child array means much slower search times! \n");
-        }
-        if(opt.command == ALN && (opt.unpairedQ.empty() && (opt.pair1.empty() || opt.pair2.empty()))){
-            fprintf(stderr, "ALFALFA requires query files (1 unpaired and/or 2 mate files \n");
-            exit(1);
-        }
-        if(opt.saveIndex && opt.index_prefix.empty())
+            if(opt.index_prefix.empty()){
                 opt.index_prefix = opt.ref_fasta;
-        if(opt.K > 1 && (opt.alnOptions.memType == MAM || opt.alnOptions.memType == MUM)){
-                fprintf(stderr, "MAM and MUM seeds are not supported with s>1\n");
-                exit(1);
+            }
+            if(opt.hasChild && opt.hasSuflink)
+                fprintf(stderr, "WARNING: having both child array and suffix link support is marginally useful and requires more memory! \n");
+            if(!opt.hasChild && opt.K>=3)
+                fprintf(stderr, "WARNING: no child array means much slower search times! \n");
         }
-        if(!opt.alnOptions.noClipping && !opt.alnOptions.scoresSetByUser){
-            //local alignment and scores not set: BWA-SW defaults
-            opt.alnOptions.scores.match = 1;
-            opt.alnOptions.scores.mismatch = -3;
-            opt.alnOptions.scores.openGap = -5;
-            opt.alnOptions.scores.extendGap = -2;
+        if(opt.command == ALN){
+            if(opt.indexLocation.empty() && opt.index_prefix.empty()){
+                opt.index_prefix = opt.ref_fasta;
+            }
+            if(opt.hasChild && opt.hasSuflink)
+                fprintf(stderr, "WARNING: having both child array and suffix link support is marginally useful and requires more memory! \n");
+            if(!opt.hasChild && opt.K>=3)
+                fprintf(stderr, "WARNING: no child array means much slower search times! \n");
+            if(!opt.saveIndex && opt.indexLocation.empty())
+                fprintf(stderr, "WARNING: index will not be saved to disk! \n");
+            if(opt.unpairedQ.empty() && (opt.pair1.empty() || opt.pair2.empty())){
+                fprintf(stderr, "ERROR: ALFALFA requires query files. Specify query files with -0 or -1,-2 options.\n");
+                exit(1);
+            }
+            if(opt.outputName.empty())
+                opt.outputName = opt.ref_fasta.substr().append(".sam");
+            if(opt.alnOptions.errorPercent < 0.0 || opt.alnOptions.errorPercent > 1.0){
+                fprintf(stderr, "ERROR: uncorrect value for edit distance. Value should lie in the interval [0,1[\n");
+                exit(1);
+            }
+            if(opt.alnOptions.minCoverage < 0.0 || opt.alnOptions.minCoverage > 1.0){
+                fprintf(stderr, "ERROR: uncorrect value for minimum coverage. Value should lie in the interval [0,1[\n");
+                exit(1);
+            }
+            if(!opt.alnOptions.noClipping && !opt.alnOptions.scoresSetByUser){
+                //local alignment and scores not set: BWA-SW defaults
+                opt.alnOptions.scores.match = 1;
+                opt.alnOptions.scores.mismatch = -3;
+                opt.alnOptions.scores.openGap = -5;
+                opt.alnOptions.scores.extendGap = -2;
+            }
+            if(opt.pairedOpt.minInsert > opt.pairedOpt.maxInsert){
+                fprintf(stderr, "ERROR: minimum insert size is larger than maximum insert size\n");
+                exit(1);
+            }
+            if(opt.pairedOpt.mode < 1 || opt.pairedOpt.mode > 4){
+                fprintf(stderr, "ERROR: chosen paired-end mode not supported.\n");
+                exit(1);
+            }
         }
         if(opt.alnOptions.print > 0)
             opt.printOptions();
