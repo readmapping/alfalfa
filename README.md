@@ -5,21 +5,21 @@ ALFALFA: fast and accurate long read mapper
 
 Rapid evolutions in sequencing technology force read mappers into flexible adaptation to longer reads, changing error models, memory barriers and novel applications. The long read mapper ALFALFA achieves high performance in accurately mapping long (>500bp) single-end and paired-end reads to gigabase-scale reference genomes, while remaining competitive for mapping shorter (>100bp) reads. Its seed-and-extend workflow is underpinned by fast retrieval of super-maximal exact matches from an enhanced sparse suffix array, with flexible parameter tuning to balance performance, memory footprint and accuracy.
 
-# Downloads:
+# Downloads
 
 [ALFALFA v0.7.0](https://github.ugent.be/ComputationalBiology/alfalfa/blob/master/alfalfa.tgz?raw=true)
 
-# Installation:
+# Installation
 
 * unpack using `tar xvzf alfalfa.tgz`  
 * change into the folder alfalfa  
 * type `make`
 
-# Usage: 
+# Usage
 
 Usage and command line parameter information can be found on the [wiki](https://github.ugent.be/ComputationalBiology/alfalfa/wiki).
 
-# Version history:  
+# Version history
 
 
 * Version 0.7.0 update (May 23, 2013)  
@@ -103,10 +103,10 @@ Usage and command line parameter information can be found on the [wiki](https://
 * Version 0.0.0 (March 01, 2012)  
   1. First release of ALFALFA.  
 
-# Links:
+# Links  
 
 [essaMEM project](https://github.ugent.be/ComputationalBiology/essaMEM)
 
-# Contact: 
+# Contact  
 
 Don't hesitate to contact us at michael.vyverman[at]ugent.be if you have any further questions or suggestions. 
