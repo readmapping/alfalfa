@@ -224,7 +224,7 @@ static void processCheckParameters(int argc, char* argv[], samCheckOptions_t& op
         exit(1);
     }
     string subcommand = argv[1];
-    if(strcmp(argv[1], "oracle") == 0) opt.subcommand = ORACLE;
+    if(strcmp(argv[1], "sam") == 0) opt.subcommand = ORACLE;
     else if(strcmp(argv[1], "summary") == 0) opt.subcommand = SUMMARY;
     else if(strcmp(argv[1], "wgsim") == 0) opt.subcommand = WGSIM;
     else{

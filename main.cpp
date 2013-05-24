@@ -356,7 +356,7 @@ int main(int argc, char* argv[]){
                 vector<query_arg> args(opt.query_threads);
                 vector<pthread_t> thread_ids(opt.query_threads);
                 cerr << "Mapping unpaired reads to the index using " << opt.query_threads << " threads ..." << endl;
-                cerr << "Progress (each dot represents 10.000 reads processed: ";
+                cerr << "Progress (each dot represents 10.000 reads processed): ";
                 clock_t start = clock();
                 // Initialize additional thread data.
                 for(int i = 0; i < opt.query_threads; i++) {
@@ -389,7 +389,7 @@ int main(int argc, char* argv[]){
                 vector<query_arg> args(opt.query_threads);
                 vector<pthread_t> thread_ids(opt.query_threads);
                 cerr << "Mapping paired reads to the index using " << opt.query_threads << " threads ..." << endl;
-                cerr << "Progress (each dot represents 10.000 reads processed: ";
+                cerr << "Progress (each dot represents 10.000 reads processed): ";
                 clock_t start = clock();
                 // Initialize additional thread data.
                 for(int i = 0; i < opt.query_threads; i++) {
