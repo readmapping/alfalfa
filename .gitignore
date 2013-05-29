@@ -14,3 +14,5 @@
 #build and dist directories
 build/
 dist/
+/nbproject/private/
+/nbproject/
