@@ -48,7 +48,7 @@ using namespace std;
 //mapper options
 static const string PROG = "alfalfa";
 static const string SAM_VERSION = "1.3";
-static const string PROG_VERSION = "0.7.0";
+static const string PROG_VERSION = "0.7.1";
 static const string NOT_AVAILABLE = "*";
 static const long INIT_DP_DIMENSION = 2048;
 
@@ -263,14 +263,15 @@ void *paired_thread1(void *arg_) {
 
 int main(int argc, char* argv[]){
     cerr << "@PG\tID:" << PROG << "\tVN:" << PROG_VERSION << endl;
+    //handle command structure and general help
     if(argc < 2 || strcmp(argv[1], "-h")==0 || strcmp(argv[1], "--help")==0){
-        usage();
+        option::printUsage(std::cerr, basicUsage);
         exit(1);
-    }
+    }    
     if(strcmp(argv[1], "evaluate") == 0){
         samCheckOptions_t opt;
         opt.initOptions();
-        processCheckParameters(argc-1, argv+1, opt, PROG );
+        processCheckParameters(argc-1, argv+1, opt);
         cerr << "parsing options: done" << endl;
         if(opt.subcommand == ORACLE)
             checkOracle(opt);
@@ -282,7 +283,7 @@ int main(int argc, char* argv[]){
     else{
         mapOptions_t opt;
         opt.initOptions();
-        processParameters(argc, argv, opt, PROG);
+        processParameters(argc, argv, opt);
         //query name + read initialization
         cerr << "parsing options: done" << endl;
         cerr << "loading ref sequences: ..." << endl;

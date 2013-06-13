@@ -7,22 +7,43 @@ Rapid evolutions in sequencing technology force read mappers into flexible adapt
 
 # Downloads
 
-[ALFALFA v0.7.0](https://github.ugent.be/ComputationalBiology/alfalfa/blob/master/alfalfa.tgz?raw=true)
+[zip containing current version](https://github.ugent.be/ComputationalBiology/alfalfa/archive/master.zip)
+[ALFALFA v0.7.2 zip](https://github.ugent.be/ComputationalBiology/alfalfa/archive/v0.7.2.zip)
+[ALFALFA v0.7.2 tarball](https://github.ugent.be/ComputationalBiology/alfalfa/archive/v0.7.2.tar.gz)
 
 # Installation
 
-* unpack using `tar xvzf alfalfa.tgz`  
-* change into the folder alfalfa  
-* type `make`
+## Clone repository
+
+1.  optional: install git
+2.  type `git clone git://github.ugent.be/ComputationalBiology/alfalfa.git`
+3.  change into the folder `alfalfa`
+4.  type `make`
+
+## Current version zip file
+
+1. unpack using uncompression program such as [7-zip](www.7-zip.org/‎) or using `unzip alfalfa-master.zip`
+2. change into the folder `alfalfa-master`
+3. type `make`
+
+##specific version tarball  or zip-file
+
+1. unpack
+  * zip: unpack using uncompression program such as [7-zip](www.7-zip.org/‎) or using `unzip alfalfa-version.zip`
+  * tar: `tar xvzf alfalfa-version.tar.gz`
+2. change into the folder `alfalfa-version`
+3. type `make`
 
 # Usage
 
-Usage and command line parameter information can be found on the [wiki](https://github.ugent.be/ComputationalBiology/alfalfa/wiki).
+Usage and command line parameter information can be found on the [web page](https://github.ugent.be/pages/ComputationalBiology/alfalfa/).
 
 # Version history
 
-
-* Version 0.7.0 update (May 23, 2013)  
+* Version 0.7.2 (June 13, 2013)  
+  1. Improved online help
+  2. Reordered source code in folders and updated makefile
+* Version 0.7.1 (May 23, 2013)  
   1. Changed parameter names and defaults.  
   2. Removed deprecated code.  
   3. Improved paired-end mode 4.  
