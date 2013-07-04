@@ -409,10 +409,10 @@ void sparseSA::construct(){
         suffixsort(&ISA[0], SAint , N-1, alphalast, 1);
     }
 
-    cerr << "N=" << N << endl;
+    cerr << "size concatenated sequence = " << N << endl;
 
     LCP.resize(N/K);
-    cerr << "N/K=" << N/K << endl;
+    cerr << "number of suffix array values = " << N/K << endl;
     // Use algorithm by Kasai et al to construct LCP array.
     computeLCP();  // SA + ISA -> LCP
     LCP.init();

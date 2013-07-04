@@ -92,7 +92,7 @@ void load_fasta(string filename, string &S, vector<string> &descr, vector<long> 
   if(length > 0) {
     descr.push_back(meta);
   }
-  cerr << "# S.length=" << S.length() << endl;
+  cerr << "# full reference length = " << S.length() << endl;
   for(long i = 0; i < (long)descr.size(); i++) {
     cerr << "# " << descr[i] << " " << startpos[i] << endl;
   }

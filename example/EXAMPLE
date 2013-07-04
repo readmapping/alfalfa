@@ -1,0 +1,207 @@
+# Example usage
+
+***
+
+To get started with ALFALFA, the basic usage of ALFALFA is shown in the small examples below.
+The example code assumes that ALFALFA has already been [obtained](https://github.ugent.be/ComputationalBiology/alfalfa/wiki/Usage) and [built](https://github.ugent.be/ComputationalBiology/alfalfa/wiki/Usage) and that the command to call the program is `alfalfa`. If alfalfa has not been installed, the command should also include the path to the binary.
+
+The files used in the example can be found in the folder `example`. In the code below, we assume that the current working directory is `example`. The example uses the small Lambda phage genome as a reference and contains two small read data sets of simulated reads. 
+
+## Indexing the reference genome
+Building the index structure used by ALFALFA for the Lambda phage genome in the example can be done using the command line:
+
+```bash
+$ alfalfa index -r reference.fasta -p lambda_phage -s 1
+```
+
+The parameter `-s 1` tells the program to use a sparseness value of one. For larger genomes, we suggest using a larger sparseness value to decrease the memory usage of the program. The default value 12 is a good choice for genomes with a size similar to the human genome.
+
+The command will create several files in the current working directory making up the index structure. These files are: `lambda_phage.aux`, `lambda_phage.sa`, `lambda_phage.lcp`, `lambda_phage.child`, `lambda_phage.kmer`. The meaning of each file can be found in the [manual](https://github.ugent.be/ComputationalBiology/alfalfa/wiki/Manual). Note that the size of the file `lambda_phage.kmer` is large in comparison to the genome size. The size of this file is, however, independent of the genome size.
+
+The program will also write some information to standard error. An example output can be found below. The printed text includes process information, reference sequence information including total length and headers of the separate fasta entries (chromosomes), size of different data structures, final construction time and final memory footprint of the index in memory.
+```
+@PG     ID:alfalfa      VN:0.7.2
+parsing options: ...
+parsing options: done
+loading ref sequences: ...
+# full reference length = 48502
+# gi|9626243|ref|NC_001416.1| 0
+loading ref sequences: done
+# ref sequence: reference.fasta
+building index with s = 1 ...
+size concatenated sequence = 48503
+number of suffix array values = 48503
+number of lcp values >= 255: 0
+building index: done
+saving index to disk ...
+saving index to disk: done
+time for building index structure: 0.03
+INDEX SIZE IN BYTES: 8874509
+```
+
+## Aligning single-end reads
+To align single-end reads to the created index, the following command can be used:
+
+```bash
+$ alfalfa align -r reference.fasta -i lambda_phage -0 454reads.fq -o 454reads.sam
+```
+
+ALFALFA will first read the reference genome and index files. Next, the program will align the reads from the `454reads.fq` one by one and save the found alignments in the `454reads.sam` SAM file in the current working directory. Together with the final mapping time, this information is displayed in the text written to standard error:
+
+```
+@PG     ID:alfalfa      VN:0.7.2
+parsing options: ...
+parsing options: done
+loading ref sequences: ...
+# S.length=48502
+# gi|9626243|ref|NC_001416.1| 0
+loading ref sequences: done
+# ref sequence: reference.fasta
+atempting to load index reference ...
+index loaded succesful
+Mapping unpaired reads to the index using 1 threads ...
+Progress (each dot represents 10.000 reads processed):
+sequences read by thread 0: 100
+sequences mapped by thread 0: 100
+alignments printed by thread 0: 100
+
+mapping unpaired: done
+time for mapping: 0.05
+FINISHED
+```
+
+The SAM output format is supported by many tools. The explanation of its fields can be found in the format [description](samtools.sourceforge.net/SAM1.pdf). 
+
+ALFALFA prints the full command line that was used to generate the file in the SAM header, together with the version number of ALFALFA.
+
+```
+@PG	ID:alfalfa	CL:alfalfa align -r reference.fasta -i lambda_phage -0 454reads.fq -o 454reads.sam	VN:0.7.2
+```
+
+In addition to the basic fields, ALFALFA supports the alignment score field `AS` and the edit distance field `NM`. ALFALFA also produces a `X0` field that contains the CIGAR string that uses sequence match `=` and mismatch `X` characters instead of the general alignment match character `M`.
+
+```
+AS:i:-108	NM:i:27 X0:Z:4=1I4=1D11=1D4=1I26=1I22=1I6=1D28=1D9=1D11=1I36=1I7=1I15=1I3=2X3=1D25=1D12=1I1=1I17=1I8=1D34=1I160=2I11=1D5=1I119=1D19=
+```
+
+More information on the possible parameter settings can be found in the [manual](https://github.ugent.be/ComputationalBiology/alfalfa/wiki/Manual).
+
+## Aligning paired-end reads
+
+Aligning paired-end reads requires two separate files containing the both ends of the pair and an estimation of the insert size (total length of insert, including length of both reads). This estimation is set using parameter `-I` for minimum insert size and parameter `-X` for maximum insert size.
+
+```bash
+$ alfalfa align -r reference.fasta -i lambda_phage -1 mate1.fq -2 mate2.fq -I 3600 -X 4400 -o paired_end.sam
+```
+
+## Local alignment
+
+By default, ALFALFA performs end-to-end alignment. For reads containing many (long) indels, however, local alignment could results in more accurate mappings. Local alignment can be turned on using the switch `--local` on the command line. Other parameters influencing the accuracy of local alignment can be found in the [manual](https://github.ugent.be/ComputationalBiology/alfalfa/wiki/Manual).
+
+```bash
+$ alfalfa align -r reference.fasta -i lambda_phage -1 mate1.fq -2 mate2.fq -I 3600 -X 4400 -o paired_end.sam --local
+```
+
+By default end-to-end alignment uses a fixed penalty for gaps and local alignment uses affine gap penalties. This can be changed by setting the scores directly using parameters `-M/--match`, `-U/--mismatch`, `-O/--gap-open` and `-E/--gap-extend`.
+
+## Evaluation of aligned reads
+
+ALFALFA includes an `evaluation` command that can be used to build a summary of the number of mapped reads for a given SAM output file or to calculate the accuracy of the mappings in combination with certain types of simulated reads. This section contains a small example of these commands.
+
+### Summary of the number of alignments
+
+The following command computes a summary of the above mapped single-end reads and stores it in `454reads_summary.txt`.
+
+```bash
+$ alfalfa evaluate summary --reads 100 -i 454reads.sam -o 454reads_summary.txt
+```
+
+If the parameter `-o`  would have been omitted, the summary would have been printed to standard output. As seen in the command, the number of reads in the initial fastQ file has to be provided. If this number is unknown, the summary will use the number of reads present in the SAM file instead. For mapped paired-end reads, the command requires an additional argument `--paired`.
+
+```bash
+$ alfalfa evaluate summary --reads 50 -i paired_end.sam -o paired_end_summary.txt --paired
+```
+
+The summary provides information on the number of mapped and unmapped reads and alignments, the number of alignments flagged as secondary alignments and the number of reads with a given number of alignments. An example output looks like this:
+
+```
+##All alignments:
+~~~	   num_mapped	 percent_mapped	 num_unmapped	 /percent_unmapped	 num_second_aligned count
+alignments 100	         100	         0	         0	                 0	            100
+reads	   100	         100	         0	         0	                 N.A.	            100
+
+number of reads with x alignments
+0	 0
+1	 100
+```
+
+The same information is also printed for reads with a unique alignment and the subset of alignments with a certain minimum quality score (provided by parameter `-q`
+
+### Evaluation of mapping accuracy of reads generated with Mason
+
+The single-end read data set used in this example was generated with the [Mason](http://www.seqan.de/projects/mason/) read simulator. Together with the reads, Mason also generates a SAM file containing the original position of the read and the number of differences that were simulated. Using this information, ALFALFA can calculate the accuracy of the alignments performed by ALFALFA or another mapper. 
+
+The evaluation method requires two SAM files: an input SAM file containing the mapped reads and an oracle SAM file containing the true simulated positions. In addition, both files need to be sorted by read name. This can be done using [SAMtools](http://samtools.sourceforge.net/) (look at the SAMtools website for information on how to obtain and install it). If SAMtools is installed, the files can be sorted using:
+
+```bash
+$ samtools view -Sb 454reads.sam > 454reads.bam
+$ samtools sort -n 454reads.bam 454reads_by_coordinate
+$ samtools view -h 454reads_by_coordinate.bam > 454reads.sam
+```
+
+Calculating the accuracy can be done using:
+
+```bash
+$ alfalfa evaluate sam -r reference.fasta --reference-sam 454reads.fq.sam -i 454reads.sam -o 454reads_result.txt
+```
+
+Process information is written to standard error and the accuracy results are written to `454reads_result.txt`. Similar to the `summary` command, the `-o` parameter can be omitted if you prefer that the results are written to standard output. The output will look like:
+
+```
+##ALFALFA check alignment accuracy using an oracle file for simulated reads
+##
+##Warning: these results only make sense if both the oracle and query file are sorted according to         query name and if the edit distance field is filled correctly.
+##
+##SAM file containing alignments: 454reads.sam
+##SAM file containing simulated origins: 454reads.fq.sam
+##
+##An alignment is considered correct if it falls within a certain range from the simulated origin
+##The ranges that are considered are: 50
+##
+##Results will be presented for all alignments in the file, unique alignments and for the         fraction of reads for which the mapping quality is at least: 
+##
+##The first 6 columns represent number and percentage of alignments that are correct, ok         (not close to origin/not paired correctly, but with a smaller or equal edit distance) and incorrect alignments.
+##The second 6 columns represent these numbers and percentages for the reads. A read is considered correctly mapped        if at least one correct alignment has been found (and likewise for ok reads).
+##
+##
+##Results
+##
+##Number of reads: 100
+##Reads are paired?: 0
+##
+##Results for allowed range of 50
+#			 alignments						 reads
+#resultType	 num_correct	 percent_correct	 num_ok	 percent_ok	 /num_incorrect	 percent_incorrect	 num_correct	 percent_correct	 /num_ok	 percent_ok	 num_incorrect	 percent_incorrect
+all	 100	 100	 0	 0	 0	 0	 100	 100	 0	 0	 0	 0
+unique aligned	 100	 100	 0	 0	 0	 0	 100	 100	 0	 0	 0	 0
+##
+##
+```
+
+Correct alignments are alignments that are located within a given distance of the simulated position. For paired-end reads, it is required that the corresponding mate of an alignment is also mapped correctly. Alignments that are not correctly mapped can still be plausibly mapped (columns `num_ok` and `percent_ok`) if they contain fewer differences than the number of differences that were simulated. All other alignments are considered incorrect. A read is mapped correctly if it has at least one correct alignment. Likewise for plausibly mapped reads. In addition, the alignment set can be limited to the uniquely mapped reads and alignments with a certain minimum quality mapping score.
+
+The default distance that decides if an alignment is mapped correctly can be set using the parameter `-w`. Specifying more values in a comma-separated list (_e.g._ `1,10,50`) prints the result for all of these values in the same file.
+
+Note that the above definitions are also printed in the output.
+
+### Evaluation of mapping accuracy of reads generated with Wgsim
+
+ALFALFA also has a special function to evaluate the accuracy of mapped reads that were simulated using [Wgsim](https://github.com/lh3/wgsim). Wgsim does not provide a separate SAM file containing the simulated positions of each read, but stores this information in the read names.
+
+The paired-end reads in the example were generated using Wgsim. The accuracy of the mapping can be checked using the command:
+
+```bash
+$ alfalfa evaluate wgsim -r reference.fasta -i paired_end.sam -o paired_end_result.txt
+```
+
+The output stored in `paired_end_result.txt` is similar to that of the accuracy result of Mason simulated reads (see section above). 

@@ -1,0 +1,27 @@
+##ALFALFA check alignment accuracy using an oracle file for simulated reads
+##
+##Warning, these results only make sense if the SAM file is sorted according to         query name and if the edit distance field is filled correctly.
+##
+##SAM file containing alignments: paired_end.sam
+##
+##An alignment is considered correct if it falls within a certain range from the simulated origin
+##The ranges that are considered are: 50
+##
+##Results will be presented for all alignments in the file, unique alignments and for the         fraction of reads for which the mapping quality is at least: 
+##
+##The first 6 columns represent number and percentage of alignments that are correct, ok         (not close to origin/not paired correctly, but with a smaller or equal edit distance) and incorrect alignments.
+##The second 6 columns represent these numbers and percentages for the reads. A read is considered correctly mapped        if at least one correct alignment has been found (and likewise for ok reads).
+##
+##
+##Results
+##
+##Number of reads: 50
+##Reads are paired?: true
+##
+##Results for allowed range of 50
+#			 alignments						 reads
+#resultType	 num_correct	 percent_correct	 num_ok	 percent_ok	 /num_incorrect	 percent_incorrect	 num_correct	 percent_correct	 /num_ok	 percent_ok	 num_incorrect	 percent_incorrect
+all	 100	 100	 0	 0	 0	 0	 50	 100	 0	 0	 0	 0
+unique aligned	 49	 100	 0	 0	 0	 0	 49	 98	 0	 0	 1	 2
+##
+##

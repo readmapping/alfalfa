@@ -48,7 +48,7 @@ using namespace std;
 //mapper options
 static const string PROG = "alfalfa";
 static const string SAM_VERSION = "1.3";
-static const string PROG_VERSION = "0.7.1";
+static const string PROG_VERSION = "0.7.2";
 static const string NOT_AVAILABLE = "*";
 static const long INIT_DP_DIMENSION = 2048;
 
@@ -135,6 +135,7 @@ void *unpaired_thread(void *arg_) {
           delete ss;
       }
   }
+  cerr << endl;
   printf("sequences read by thread %d: %ld\n",arg->skip0, seq_cnt);
   printf("sequences mapped by thread %d: %ld\n",arg->skip0, seq_mapped);
   printf("alignments printed by thread %d: %ld\n",arg->skip0, alignments_printed);
@@ -187,6 +188,7 @@ void *query_thread(void *arg_) {
           delete ss;
       }
   }
+  cerr << endl;
   printf("sequences read by thread %d: %ld\n",arg->skip0, seq_cnt);
   printf("sequences mapped by thread %d: %ld\n",arg->skip0, seq_mapped);
   printf("alignments printed by thread %d: %ld\n",arg->skip0, alignments_printed);
@@ -252,6 +254,7 @@ void *paired_thread1(void *arg_) {
           delete ss;
       }
   }
+  cerr << endl;
   printf("sequences read by thread %d: %ld\n", arg->skip0,seq_cnt);
   printf("sequences mapped (mate1) by thread %d: %ld\n", arg->skip0, seq_mapped1);
   printf("sequences mapped (mate2) by thread %d: %ld\n", arg->skip0, seq_mapped2);

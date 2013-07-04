@@ -230,6 +230,9 @@ static void processCheckParameters(int argc, char* argv[], samCheckOptions_t& op
             cerr << "error during parsing of command line options" << endl;
             exit(1);
         }
+        if(parser.optionsCount() == 0){
+            option::printUsage(std::cerr, summaryUsage); exit(0);
+        }
         for (int i = 0; i < parser.optionsCount(); ++i) {
             Option& option = buffer[i];
             switch(option.index()) {
@@ -256,6 +259,9 @@ static void processCheckParameters(int argc, char* argv[], samCheckOptions_t& op
             cerr << "error during parsing of command line options" << endl;
             exit(1);
         }
+        if(parser.optionsCount() == 0){
+            option::printUsage(std::cerr, samUsage); exit(0);
+        }
         for (int i = 0; i < parser.optionsCount(); ++i) {
             Option& option = buffer[i];
             switch(option.index()) {
@@ -277,13 +283,16 @@ static void processCheckParameters(int argc, char* argv[], samCheckOptions_t& op
         delete[] buffer;
     }
     else if(opt.subcommand == WGSIM){
-        option::Stats  stats(samUsage, argc, argv);
+        option::Stats  stats(wgsimUsage, argc, argv);
         option::Option* options = new option::Option[stats.options_max];
         option::Option* buffer  = new option::Option[stats.buffer_max];
-        option::Parser parser(samUsage, argc, argv, options, buffer);
+        option::Parser parser(wgsimUsage, argc, argv, options, buffer);
         if (parser.error()){
             cerr << "error during parsing of command line options" << endl;
             exit(1);
+        }
+        if(0==parser.optionsCount()){
+            option::printUsage(std::cerr, wgsimUsage); exit(0);
         }
         for (int i = 0; i < parser.optionsCount(); ++i) {
             Option& option = buffer[i];
@@ -294,10 +303,8 @@ static void processCheckParameters(int argc, char* argv[], samCheckOptions_t& op
                 case ARG_REFERENCE_EVAL: opt.refString = option.arg; break;
                 case ARG_WINDOW: processCommaSepListInt(option.arg, opt.correctRange, "ranges", 0, 1000000); break;
                 case ARG_INPUT_EDIT: opt.qtag = option.arg; break;
-                case ARG_REFERENCE_SAM: opt.oracleSam = option.arg; break;
-                case ARG_REFERENCE_EDIT: opt.otag = option.arg; break;
                 case ARG_PRINT: opt.print = true; break;
-                case ARG_HELP_EVAL: option::printUsage(std::cerr, samUsage); exit(0);
+                case ARG_HELP_EVAL: option::printUsage(std::cerr, wgsimUsage); exit(0);
                 default: cerr << "unknown option: " << option.name << endl; break;
                 throw 1;
             }
@@ -305,65 +312,32 @@ static void processCheckParameters(int argc, char* argv[], samCheckOptions_t& op
         delete[] options;
         delete[] buffer;
     }
-//    int option_index = 0;
-//    int c;
-//    while ((c = getopt_long(
-//    argc-1, argv+1,
-//    short_optionsC, long_optionsC, &option_index)) != -1) {//memType cannot be chosen
-//        switch (c) {
-//            case 'i': opt.querySam = optarg; break;
-//            case 'o': opt.outputFile = optarg; break;
-//            case 'q': processCommaSepListInt(optarg, opt.qualityValues, "quality-values", 0, 255); break;
-//            case 'p': opt.print = true; break;
-//            case 'h': if(opt.subcommand == SUMMARY) usageSummary(); else if(opt.subcommand == ORACLE) usageSam(); else usageWgsim(); break;
-//            case 'r': if(opt.subcommand != SUMMARY) opt.refString = optarg;
-//            else fprintf(stderr, "reference sequence file not needed for '%s' mode. This parameter will be ignored.\n", subcommand.c_str()); 
-//            break;
-//            case 'w': if(opt.subcommand != SUMMARY) processCommaSepListInt(optarg, opt.correctRange, "ranges", 0, 1000000);
-//            else fprintf(stderr, "quality value cut-offs not needed for '%s' mode. This parameter will be ignored.\n", subcommand.c_str()); 
-//            break;
-//            case ARG_QTAG: if(opt.subcommand != SUMMARY) opt.qtag = optarg;
-//            else fprintf(stderr, "tag for edit distance not needed for '%s' mode. This parameter will be ignored.\n", subcommand.c_str());
-//            break;
-//            case ARG_REFSAM: if(opt.subcommand == ORACLE) opt.oracleSam = optarg;
-//            else fprintf(stderr, "oracle SAM file not needed for '%s' mode. This parameter will be ignored.\n", subcommand.c_str()); 
-//            break;
-//            case ARG_OTAG: if(opt.subcommand == ORACLE) opt.otag = optarg;
-//            else fprintf(stderr, "tag for edit distance not needed for '%s' mode. This parameter will be ignored.\n", subcommand.c_str()); 
-//            break;
-//            case -1: /* Done with options. */
-//            break;
-//            case 0: if (long_options[option_index].flag != 0) break;
-//            default: if(opt.subcommand == SUMMARY) usageSummary(); else if(opt.subcommand == ORACLE) usageSam(); else usageWgsim();
-//            throw 1;
-//        }
-//    }
-//    if(opt.querySam.empty()){
-//        fprintf(stderr, "ERROR: The query SAM file has not been specified using the -i option.\n"); 
-//        exit(1);
-//    }
-//    if(opt.subcommand == SUMMARY){
-//        if(opt.numReads==0)
-//            fprintf(stderr, "WARNING: Number of reads was not specified. Number of reads in input sam will be used.\n");
-//    }
-//    if(opt.subcommand == ORACLE){
-//        if(opt.refString.empty()){
-//            fprintf(stderr, "ERROR: The reference genome has not been specified using the -r option.\n"); 
-//            exit(1);
-//        }
-//        if(opt.oracleSam.empty()){
-//            fprintf(stderr, "ERROR: The reference SAM file has not been specified using the --reference-sam option.\n"); 
-//            exit(1);
-//        }
-//    }
-//    if(opt.subcommand == WGSIM){
-//        if(opt.refString.empty()){
-//            fprintf(stderr, "ERROR: The reference genome has not been specified using the -r option.\n"); 
-//            exit(1);
-//        }
-//    }
-//    if(opt.subcommand != SUMMARY && opt.correctRange.empty())
-//        opt.correctRange.push_back(50);
+    if(opt.querySam.empty()){
+        fprintf(stderr, "ERROR: The query SAM file has not been specified using the -i option.\n"); 
+        exit(1);
+    }
+    if(opt.subcommand == SUMMARY){
+        if(opt.numReads==0)
+            fprintf(stderr, "WARNING: Number of reads was not specified. Number of reads in input sam will be used.\n");
+    }
+    if(opt.subcommand == ORACLE){
+        if(opt.refString.empty()){
+            fprintf(stderr, "ERROR: The reference genome has not been specified using the -r option.\n"); 
+            exit(1);
+        }
+        if(opt.oracleSam.empty()){
+            fprintf(stderr, "ERROR: The reference SAM file has not been specified using the --reference-sam option.\n"); 
+            exit(1);
+        }
+    }
+    if(opt.subcommand == WGSIM){
+        if(opt.refString.empty()){
+            fprintf(stderr, "ERROR: The reference genome has not been specified using the -r option.\n"); 
+            exit(1);
+        }
+    }
+    if(opt.subcommand != SUMMARY && opt.correctRange.empty())
+        opt.correctRange.push_back(50);
 }
 
 static string nextField(const string & line, char delimeter, int& beginPos){
@@ -1035,7 +1009,7 @@ static void checkWgsim(samCheckOptions_t & opt){
             getlijn2(queryFile, queryLine);
         } while(queryFile.good() && !queryLine.empty());
         //if new query, finish previous
-        if(prevQname != "" && prevQname.compare(qname) != 0){
+        if(prevQname != ""){
             //sumarize for read
             for(size_t j=0; j < rangeCount; j++){
                 if(opt.print && results[j][0].tempReadResult==0)

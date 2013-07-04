@@ -1,0 +1,32 @@
+##ALFALFA summary of alignment accuracy
+##
+##Warning: these results only make sense if the query file is sorted according to query name.
+##
+##SAM file containing alignments: 454reads.sam
+##Results will be presented for all alignments in the file, unique alignments and for the         fraction of reads for which the mapping quality is at least: 
+##For every category, the fraction of alignments/reads mapped (and paired correctly) will be shown.
+##Furthermore, a list is given of number of alignments per read.
+##
+##
+##Results
+##
+##Number of reads: 100
+##Reads are paired?: 0
+##
+##All alignments:
+~~~	 num_mapped	 percent_mapped	 num_unmapped	 /percent_unmapped	 num_second_aligned	 count
+alignments	 100	 100	 0	 0	 0	 100
+reads	 100	 100	 0	 0	 N.A.	 100
+
+number of reads with x alignments
+0	 0
+1	 100
+##
+##Unique alignments:
+~~~	 num_mapped	 percent_mapped	 num_unmapped	 /percent_unmapped	 num_second_aligned	 count
+alignments	 100	 100	 0	 0	 0	 100
+reads	 100	 100	 0	 0	 N.A.	 100
+
+number of reads with x alignments
+0	 0
+1	 100
