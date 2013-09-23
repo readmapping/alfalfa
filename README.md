@@ -3,9 +3,11 @@ alfalfa
 
 ALFALFA: fast and accurate long read mapper
 
-web site, manual, example and more: https://github.ugent.be/pages/ComputationalBiology/alfalfa/
-
 Rapid evolutions in sequencing technology force read mappers into flexible adaptation to longer reads, changing error models, memory barriers and novel applications. The long read mapper ALFALFA achieves high performance in accurately mapping long (>500bp) single-end and paired-end reads to gigabase-scale reference genomes, while remaining competitive for mapping shorter (>100bp) reads. Its seed-and-extend workflow is underpinned by fast retrieval of super-maximal exact matches from an enhanced sparse suffix array, with flexible parameter tuning to balance performance, memory footprint and accuracy.
+
+# Website
+
+https://github.ugent.be/pages/ComputationalBiology/alfalfa/
 
 # Downloads
 
