@@ -7,9 +7,9 @@ Rapid evolutions in sequencing technology force read mappers into flexible adapt
 
 # Downloads
 
-[zip containing current version](https://github.ugent.be/ComputationalBiology/alfalfa/archive/master.zip)
-[ALFALFA v0.7.2 zip](https://github.ugent.be/ComputationalBiology/alfalfa/archive/v0.7.2.zip)
-[ALFALFA v0.7.2 tarball](https://github.ugent.be/ComputationalBiology/alfalfa/archive/v0.7.2.tar.gz)
+[zip containing current version](https://github.com/readmapping/alfalfa/archive/master.zip)
+[ALFALFA v0.8 zip](https://github.com/readmapping/alfalfa/archive/v0.8.zip)
+[ALFALFA v0.8 tarball](https://github.com/readmapping/alfalfa/archive/v0.8.tar.gz)
 
 # Installation
 
@@ -36,4 +36,4 @@ Rapid evolutions in sequencing technology force read mappers into flexible adapt
 
 # Usage
 
-Usage and command line parameter information can be found on the [web page](https://alfalfa.ugent.be).
+Usage and command line parameter information can be found on the [web page](http://alfalfa.ugent.be).
