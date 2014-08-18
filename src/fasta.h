@@ -28,14 +28,14 @@
 #include <string>
 #include <vector>
 #include <pthread.h>
-#include <iostream>
-#include <fstream>
+#include <zlib.h>
+#include "kseq.h"
 
-using namespace std;
+KSEQ_INIT(gzFile, gzread)
 
-void reverse_complement(string &seq_rc, bool nucleotides_only);
-void trim(string &line, long &start, long &end);
-void load_fasta(string filename, string &S, vector<string> &descr, vector<long> &startpos);
+void reverse_complement(std::string &seq_rc, bool nucleotides_only);
+void trim(std::string &line, long &start, long &end);
+void load_fasta(std::string filename, std::string &S, std::vector<std::string> &descr, std::vector<long> &startpos);
 
 enum filetype_t { UNKNOWN, FASTA, FASTQ };
 
@@ -46,20 +46,18 @@ enum filetype_t { UNKNOWN, FASTA, FASTQ };
  */
 struct fastqInputReader {
     fastqInputReader();
-    fastqInputReader(const string& fileName, bool nucOnly, filetype_t fileT = UNKNOWN);
+    fastqInputReader(const std::string& fileName, bool nucOnly);
     ~fastqInputReader();
-    void open(const string& fileName, bool nucOnly, filetype_t fileT = UNKNOWN);
+    void open(const std::string& fileName, bool nucOnly);
     
-    void determineType();
-    //returns 0 if succeeded
-    bool nextRead(string& meta, string& sequence, string& qualities);
-    bool nextReadFastQ(string& meta, string& sequence, string& qualities);
-    bool nextReadFastA(string& meta, string& sequence);
+    bool nextRead(std::string& meta, std::string& sequence, std::string& qualities);
     
+    gzFile fp;
+    kseq_t *seq;
+    int l;
     bool nucleotidesOnly;
-    ifstream data;
-    filetype_t fileType;
-    string filename;
+    
+    std::string filename;
     pthread_mutex_t readLock_;
 };
 

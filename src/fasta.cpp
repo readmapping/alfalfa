@@ -25,9 +25,11 @@
 #include <fstream>
 #include <iostream>
 #include <algorithm>
-#include <assert.h>
+#include <stdio.h>
 
 #include "fasta.h"
+
+using namespace std;
 
 // Trim a string, giving start and end in trimmed version.
 // NOTE: Assumes line.length() > 0!!!!
@@ -98,79 +100,45 @@ void load_fasta(string filename, string &S, vector<string> &descr, vector<long> 
   }
 }
 
-void getlijn(ifstream & input, string & lijn){
-    //write windows version of getline
-    getline(input, lijn, '\n'); // Load one line at a time.
-    if(lijn.length() > 0 && lijn[lijn.length()-1]=='\r')
-        lijn.erase(--lijn.end());
-}
-
-fastqInputReader::fastqInputReader(): nucleotidesOnly(false), data(), fileType(UNKNOWN), filename("") {
+fastqInputReader::fastqInputReader(): nucleotidesOnly(false), filename("") {
     pthread_mutex_init(&readLock_, NULL);
 }
 
-fastqInputReader::fastqInputReader(const string& fName, bool nucOnly, filetype_t fileT): 
-        nucleotidesOnly(nucOnly), data(fName.c_str()), fileType(fileT), filename(fName) {
+fastqInputReader::fastqInputReader(const string& fName, bool nucOnly): 
+        nucleotidesOnly(nucOnly), filename(fName) {
     pthread_mutex_init(&readLock_, NULL);
-    if(!data.is_open()) { cerr << "unable to open " << fName << endl; exit(1); }
-    determineType();
+    fp = gzopen(fName.c_str(),"r");
+    if(fp == NULL){
+        fprintf(stderr, "ERROR: file %s could not be read.", fName.c_str());
+        exit(1);
+    }
+    seq = kseq_init(fp);
 }
 
-void fastqInputReader::open(const string& fileName, bool nucOnly, filetype_t fileT){
+void fastqInputReader::open(const string& fileName, bool nucOnly){
     nucleotidesOnly = nucOnly;
     filename = fileName;
-    fileType = fileT;
-    data.open(filename.c_str());
-    determineType();
+    fp = gzopen(fileName.c_str(),"r");
+    if(fp == NULL){
+        fprintf(stderr, "ERROR: file %s could not be read.", fileName.c_str());
+        exit(1);
+    }
+    seq = kseq_init(fp);
 }
 
 fastqInputReader::~fastqInputReader(){
-    data.close();
+    kseq_destroy(seq);
+    gzclose(fp);
     pthread_mutex_destroy(&readLock_);
 }
 
-void fastqInputReader::determineType(){
-    if(fileType == UNKNOWN){
-        string line = "";
-        while(!data.eof() && line.length() == 0){
-            getlijn(data, line);
-        }
-        if(line.length() > 0){
-            if(line[0] == '@')
-                fileType = FASTQ;
-            else if(line[0] == '>')
-                fileType = FASTA;
-            else{
-                cerr << "unknown query file format: " << filename << endl; exit(1);
-            }
-        }
-        data.clear();
-        data.seekg(0, ios::beg) ;
-    }
-}
-
 bool fastqInputReader::nextRead(string& meta, string& sequence, string& qualities){
-    if(fileType == FASTQ)
-        return nextReadFastQ(meta, sequence, qualities);
+    l = kseq_read(seq);
+    if(l < 0)
+        return false;
     else{
-        qualities = "*";
-        return nextReadFastA(meta, sequence);
-    }
-}
-
-bool fastqInputReader::nextReadFastQ(string& meta, string& sequence, string& qualities){
-    string line;
-    sequence.clear();
-    meta.clear();
-    qualities.clear();
-    while(!data.eof()) {// Load one line at a time: cycle through meta, sequence, '+' and quality
-        getlijn(data, line); // new meta
-        if(line.length() == 0) continue;
-        //only up to first space
-        long start = 1, end = line.find(' ');//line.length()-1;
-        //trim(line, start , end);
-        meta = line.substr(start,end-start);
-        getlijn(data, sequence); //sequence line
+        meta = seq->name.s;
+        sequence = seq->seq.s;
         for(size_t i = 0; i <= sequence.length(); i++) {
             char c = std::tolower(sequence[i]);
             if(nucleotidesOnly) {
@@ -182,43 +150,10 @@ bool fastqInputReader::nextReadFastQ(string& meta, string& sequence, string& qua
             }
             sequence[i] = c;
         }
-        getlijn(data, line); //'+' line --> should become skiplijn(data);
-        getlijn(data, qualities); //qual line
+        
+        if (seq->qual.l)
+            qualities = seq->qual.s;
+        
         return true;
     }
-    return false;//no more sequences
-}
-
-bool fastqInputReader::nextReadFastA(string& meta, string& sequence){
-    string line;
-    meta.clear();
-    sequence.clear();
-    while(!data.eof()) {
-        getlijn(data, line); // Load one line at a time.
-        if(line.length() == 0) continue;
-        long start = 1, end = line.find(' ');//line.length()-1;
-        // Meta tag line and start of a new sequence.
-        // Collect meta data.
-        assert(line[0] == '>');
-        //trim(line, start, end);
-        meta = line.substr(start,end-start);
-        //sequence part
-        while(!data.eof() && data.peek() != '>'){
-            getlijn(data, line); // Load one line at a time.
-            if(line.empty()) continue;
-            for(size_t i = 0; i < line.length(); i++) {
-                char c = std::tolower(line[i]);
-                if(nucleotidesOnly) {
-                        switch(c) {
-                                case 'a': case 't': case 'g': case 'c': break;
-                                default:
-                                c = '~';
-                        }
-                }
-                sequence += c;
-            }
-        }
-        return true;
-    }
-    return false;
 }

@@ -20,51 +20,19 @@
 #ifndef DP_H
 #define	DP_H
 
-#include <iostream>
 #include <string>
-#include <algorithm>
-#include <stdlib.h>
-#include <stdio.h>
+#include <vector>
+#include <sstream>
 
 #define DEBUG 0
 
-using namespace std;
-
-static const unsigned int ORDVALUE[256] = { 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,//0-9
-                                         4, 4, 4, 4, 4, 4, 4, 4, 4, 4,//10-19
-                                         4, 4, 4, 4, 4, 4, 4, 4, 4, 4,//20-29
-                                         4, 4, 4, 4, 4, 4, 4, 4, 4, 4,//30-39
-                                         4, 4, 4, 4, 4, 4, 4, 4, 4, 4,//40-49
-                                         4, 4, 4, 4, 4, 4, 4, 4, 4, 4,//50-59
-                                         4, 4, 4, 4, 4, 0, 4, 1, 4, 4,//60-69 65:A, 67:C
-                                         4, 2, 4, 4, 4, 4, 4, 4, 4, 4,//70-79 71:G
-                                         4, 4, 4, 4, 3, 4, 4, 4, 4, 4,//80-89 84:T
-                                         4, 4, 4, 4, 4, 4, 4, 0, 4, 1,//90-99 97:a, 99: c
-                                         4, 4, 4, 2, 4, 4, 4, 4, 4, 4,//100-109 103:g
-                                         4, 4, 4, 4, 4, 4, 3, 4, 4, 4,//110-119 116:t
-                                         4, 4, 4, 4, 4, 4, 4, 4, 4, 4,//120-129
-                                         4, 4, 4, 4, 4, 4, 4, 4, 4, 4,//130-139
-                                         4, 4, 4, 4, 4, 4, 4, 4, 4, 4,//140-149
-                                         4, 4, 4, 4, 4, 4, 4, 4, 4, 4,//150-159
-                                         4, 4, 4, 4, 4, 4, 4, 4, 4, 4,//160-169
-                                         4, 4, 4, 4, 4, 4, 4, 4, 4, 4,//170-179
-                                         4, 4, 4, 4, 4, 4, 4, 4, 4, 4,//180-189
-                                         4, 4, 4, 4, 4, 4, 4, 4, 4, 4,//190-199
-                                         4, 4, 4, 4, 4, 4, 4, 4, 4, 4,//200-209
-                                         4, 4, 4, 4, 4, 4, 4, 4, 4, 4,//210-219
-                                         4, 4, 4, 4, 4, 4, 4, 4, 4, 4,//220-229
-                                         4, 4, 4, 4, 4, 4, 4, 4, 4, 4,//230-239
-                                         4, 4, 4, 4, 4, 4, 4, 4, 4, 4,//240-249
-                                         4, 4, 4, 4, 4, 4 };//250-255
-
-
 struct boundaries{
     boundaries(): refB(0), refE(0), queryB(0), queryE(0) {}
-    boundaries(long refBegin, long refEnd, long queryBegin, long queryEnd): refB(refBegin), refE(refEnd), queryB(queryBegin), queryE(queryEnd){}
+    boundaries(long refBegin, long refEnd, int queryBegin, int queryEnd): refB(refBegin), refE(refEnd), queryB(queryBegin), queryE(queryEnd){}
     long refB;
     long refE;
-    long queryB;
-    long queryE;
+    int queryB;
+    int queryE;
 };
 
 struct dp_scores{
@@ -89,14 +57,12 @@ struct dp_type{
 };
 
 struct dp_output{
-    dp_output(): traceRef(""),traceQuery(""),editDist(0),dpScore(0), cigarChars(0), cigarLengths(0) {}
-    string traceRef;//remove???
-    string traceQuery;
+    dp_output(): editDist(0),dpScore(0), cigarChars(0), cigarLengths(0) {}
     int editDist;
     int dpScore;
-    vector<char> cigarChars;//static, fixed length field?
-    vector<int> cigarLengths;
-    void clear(){cigarChars.clear(); cigarLengths.clear(); editDist = dpScore = 0; traceRef = traceQuery = ""; };
+    std::vector<char> cigarChars;//static, fixed length field?
+    std::vector<int> cigarLengths;
+    void clear(){cigarChars.clear(); cigarLengths.clear(); editDist = dpScore = 0; };
 };
 
 enum outputType{
@@ -131,38 +97,42 @@ void initDPMatrix(int dimensionL2, int dimensionL1, bool affine);
 void resizeDPMatrix(int dimensionL2, int dimensionL1, bool affine);
 void deleteDPMatrix(bool affine);
 
-int updateMatrix(const dp_type& type, bool print);
-int dpFillOptStatic(const string& ref,const string& query, bool forward, 
+int updateMatrix(const dp_type& type, bool backward, bool print);
+int dpFillOptStatic(const std::string& ref,const std::string& query, bool forward, 
         const boundaries& offset, const dp_type& type);
-int dpFillOptStaticBackward(const string& ref,const string& query, bool forward, 
+int dpFillOptStaticBackward(const std::string& ref,const std::string& query,
+        const boundaries& offset);
+int dpFillStatic(const std::string& ref,const std::string& query, bool forward,
         const boundaries& offset, const dp_type& type);
-int dpFillStatic(const string& ref,const string& query, bool forward,
-        const boundaries& offset, const dp_type& type);
-int dpFillStaticBackward(const string& ref,const string& query, bool forward,
-        const boundaries& offset, const dp_type& type);
-int findTraceBackPosStatic(bool forward, int* const i, int* const j,const dp_type& type);
-int dpTraceBackStatic(int& i, int& j, const dp_type& type, dp_output& output, 
-        stringstream & ss, const boundaries& offset, bool forward, const string& ref, const string& query);
+int dpFillStaticBackward(const std::string& ref,const std::string& query,
+        const boundaries& offset);
+int findTraceBackPosStatic(int* const i, int* const j,const dp_type& type);
+int dpTraceBackFull(int& i, int& j, dp_output& output, std::stringstream & ss, 
+        const boundaries& offset, bool forward, const std::string& ref, const std::string& query);
+int dpTraceBackOptFull(int& i, int& j, const dp_type& type, dp_output& output, 
+        std::stringstream & ss, const boundaries& offset, bool forward, const std::string& ref, const std::string& query);
+int dpTraceBackStatic(int& i, int& j, dp_output& output, std::stringstream & ss, 
+        const boundaries& offset, bool forward, const std::string& ref, const std::string& query);
 int dpTraceBackOptStatic(int& i, int& j, const dp_type& type, dp_output& output, 
-        stringstream & ss, const boundaries& offset, bool forward, const string& ref, const string& query);
+        std::stringstream & ss, const boundaries& offset, bool forward, const std::string& ref, const std::string& query);
 
-void  print_matrices(const string& ref, const string& query, const boundaries& offset, bool gapMatrices );
-void  print_seq( const string& ref,const string& query, boundaries& offset );
+void  print_matrices(const std::string& ref, const std::string& query, const boundaries& offset, bool gapMatrices );
+void  print_seq( const std::string& ref,const std::string& query, boundaries& offset );
 
-//int dp( const string&, const string&, boundaries&, const dp_type&, 
-//        const outputType&, dp_output&, bool print = false);
-
-//int dpBand( const string&, const string&, boundaries&, const dp_type&, 
-//        const outputType&, dp_output&, int bandSize, bool print = false);
-
-int dpBandStatic( const string&, const string&, boundaries&, 
+int dpBandStatic( const std::string&, const std::string&, boundaries&, 
         const dp_type&, const outputType&, dp_output&, int minbandSize, int maxbandSize, bool print = false);
 
-int dpMyers( const string&, const string&, boundaries&, 
-        const dp_type&, const outputType&, dp_output&, int minbandSize, int maxbandSize, bool print = false);
-
-int dpBandFull( const string&, const string&, boundaries&, 
+int dpBandFull( const std::string&, const std::string&, boundaries&, 
         const dp_type&, const outputType&, dp_output&, int bandLeft, int bandRight, bool print = false);
+
+int dpTraceBackScore(int& i, int& j, const boundaries& offset, dp_output& output, 
+        const std::string& ref, const std::string& query);
+
+int dpBandScore( const std::string&, const std::string&, boundaries&, 
+        const dp_type&, const outputType&, dp_output&, int bandLeft, int bandRight, bool print = false);
+
+int dpBasic( const std::string&, const std::string&, boundaries&,
+        const dp_type&, const outputType&, dp_output&);
 
 };
 

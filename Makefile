@@ -1,8 +1,9 @@
 CC=gcc
 CXX=g++
-FLAGS = -O3 -DNDEBUG
-CCSRC = qsufsort.c
-CXXSRC = main.cpp sparseSA.cpp fasta.cpp dp.cpp utils.cpp mapper.cpp
+FLAGS = -O3 -DNDEBUG -pthread
+LIBS=-lm -lz
+CCSRC = qsufsort.c ksw.c
+CXXSRC = main.cpp options.cpp sparseSA.cpp fasta.cpp dp.cpp utils.cpp mapper.cpp performanceUtils.cpp
 PREFIX=/usr/local
 src_dir = src
 build_dir = build
@@ -15,7 +16,7 @@ EXEC = alfalfa
 all: alfalfa
 
 alfalfa: dir $(objs)
-	$(CXX) -pthread -lpthread $(FLAGS) $(objs) -o $@
+	$(CXX) $(FLAGS) $(objs) -o $@ $(LIBS)
 	
 dir:
 	mkdir -p $(build_dir)

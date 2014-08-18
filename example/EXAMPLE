@@ -3,7 +3,7 @@
 ***
 
 To get started with ALFALFA, the basic usage of ALFALFA is shown in the small examples below.
-The example code assumes that ALFALFA has already been [obtained](https://github.ugent.be/ComputationalBiology/alfalfa/wiki/Usage) and [built](https://github.ugent.be/ComputationalBiology/alfalfa/wiki/Usage) and that the command to call the program is `alfalfa`. If alfalfa has not been installed, the command should also include the path to the binary.
+The example code assumes that ALFALFA has already been [obtained](https://github.com/readmapping/alfalfa/wiki/Usage) and [built](https://github.com/readmapping/alfalfa/wiki/Usage) and that the command to call the program is `alfalfa`. If alfalfa has not been installed, the command should also include the path to the binary.
 
 The files used in the example can be found in the folder `example`. In the code below, we assume that the current working directory is `example`. The example uses the small Lambda phage genome as a reference and contains two small read data sets of simulated reads. 
 
@@ -16,11 +16,11 @@ $ alfalfa index -r reference.fasta -p lambda_phage -s 1
 
 The parameter `-s 1` tells the program to use a sparseness value of one. For larger genomes, we suggest using a larger sparseness value to decrease the memory usage of the program. The default value 12 is a good choice for genomes with a size similar to the human genome.
 
-The command will create several files in the current working directory making up the index structure. These files are: `lambda_phage.aux`, `lambda_phage.sa`, `lambda_phage.lcp`, `lambda_phage.child`, `lambda_phage.kmer`. The meaning of each file can be found in the [manual](https://github.ugent.be/ComputationalBiology/alfalfa/wiki/Manual). Note that the size of the file `lambda_phage.kmer` is large in comparison to the genome size. The size of this file is, however, independent of the genome size.
+The command will create several files in the current working directory making up the index structure. These files are: `lambda_phage.aux`, `lambda_phage.ref`, `lambda_phage.sa`, `lambda_phage.lcp`, `lambda_phage.child`, `lambda_phage.kmer`. The meaning of each file can be found in the [manual](https://github.com/readmapping/alfalfa/wiki/Manual). Note that the size of the file `lambda_phage.kmer` is large in comparison to the genome size. The size of this file is, however, independent of the genome size.
 
 The program will also write some information to standard error. An example output can be found below. The printed text includes process information, reference sequence information including total length and headers of the separate fasta entries (chromosomes), size of different data structures, final construction time and final memory footprint of the index in memory.
 ```
-@PG     ID:alfalfa      VN:0.7.2
+@PG     ID:alfalfa      VN:0.8
 parsing options: ...
 parsing options: done
 loading ref sequences: ...
@@ -43,10 +43,10 @@ INDEX SIZE IN BYTES: 8874509
 To align single-end reads to the created index, the following command can be used:
 
 ```bash
-$ alfalfa align -r reference.fasta -i lambda_phage -0 454reads.fq -o 454reads.sam
+$ alfalfa align -i lambda_phage -0 454reads.fq -o 454reads.sam
 ```
 
-ALFALFA will first read the reference genome and index files. Next, the program will align the reads from the `454reads.fq` one by one and save the found alignments in the `454reads.sam` SAM file in the current working directory. Together with the final mapping time, this information is displayed in the text written to standard error:
+ALFALFA will first read the index files. Next, the program will align the reads from the `454reads.fq` one by one and save the found alignments in the `454reads.sam` SAM file in the current working directory. Together with the final mapping time, this information is displayed in the text written to standard error:
 
 ```
 @PG     ID:alfalfa      VN:0.7.2
@@ -75,7 +75,7 @@ The SAM output format is supported by many tools. The explanation of its fields 
 ALFALFA prints the full command line that was used to generate the file in the SAM header, together with the version number of ALFALFA.
 
 ```
-@PG	ID:alfalfa	CL:alfalfa align -r reference.fasta -i lambda_phage -0 454reads.fq -o 454reads.sam	VN:0.7.2
+@PG	ID:alfalfa	CL:alfalfa align -i lambda_phage -0 454reads.fq -o 454reads.sam	VN:0.8
 ```
 
 In addition to the basic fields, ALFALFA supports the alignment score field `AS` and the edit distance field `NM`. ALFALFA also produces a `X0` field that contains the CIGAR string that uses sequence match `=` and mismatch `X` characters instead of the general alignment match character `M`.
@@ -84,25 +84,25 @@ In addition to the basic fields, ALFALFA supports the alignment score field `AS`
 AS:i:-108	NM:i:27 X0:Z:4=1I4=1D11=1D4=1I26=1I22=1I6=1D28=1D9=1D11=1I36=1I7=1I15=1I3=2X3=1D25=1D12=1I1=1I17=1I8=1D34=1I160=2I11=1D5=1I119=1D19=
 ```
 
-More information on the possible parameter settings can be found in the [manual](https://github.ugent.be/ComputationalBiology/alfalfa/wiki/Manual).
+More information on the possible parameter settings can be found in the [manual](https://github.com/readmapping/alfalfa/wiki/Manual).
 
 ## Aligning paired-end reads
 
 Aligning paired-end reads requires two separate files containing the both ends of the pair and an estimation of the insert size (total length of insert, including length of both reads). This estimation is set using parameter `-I` for minimum insert size and parameter `-X` for maximum insert size.
 
 ```bash
-$ alfalfa align -r reference.fasta -i lambda_phage -1 mate1.fq -2 mate2.fq -I 3600 -X 4400 -o paired_end.sam
+$ alfalfa align -i lambda_phage -1 mate1.fq -2 mate2.fq -I 3600 -X 4400 -o paired_end.sam
 ```
 
 ## Local alignment
 
-By default, ALFALFA performs end-to-end alignment. For reads containing many (long) indels, however, local alignment could results in more accurate mappings. Local alignment can be turned on using the switch `--local` on the command line. Other parameters influencing the accuracy of local alignment can be found in the [manual](https://github.ugent.be/ComputationalBiology/alfalfa/wiki/Manual).
+By default, ALFALFA performs end-to-end alignment. For reads containing many (long) indels, however, local alignment could results in more accurate mappings. Local alignment can be turned on using the switch `--local` on the command line. Other parameters influencing the accuracy of local alignment can be found in the [manual](https://github.com/readmapping/alfalfa/wiki/Manual).
 
 ```bash
-$ alfalfa align -r reference.fasta -i lambda_phage -1 mate1.fq -2 mate2.fq -I 3600 -X 4400 -o paired_end.sam --local
+$ alfalfa align -i lambda_phage -1 mate1.fq -2 mate2.fq -I 3600 -X 4400 -o paired_end.sam --local
 ```
 
-By default end-to-end alignment uses a fixed penalty for gaps and local alignment uses affine gap penalties. This can be changed by setting the scores directly using parameters `-M/--match`, `-U/--mismatch`, `-O/--gap-open` and `-E/--gap-extend`.
+By default alignment uses affine gap penalties. This can be changed by setting the scores directly using parameters `-M/--match`, `-U/--mismatch`, `-O/--gap-open` and `-E/--gap-extend`.
 
 ## Evaluation of aligned reads
 

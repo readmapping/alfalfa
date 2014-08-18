@@ -16,7 +16,7 @@ Rapid evolutions in sequencing technology force read mappers into flexible adapt
 ## Clone repository
 
 1.  optional: install git
-2.  type `git clone git://github.ugent.be/ComputationalBiology/alfalfa.git`
+2.  type `git clone git://github.com/readmapping/alfalfa.git`
 3.  change into the folder `alfalfa`
 4.  type `make`
 
@@ -36,10 +36,34 @@ Rapid evolutions in sequencing technology force read mappers into flexible adapt
 
 # Usage
 
-Usage and command line parameter information can be found on the [web page](https://github.ugent.be/pages/ComputationalBiology/alfalfa/).
+Usage and command line parameter information can be found on the [web page](https://alfalfa.ugent.be).
 
 # Version history
-
+* Version 0.8 (July 22, 2014)
+  * Added and changed command line options, changed default values of some command line parameters.
+  * Bugfixes.
+  * Removed some warnings during compilation using intel compilers. 
+  * Added option to use full dynamic programming. 
+  * Changed global/local behavior. 
+  * Added 3 more paired-end alignment methods and improved existing ones.
+  * Added more rescue procedures.
+  * Improved chaining again.
+  * Changed debug information printing.
+* Version 0.7.4 (April 23, 2014)
+  * Major changes in the Algorithm.
+  * Index now includes reference.
+  * Incorporation of klib library for I/O and dynamic programming (https://github.com/attractivechaos/klib). 
+  * Added new methods for seed-finding.
+  * Improved seed-finding.
+  * Improved candidate regions identification and selection.
+  * Changed candidate region extension criterium.
+  * Greatly improved chaining.
+  * Allow multiple chains per candidate region.
+  * Major refactoring of code.
+* Version 0.7.3 (August 13, 2013)
+  * Improved command line printing method.
+  * Few bug fixes. 
+  * Fixed few typos in manual.  
 * Version 0.7.2 (June 13, 2013)  
   1. Improved online help
   2. Reordered source code in folders and updated makefile
@@ -126,7 +150,7 @@ Usage and command line parameter information can be found on the [web page](http
 
 # Links  
 
-[essaMEM project](https://github.ugent.be/ComputationalBiology/essaMEM)
+[essaMEM project](https://github.com/readmapping/essaMEM)
 
 # Contact  
 
