@@ -24,6 +24,20 @@ Rapid evolutions in sequencing technology force read mappers into flexible adapt
 
 1. unpack using uncompression program such as [7-zip](www.7-zip.org/‎) or using `unzip alfalfa-master.zip`
 2. change into the folder `alfalfa-master`
+=======
+# Installation
+
+## Clone repository
+
+1.  optional: install git
+2.  type `git clone git://github.ugent.be/ComputationalBiology/alfalfa.git`
+3.  change into the folder `alfalfa`
+4.  type `make`
+
+## Current version zip file
+
+1. unpack using uncompression program such as [7-zip](www.7-zip.org/‎) or using `unzip alfalfa-master.zip`
+2. change into the folder `alfalfa-master`
 3. type `make`
 
 ##specific version tarball  or zip-file
