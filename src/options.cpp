@@ -223,6 +223,16 @@ void processParameters(int argc, char* argv[], mapOptions_t& opt) {
     if (options[ARG_DEBUG])
         opt.alnOptions.debugFile = fopen(options[ARG_DEBUG].arg, "w");
     //index parsing options
+    if(options[ARG_UNKNOWN] || parser.nonOptionsCount() > 0){
+        cerr << "encountered illegal options:" << endl;
+        for (option::Option* opt = options[ARG_UNKNOWN]; opt; opt = opt->next())
+            std::cerr << "Unknown option: " << opt->name << "\n";
+        for (int i = 0; i < parser.nonOptionsCount(); ++i)
+            std::cerr << "Non-option #" << i << ": " << parser.nonOption(i) << "\n";
+        cerr << "terminating ..." << endl;
+        exit(1);
+    }
+    //index parsing options
     for (int i = 0; i < parser.optionsCount(); ++i) {
         option::Option& option = buffer[i];
         switch (option.index()) {
