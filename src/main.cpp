@@ -30,6 +30,8 @@
 #include "mapper.h"
 #include "performanceUtils.h"
 
+#include "kthread.h"
+
 #include <time.h>
 #include <stdio.h>
 #include <sys/time.h>
@@ -47,153 +49,218 @@ using namespace std;
 //mapper options
 static const string PROG = "alfalfa";
 static const string SAM_VERSION = "1.3";
-static const string PROG_VERSION = "0.8";
+static const string PROG_VERSION = "0.8.1";
 static const string NOT_AVAILABLE = "*";
+static const int BUFFER_SIZE = 10000000;
 
 //FIELDS
 static sparseSA *sa;
 static fastqInputReader *queryReader;
 static FILE * outfile;
-static pthread_mutex_t writeLock_;
 
 static fastqInputReader *mate1Reader;
 static fastqInputReader *mate2Reader;
 
-struct query_arg {
-
-    query_arg() : skip0(0), skip(0), opt(0) {
-    }
-    int skip0;
-    int skip;
-    mapOptions_t * opt;
-    pthread_mutex_t *readLock;
-    pthread_mutex_t *writeLock;
-};
-
-//currently not used
-
-void *unpaired_thread(void *arg_) {
-
-    query_arg *arg = (query_arg *) arg_;
-    long seq_cnt = 0;
-    long seq_mapped = 0;
-    long alignments_printed = 0;
+int readBatch(int bpCount, vector<read_t> & reads){
+    int curCount = 0;
     bool hasRead = true;
-#ifndef NDEBUG
-    if (arg->opt->alnOptions.debugFile != NULL)
-        fprintf(arg->opt->alnOptions.debugFile, "#ALN\n");
-#endif
-    while (hasRead) {
+    while(curCount < bpCount && hasRead){
         read_t read;
-        pthread_mutex_lock(arg->readLock);
         hasRead = queryReader->nextRead(read.qname, read.sequence, read.qual);
-        pthread_mutex_unlock(arg->readLock);
-        if (hasRead) {
-            if (read.qname.length() > 2 && read.qname[read.qname.length() - 2] == '/')
-                read.qname.erase(read.qname.length() - 2);
-            seq_cnt++;
-            if (seq_cnt % 10000 == 0)
-                cerr << ".";
-            read.init(arg->opt->nucleotidesOnly);
-            if (arg->opt->alnOptions.print >= 3) cerr << "match " << read.qname << " with length " << read.sequence.length() << endl;
-            if (arg->opt->alnOptions.print >= 2) cerr << "#READ" << endl;
-#ifndef NDEBUG
-            if (arg->opt->alnOptions.debugFile != NULL) {
-                fprintf(arg->opt->alnOptions.debugFile, ">%s\n", read.qname.c_str());
-                fprintf(arg->opt->alnOptions.debugFile, "%lu\n", read.sequence.size());
-            }
-#endif
-            unpairedMatch(*sa, read, arg->opt->alnOptions);
-            read.postprocess(*sa, arg->opt->alnOptions, false);
-            //Ouput
-            pthread_mutex_lock(arg->writeLock);
-            if (read.alignments.empty())
-                fprintf(outfile, "%s", read.emptyAlingment(false, false, true).c_str());
-            else {
-                seq_mapped++;
-                alignments_printed += min(read.alignmentCount(), arg->opt->alnOptions.alignmentCount);
-                for (int k = 0; k < min(read.alignmentCount(), arg->opt->alnOptions.alignmentCount); k++)
-                    fprintf(outfile, "%s", read.printUnpairedAlignment(k).c_str());
-            }
-            pthread_mutex_unlock(arg->writeLock);
+        if(hasRead){
+            curCount += read.sequence.length();
+            reads.push_back(read);
         }
     }
-    cerr << endl;
-    printf("sequences read by thread %d: %ld\n", arg->skip0, seq_cnt);
-    printf("sequences mapped by thread %d: %ld\n", arg->skip0, seq_mapped);
-    printf("alignments printed by thread %d: %ld\n", arg->skip0, alignments_printed);
-    pthread_exit(NULL);
+    return reads.size();
 }
 
-void *paired_thread1(void *arg_) {
+struct unpaired_data {
+    unpaired_data(const mapOptions_t * opt_, const sparseSA * ssa_, 
+        vector<read_t> * reads_) : opt(opt_), ssa(ssa_), reads(reads_) {
+    }
+    const mapOptions_t * opt;
+    const sparseSA * ssa;
+    vector<read_t> * reads; 
+};
 
-    query_arg *arg = (query_arg *) arg_;
-    long seq_cnt = 0;
+static void map_unpaired(void * unpairedData, int i, int threadid)
+{
+    unpaired_data * data = (unpaired_data*) unpairedData;
+    read_t & read = data->reads->at(i);
+    if (read.qname.length() > 2 && read.qname[read.qname.length() - 2] == '/')
+        read.qname.erase(read.qname.length() - 2);
+    read.init(data->opt->nucleotidesOnly);
+    if (data->opt->alnOptions.print >= 3) cerr << "match " << read.qname << " with length " << read.sequence.length() << endl;
+    if (data->opt->alnOptions.print >= 2) cerr << "#READ" << endl;
+#ifndef NDEBUG
+    if (data->opt->alnOptions.debugFile != NULL && data->opt->query_threads == 1) {
+        fprintf(data->opt->alnOptions.debugFile, ">%s\n", read.qname.c_str());
+        fprintf(data->opt->alnOptions.debugFile, "%lu\n", read.sequence.size());
+    }
+#endif
+    unpairedMatch(*data->ssa, read, data->opt->alnOptions);
+    read.postprocess(*data->ssa, data->opt->alnOptions, false);
+}
+
+void unpaired_thread(const mapOptions_t * opt) {
+    long total_seq_cnt = 0;
+    long seq_mapped = 0;
+    long alignments_printed = 0;
+#ifndef NDEBUG
+    if (opt->alnOptions.debugFile != NULL)
+        fprintf(opt->alnOptions.debugFile, "#ALN\n");
+#endif
+    //init fields
+    vector<read_t> reads;
+    int bpCount = opt->query_threads * BUFFER_SIZE;
+    //read reads
+    while(readBatch(bpCount, reads) > 0){// have reads
+        //count reads, init fields
+        int seq_cnt = reads.size();
+        total_seq_cnt += seq_cnt;
+        cerr << "Progress " << seq_cnt << " reads ..." << endl;
+        clock_t start = clock();
+        unpaired_data unpairedData(opt, sa, &reads);
+        //parallel loop
+        kt_for(opt->query_threads, seq_cnt, map_unpaired, &unpairedData);
+        //output
+        for(int i = 0; i < reads.size(); i++){
+            if (reads[i].alignments.empty())
+                fprintf(outfile, "%s", reads[i].emptyAlingment(false, false, true).c_str());
+            else{
+                seq_mapped++;
+                alignments_printed += min(reads[i].alignmentCount(), opt->alnOptions.alignmentCount);
+                for (int k = 0; k < min(reads[i].alignmentCount(), opt->alnOptions.alignmentCount); k++)
+                    fprintf(outfile, "%s", reads[i].printUnpairedAlignment(k).c_str());
+            }
+        }
+        reads.clear();
+        clock_t end = clock();
+        double cpu_time = (double) (end - start) / CLOCKS_PER_SEC;
+        cerr << "Progress " << seq_cnt << " reads: done in " << cpu_time << " seconds" << endl;
+    }
+    //clean up
+    reads.clear();
+    //report statistics
+    printf("sequences read: %ld\n", total_seq_cnt);
+    printf("sequences mapped: %ld\n", seq_mapped);
+    printf("alignments printed: %ld\n", alignments_printed);
+}
+
+int readBatchPaired(int bpCount, vector<read_t> & mates1, vector<read_t> & mates2){
+    int curCount = 0;
+    bool hasRead = true;
+    while(curCount < bpCount && hasRead){
+        read_t mate1;
+        read_t mate2;
+        hasRead = mate1Reader->nextRead(mate1.qname, mate1.sequence, mate1.qual);
+        hasRead = mate2Reader->nextRead(mate2.qname, mate2.sequence, mate2.qual);
+        if(hasRead){
+            curCount += mate1.sequence.length();
+            mates1.push_back(mate1);
+            mates2.push_back(mate2);
+        }
+    }
+    return mates1.size();
+}
+
+struct paired_data {
+    paired_data(const mapOptions_t * opt_, const sparseSA * ssa_, 
+        vector<read_t> * mates1_, vector<read_t> * mates2_) : opt(opt_), 
+        ssa(ssa_), mates1(mates1_), mates2(mates2_) {
+    }
+    const mapOptions_t * opt;
+    const sparseSA * ssa;
+    vector<read_t> * mates1; 
+    vector<read_t> * mates2; 
+};
+
+static void map_paired(void * pairedData, int i, int threadid)
+{
+    paired_data * data = (paired_data*) pairedData;
+    read_t & mate1 = data->mates1->at(i);
+    read_t & mate2 = data->mates2->at(i);
+    if (mate1.qname.length() > 2 && mate1.qname[mate1.qname.length() - 2] == '/')
+        mate1.qname.erase(mate1.qname.length() - 2);
+    if (mate2.qname.length() > 2 && mate2.qname[mate2.qname.length() - 2] == '/')
+        mate2.qname.erase(mate2.qname.length() - 2);
+    mate1.init(data->opt->nucleotidesOnly);
+    mate2.init(data->opt->nucleotidesOnly);
+    if (data->opt->alnOptions.print >= 3) cerr << "match " << mate1.qname << " with lengths " << mate1.sequence.length() << " and " << mate2.sequence.length() << endl;
+    if (data->opt->alnOptions.print >= 2) cerr << "#READ" << endl;
+    pairedMatch(*data->ssa, mate1, mate2, data->opt->alnOptions, data->opt->pairedOpt);
+    mate1.postprocess(*data->ssa, data->opt->alnOptions, true);
+    mate2.postprocess(*data->ssa, data->opt->alnOptions, true);
+}
+
+void paired_thread1(const mapOptions_t * opt) {
+    long total_seq_cnt = 0;
     long seq_mapped1 = 0;
     long alignments_printed1 = 0;
     long seq_mapped2 = 0;
     long alignments_printed2 = 0;
-    bool hasRead = true;
-    while (hasRead) {
-        read_t mate1;
-        read_t mate2;
-        pthread_mutex_lock(arg->readLock);
-        hasRead = mate1Reader->nextRead(mate1.qname, mate1.sequence, mate1.qual);
-        hasRead = mate2Reader->nextRead(mate2.qname, mate2.sequence, mate2.qual);
-        pthread_mutex_unlock(arg->readLock);
-        if (hasRead) {
-            if (mate1.qname.length() > 2 && mate1.qname[mate1.qname.length() - 2] == '/')
-                mate1.qname.erase(mate1.qname.length() - 2);
-            if (mate2.qname.length() > 2 && mate2.qname[mate2.qname.length() - 2] == '/')
-                mate2.qname.erase(mate2.qname.length() - 2);
-            seq_cnt++;
-            if (seq_cnt % 10000 == 0)
-                cerr << ".";
-            mate1.init(arg->opt->nucleotidesOnly);
-            mate2.init(arg->opt->nucleotidesOnly);
-            if (arg->opt->alnOptions.print >= 3) cerr << "match " << mate1.qname << " with lengths " << mate1.sequence.length() << " and " << mate2.sequence.length() << endl;
-            if (arg->opt->alnOptions.print >= 2) cerr << "#READ" << endl;
-            pairedMatch(*sa, mate1, mate2, arg->opt->alnOptions, arg->opt->pairedOpt);
-            mate1.postprocess(*sa, arg->opt->alnOptions, true);
-            mate2.postprocess(*sa, arg->opt->alnOptions, true);
-            //Ouput
-            pthread_mutex_lock(arg->writeLock);
-            if (mate1.alignments.empty())
-                fprintf(outfile, "%s", mate1.emptyAlingment(true, mate2.alignments.empty(), true).c_str());
-            else {
+#ifndef NDEBUG
+    if (opt->alnOptions.debugFile != NULL)
+        fprintf(opt->alnOptions.debugFile, "#ALN\n");
+#endif
+    //init fields
+    vector<read_t> mates1;
+    vector<read_t> mates2;
+    int bpCount = opt->query_threads * BUFFER_SIZE;
+    //read reads
+    while (readBatchPaired(bpCount, mates1, mates2) > 0) {
+        //count reads, init fields
+        int seq_cnt = mates1.size();
+        total_seq_cnt += seq_cnt;
+        cerr << "Progress " << seq_cnt << " reads ..." << endl;
+        clock_t start = clock();
+        paired_data pairedData(opt, sa, &mates1, &mates2);
+        //parallel loop
+        kt_for(opt->query_threads, seq_cnt, map_paired, &pairedData);
+        //output
+        for(int i = 0; i < mates1.size(); i++){
+            if (mates1[i].alignments.empty())
+                fprintf(outfile, "%s", mates1[i].emptyAlingment(true, mates2[i].alignments.empty(), true).c_str());
+            else{
                 seq_mapped1++;
                 int mate1AlnCount;
-                if (arg->opt->pairedOpt.mixed)
-                    mate1AlnCount = min(mate1.alignmentCount(), arg->opt->alnOptions.alignmentCount);
+                if (opt->pairedOpt.mixed)
+                    mate1AlnCount = min(mates1[i].alignmentCount(), opt->alnOptions.alignmentCount);
                 else
-                    mate1AlnCount = min(mate1.pairedAlignmentCount, arg->opt->alnOptions.alignmentCount);
+                    mate1AlnCount = min(mates1[i].pairedAlignmentCount, opt->alnOptions.alignmentCount);
                 alignments_printed1 += mate1AlnCount;
                 for (int k = 0; k < mate1AlnCount; k++)
-                    fprintf(outfile, "%s", mate1.printPairedAlignments(k, true).c_str());
+                    fprintf(outfile, "%s", mates1[i].printPairedAlignments(k, true).c_str());
             }
-            if (mate2.alignments.empty())
-                fprintf(outfile, "%s", mate2.emptyAlingment(true, mate1.alignments.empty(), false).c_str());
+            if (mates2[i].alignments.empty())
+                fprintf(outfile, "%s", mates2[i].emptyAlingment(true, mates1[i].alignments.empty(), false).c_str());
             else {
                 seq_mapped2++;
                 int mate2AlnCount;
-                if (arg->opt->pairedOpt.mixed)
-                    mate2AlnCount = min(mate2.alignmentCount(), arg->opt->alnOptions.alignmentCount);
+                if (opt->pairedOpt.mixed)
+                    mate2AlnCount = min(mates2[i].alignmentCount(), opt->alnOptions.alignmentCount);
                 else
-                    mate2AlnCount = min(mate2.pairedAlignmentCount, arg->opt->alnOptions.alignmentCount);
+                    mate2AlnCount = min(mates2[i].pairedAlignmentCount, opt->alnOptions.alignmentCount);
                 alignments_printed2 += mate2AlnCount;
                 for (int k = 0; k < mate2AlnCount; k++)
-                    fprintf(outfile, "%s", mate2.printPairedAlignments(k, false).c_str());
+                    fprintf(outfile, "%s", mates2[i].printPairedAlignments(k, false).c_str());
             }
-            pthread_mutex_unlock(arg->writeLock);
         }
+        mates1.clear(); mates2.clear();
+        clock_t end = clock();
+        double cpu_time = (double) (end - start) / CLOCKS_PER_SEC;
+        cerr << "Progress " << seq_cnt << " reads: done in " << cpu_time << " seconds" << endl;
     }
-    cerr << endl;
-    printf("sequences read by thread %d: %ld\n", arg->skip0, seq_cnt);
-    printf("sequences mapped (mate1) by thread %d: %ld\n", arg->skip0, seq_mapped1);
-    printf("sequences mapped (mate2) by thread %d: %ld\n", arg->skip0, seq_mapped2);
-    printf("alignments printed (mate1) by thread %d: %ld\n", arg->skip0, alignments_printed1);
-    printf("alignments printed (mate2) by thread %d: %ld\n", arg->skip0, alignments_printed2);
-    pthread_exit(NULL);
+    //clean up
+    mates1.clear();
+    mates2.clear();
+    //report statistics
+    printf("sequences read: %ld\n", total_seq_cnt);
+    printf("sequences mapped (mate1): %ld\n", seq_mapped1);
+    printf("sequences mapped (mate2): %ld\n", seq_mapped2);
+    printf("alignments printed (mate1): %ld\n", alignments_printed1);
+    printf("alignments printed (mate2): %ld\n", alignments_printed2);
 }
 
 string createHeader(int argc, char* argv[], long refLength, sparseSA *sa) {
@@ -315,69 +382,28 @@ int main(int argc, char* argv[]) {
             //FIRST: Unpaired reads
             if (!opt.unpairedQ.empty()) {
                 if (opt.alnOptions.print >= 2) cerr << "#SE" << endl;
-                queryReader = new fastqInputReader(opt.unpairedQ, opt.nucleotidesOnly);
-                pthread_mutex_init(&writeLock_, NULL);
-                pthread_attr_t attr;
-                pthread_attr_init(&attr);
-                pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
-                vector<query_arg> args(opt.query_threads);
-                vector<pthread_t> thread_ids(opt.query_threads);
                 cerr << "Mapping unpaired reads to the index using " << opt.query_threads << " threads ..." << endl;
-                cerr << "Progress (each dot represents 10.000 reads processed): " << endl;
+                queryReader = new fastqInputReader(opt.unpairedQ, opt.nucleotidesOnly);
                 clock_t start = clock();
-                // Initialize additional thread data.
-                for (int i = 0; i < opt.query_threads; i++) {
-                    args[i].skip = opt.query_threads;
-                    args[i].skip0 = i;
-                    args[i].opt = &opt;
-                    args[i].readLock = &queryReader->readLock_;
-                    args[i].writeLock = &writeLock_;
-                }
-                // Create joinable threads to find MEMs.
-                for (int i = 0; i < opt.query_threads; i++)
-                    pthread_create(&thread_ids[i], &attr, unpaired_thread, (void *) &args[i]);
-                // Wait for all threads to terminate.
-                for (int i = 0; i < opt.query_threads; i++)
-                    pthread_join(thread_ids[i], NULL);
+                unpaired_thread(&opt);
                 clock_t end = clock();
                 double cpu_time = (double) (end - start) / CLOCKS_PER_SEC;
                 cerr << endl;
-                cerr << "mapping unpaired: done" << endl;
-                cerr << "time for mapping: " << cpu_time << endl;
+                cerr << "mapping unpaired: done in " << cpu_time << " seconds." << endl;
                 delete queryReader;
             }
             //SECOND: Paired reads
             if (!opt.pair1.empty() && !opt.pair2.empty()) {
                 if (opt.alnOptions.print >= 2) cerr << "#PE" << endl;
+                cerr << "Mapping paired reads to the index using " << opt.query_threads << " threads ..." << endl;
                 mate1Reader = new fastqInputReader(opt.pair1, opt.nucleotidesOnly);
                 mate2Reader = new fastqInputReader(opt.pair2, opt.nucleotidesOnly);
-                pthread_attr_t attr;
-                pthread_attr_init(&attr);
-                pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
-                vector<query_arg> args(opt.query_threads);
-                vector<pthread_t> thread_ids(opt.query_threads);
-                cerr << "Mapping paired reads to the index using " << opt.query_threads << " threads ..." << endl;
-                cerr << "Progress (each dot represents 10.000 reads processed): ";
                 clock_t start = clock();
-                // Initialize additional thread data.
-                for (int i = 0; i < opt.query_threads; i++) {
-                    args[i].skip = opt.query_threads;
-                    args[i].skip0 = i;
-                    args[i].opt = &opt;
-                    args[i].readLock = &mate1Reader->readLock_;
-                    args[i].writeLock = &writeLock_;
-                }
-                // Create joinable threads to find MEMs.
-                for (int i = 0; i < opt.query_threads; i++)
-                    pthread_create(&thread_ids[i], &attr, paired_thread1, (void *) &args[i]);
-                // Wait for all threads to terminate.
-                for (int i = 0; i < opt.query_threads; i++)
-                    pthread_join(thread_ids[i], NULL);
+                paired_thread1(&opt);
                 clock_t end = clock();
                 double cpu_time = (double) (end - start) / CLOCKS_PER_SEC;
                 cerr << endl;
-                cerr << "mapping paired: done" << endl;
-                cerr << "time for mapping: " << cpu_time << endl;
+                cerr << "mapping paired: done in " << cpu_time << " seconds" << endl;
                 delete mate1Reader;
                 delete mate2Reader;
             } else if (!opt.pair1.empty() || !opt.pair2.empty()) {
