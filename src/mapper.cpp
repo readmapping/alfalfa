@@ -1161,7 +1161,7 @@ void processLisIntervals(const sparseSA& sa, read_t & read, const align_opt & al
             //deal with new alignments
             if(cluster.fw) trialF++;
             else trialR++;
-            if(returnedAlnScore >= 0 && (alnOptions.maxTrialBest || maxAlnScore < returnedAlnScore)){
+            if(returnedAlnScore >= 0 && (!alnOptions.maxTrialBest || maxAlnScore < returnedAlnScore)){
                 if(cluster.fw) trialF = 0;
                 else trialR = 0;
             }
